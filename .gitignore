@@ -1,0 +1,17 @@
+# segredos do backend (só existem no servidor)
+config.local.php
+painel/config.local.js
+
+# dependências
+node_modules/
+
+# arquivos de trabalho / scratch
+scratch_*.html
+_*.css
+*.tmp
+.playwright-mcp/
+po-current-site.jpeg
+
+# sistema
+.DS_Store
+Thumbs.db
