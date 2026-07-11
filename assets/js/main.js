@@ -137,9 +137,10 @@
   const next = () => go(active + 1);
   const prev = () => go(active - 1);
 
-  function startAuto() { autoTimer = setInterval(next, AUTOPLAY_MS); }
-  function stopAuto() { clearInterval(autoTimer); autoTimer = null; }
-  function restartAuto() { stopAuto(); startAuto(); }
+  // idempotente: sempre limpa antes de criar, para nunca empilhar intervalos
+  function startAuto() { stopAuto(); autoTimer = setInterval(next, AUTOPLAY_MS); }
+  function stopAuto() { if (autoTimer) { clearInterval(autoTimer); autoTimer = null; } }
+  function restartAuto() { startAuto(); }
 
   document.getElementById('nav-next').addEventListener('click', next);
   document.getElementById('nav-prev').addEventListener('click', prev);
@@ -157,12 +158,17 @@
 
   /* ---------- arraste / swipe ---------- */
   let dragX = null;
-  rail.addEventListener('pointerdown', (e) => { dragX = e.clientX; stopAuto(); });
+  rail.addEventListener('pointerdown', (e) => {
+    // cliques nos botões de navegação não iniciam swipe (evita navegação dupla)
+    if (e.target.closest('.rail__nav')) return;
+    dragX = e.clientX;
+    stopAuto();
+  });
   window.addEventListener('pointerup', (e) => {
     if (dragX === null) return;
     const dx = e.clientX - dragX;
     dragX = null;
-    if (Math.abs(dx) > 55) { dx < 0 ? next() : prev(); }
+    if (Math.abs(dx) > 55) { dx < 0 ? next() : prev(); } // go() já reinicia o autoplay
     else { startAuto(); }
   });
 

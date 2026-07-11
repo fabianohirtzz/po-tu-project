@@ -37,11 +37,15 @@
   if (heroVideo && !reduce) {
     const id = heroVideo.dataset.yt;
     if (id) {
-      const params = 'autoplay=1&mute=1&controls=0&loop=1&playlist=' + id +
+      // playlist opcional por página (ex.: mix/rádio com direitos de uso); senão, loop do próprio vídeo
+      const list = heroVideo.dataset.ytList;
+      const loopPart = list ? ('loop=1&list=' + list) : ('loop=1&playlist=' + id);
+      const params = 'autoplay=1&mute=1&controls=0&' + loopPart +
         '&modestbranding=1&showinfo=0&rel=0&iv_load_policy=3&playsinline=1&disablekb=1&fs=0&cc_load_policy=0';
       const iframe = document.createElement('iframe');
       iframe.src = 'https://www.youtube-nocookie.com/embed/' + id + '?' + params;
-      iframe.title = 'Grécia Terra e Mar';
+      const heroTitle = document.querySelector('.hero__title');
+      iframe.title = (heroTitle && heroTitle.textContent.trim()) || 'Roteiro Pereira Oliveira';
       iframe.setAttribute('frameborder', '0');
       iframe.setAttribute('allow', 'autoplay; encrypted-media');
       iframe.setAttribute('allowfullscreen', '');
@@ -162,78 +166,5 @@
     let rt;
     window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(update, 150); });
     update();
-  }
-
-  /* ============================================================ FORMULÁRIO de lead */
-  const form = document.getElementById('lead-form');
-  if (form) {
-    const msg = document.getElementById('form-msg');
-    const wa = '5548996048882';
-    const roteiroInput = document.getElementById('f-roteiro');
-    const roteiroNome = (roteiroInput && roteiroInput.value) || 'este roteiro';
-
-    // carimba tempo de abertura (time-trap) e captura origem/UTM
-    const startTs = Date.now();
-    const setV = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-    setV('f-t', String(startTs));
-    const q = new URLSearchParams(location.search);
-    setV('f-utm_source', q.get('utm_source') || '');
-    setV('f-utm_medium', q.get('utm_medium') || '');
-    setV('f-utm_campaign', q.get('utm_campaign') || '');
-    setV('f-gclid', q.get('gclid') || '');
-    setV('f-referrer', document.referrer || '');
-    setV('f-landing', location.href);
-
-    const setMsg = (kind, text) => { msg.setAttribute('data-show', kind); msg.textContent = text; };
-    const emailOk = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const data = new FormData(form);
-
-      // honeypot — bot preencheu campo oculto
-      if ((data.get('website') || '').trim() !== '') { setMsg('ok', 'Recebemos sua mensagem. Em breve entramos em contato.'); return; }
-      // time-trap — envio rápido demais
-      if (Date.now() - startTs < 2500) { setMsg('err', 'Aguarde um instante e envie novamente.'); return; }
-
-      const nome = (data.get('nome') || '').trim();
-      const tel = (data.get('telefone') || '').trim();
-      const email = (data.get('email') || '').trim();
-      if (!nome || !tel || !email) { setMsg('err', 'Preencha nome, WhatsApp e e-mail para continuar.'); return; }
-      if (!emailOk(email)) { setMsg('err', 'Confira o e-mail informado.'); return; }
-
-      const btn = form.querySelector('.form__submit');
-      btn.disabled = true; btn.style.opacity = '.7';
-
-      const toWhats = () => {
-        const linhas = [
-          'Olá! Tenho interesse no roteiro ' + roteiroNome + '.',
-          'Nome: ' + nome,
-          'WhatsApp: ' + tel,
-          'E-mail: ' + email,
-          data.get('cidade') ? 'Cidade: ' + data.get('cidade') : '',
-          data.get('viajantes') ? 'Viajantes: ' + data.get('viajantes') : '',
-          data.get('mensagem') ? 'Mensagem: ' + data.get('mensagem') : ''
-        ].filter(Boolean).join('\n');
-        window.open('https://wa.me/' + wa + '?text=' + encodeURIComponent(linhas), '_blank', 'noopener');
-      };
-
-      // tenta o backend (enviar.php). Sem PHP (preview/Pages), cai no WhatsApp.
-      fetch('enviar.php', { method: 'POST', body: data })
-        .then((r) => {
-          if (!r.ok) throw new Error('http ' + r.status);
-          return r.json().catch(() => ({ ok: true }));
-        })
-        .then((res) => {
-          if (res && res.ok === false) throw new Error('rejeitado');
-          form.reset(); setV('f-roteiro', roteiroNome);
-          setMsg('ok', 'Recebemos seus dados. Nossa equipe entra em contato em breve com os valores.');
-        })
-        .catch(() => {
-          setMsg('ok', 'Vamos concluir pelo WhatsApp. Abrimos a conversa com seus dados para você enviar.');
-          toWhats();
-        })
-        .finally(() => { btn.disabled = false; btn.style.opacity = '1'; });
-    });
   }
 })();

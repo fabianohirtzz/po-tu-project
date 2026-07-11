@@ -267,15 +267,18 @@ button{font-family:inherit;cursor:pointer}
 .gal{background:var(--bg);border-top:1px solid var(--line)}
 .gal__head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;
   margin-bottom:clamp(26px,3vw,42px)}
-.gal__grid{display:grid;grid-template-columns:repeat(4,1fr);gap:clamp(10px,1.4vw,16px)}
-.gal__item{margin:0;border-radius:16px;overflow:hidden;cursor:zoom-in;position:relative;
+/* masonry por colunas — cada imagem no formato/proporção nativos, SEM ampliar.
+   As fotos de origem são pequenas; a imagem renderiza em min(tamanho nativo, coluna):
+   grandes reduzem (nítidas), pequenas ficam no tamanho real (nunca pixelizam). */
+.gal__grid{columns:4 240px;column-gap:clamp(10px,1.4vw,16px)}
+.gal__item{width:fit-content;max-width:100%;margin:0 auto clamp(10px,1.4vw,16px);
+  border-radius:16px;overflow:hidden;cursor:zoom-in;position:relative;
+  break-inside:avoid;-webkit-column-break-inside:avoid;
   box-shadow:0 12px 28px rgba(20,30,45,.1)}
-.gal__item img{width:100%;height:100%;object-fit:cover;transition:transform .5s var(--ease)}
+.gal__item img{display:block;width:auto;max-width:100%;height:auto;transition:transform .5s var(--ease)}
 .gal__item:hover img{transform:scale(1.06)}
-.gal__item::after{content:"";position:absolute;inset:0;background:rgba(12,16,23,0);transition:.25s}
+.gal__item::after{content:"";position:absolute;inset:0;background:rgba(12,16,23,0);transition:.25s;pointer-events:none}
 .gal__item:hover::after{background:rgba(12,16,23,.12)}
-.gal__item--tall{grid-row:span 2}
-.gal__item--wide{grid-column:span 2}
 
 /* lightbox */
 .lb{position:fixed;inset:0;z-index:90;display:none;place-items:center;padding:24px;
@@ -401,7 +404,7 @@ button{font-family:inherit;cursor:pointer}
 
 /* WhatsApp flutuante */
 .wa-float{position:fixed;right:20px;bottom:20px;z-index:70;width:58px;height:58px;border-radius:50%;
-  display:grid;place-items:center;background:#25D366;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.3);
+  display:grid;place-items:center;background:var(--brand-grad);color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.3);
   transition:.2s var(--ease)}
 .wa-float:hover{transform:translateY(-3px) scale(1.05)}
 .wa-float svg{width:30px;height:30px;fill:currentColor}
@@ -419,7 +422,7 @@ button{font-family:inherit;cursor:pointer}
   .info__grid{grid-template-columns:1fr;gap:34px}
   .invest__cards{grid-template-columns:1fr;max-width:460px}
   .cta__grid{grid-template-columns:1fr;gap:34px}
-  .gal__grid{grid-template-columns:repeat(3,1fr)}
+  .gal__grid{columns:3 200px}
   .tl{--tl-gutter:82px}
 }
 @media(max-width:640px){
@@ -427,7 +430,7 @@ button{font-family:inherit;cursor:pointer}
   .hero__actions .btn{flex:1 1 auto;justify-content:center}
   .form__grid{grid-template-columns:1fr}
   .info__stack{grid-template-columns:1fr 1fr}
-  .gal__grid{grid-template-columns:repeat(2,1fr)}
+  .gal__grid{columns:2 150px}
   .rot-card{flex:0 0 100%}
   .more__head{flex-direction:column;align-items:flex-start}
   .ft__wrap{grid-template-columns:1fr;gap:32px}
