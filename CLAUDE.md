@@ -110,7 +110,8 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   `assets/css/style.css` + `assets/js/main.js`; a página História é **standalone**
   (`assets/css/historia.css` + `assets/js/historia.js`) para não interferir na home.
 - **Pronto:** Home (header glass · hero vídeo · coverflow dos roteiros) ·
-  **Página `nossa-historia.html`**.
+  **Página `nossa-historia.html`** · **Página de roteiro `grecia-terra-mar.html`**
+  (template das páginas de roteiro).
 - **nossa-historia.html:** conceito "arquivo em papel" (papel morno, contraste com a home
   cinematográfica). Blocos: (1) intro com o ano **1967** como janela fotográfica
   (`background-clip:text` com `images/Fotos antigas/turismo3.jpg`); (2) fundador Antônio
@@ -123,8 +124,24 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   **3 visíveis** no desktop / 2 tablet / 1 mobile, com setas + swipe + contador; depois
   footer escuro + WhatsApp flutuante. Fontes: Rubik + DM Sans + **DM Mono**. Reveal on
   scroll + count-up via IntersectionObserver, `prefers-reduced-motion` respeitado.
-- **Próximo:** página/seção de Contato (formulário de lead) · replicar header/footer/
-  WhatsApp nas próximas páginas.
+- **grecia-terra-mar.html:** primeira **página de roteiro** e template das demais. Standalone
+  (`assets/css/roteiro.css` + `assets/js/roteiro.js`), conceito **hero cinematográfica →
+  corpo editorial claro** (contraste com o papel morno da História). Seções: hero de tela
+  cheia com **vídeo do YouTube em background** (embed `youtube-nocookie`, cover, poster =
+  capa do roteiro, fallback em `prefers-reduced-motion`) → "Por que viajar" (5 propostas de
+  valor) → **roteiro dia a dia** (timeline dos 16 dias, pills de refeições) → informações do
+  roteiro (spec de inclusos) → **investimento** (2 price cards: duplo €6.115+€535 / individual
+  €7.635, entrada 30% + 10x) → **galeria** com lightbox → **outros roteiros** (carrossel de
+  cards-destino, mesmo componente da História) → **formulário de lead `#contato`** (honeypot,
+  time-trap `_t`, UTM ocultos; posta em `enviar.php`, com fallback WhatsApp no preview) →
+  footer + WhatsApp. IDs de vídeo de cada roteiro coletados do site atual: Mercados de Natal
+  `K6l4OFPdqkw` · Tesouros Asiáticos `S4Z-125K3_0` · Cerejeiras `6gQV0HJALEE` · **Grécia
+  `8Z2kpec0TSE`** · Mediterrâneo `b5SY6WY498I`. No painel haverá campo para o link do vídeo.
+  Fotos reais da Grécia em `images/roteiros/grecia/grecia1..20.jpg` (baixadas do site atual;
+  o set `images/galeria-de-imagens/` é genérico de outras viagens, **não** usar em roteiro).
+  Botão "Ver roteiro" da Grécia (home + História) já aponta para a página.
+- **Próximo:** demais páginas de roteiro (mesmo template) · página/seção de Contato geral
+  (formulário de lead) · backend `enviar.php` + Supabase · replicar header/footer/WhatsApp.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro

@@ -38,7 +38,7 @@
       data: '16 dias · 02 a 18/05/2026',
       desc: 'Embarque em uma jornada pelos monumentos de Meteora, a vibrante Tessalônica e as deslumbrantes Ilhas Gregas. A bordo do Celestyal Journey, explore Santorini, Mykonos, Creta e muito mais.',
       img: 'assets/images/roteiro-grecia.jpg',
-      href: '#'
+      href: 'grecia-terra-mar.html'
     },
     {
       titulo: 'Tunísia e Malta',
