@@ -102,26 +102,33 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
 
 ## Estado atual
 
-- **Fase:** Build em andamento, seção a seção.
-- **Pronto:** Header glass flutuante · Hero (vídeo de fundo + focus-rail/coverflow dos
-  roteiros) · **Nossa História**.
-- **Nossa História (novo):** conceito "arquivo em papel" que contrasta com o hero
-  cinematográfico. Exigiu **destravar a rolagem** da página (o hero deixou de ser
-  `position:fixed`; agora é a primeira tela `100dvh` e a página rola abaixo). Estrutura:
-  (1) intro com o ano **1967** como janela fotográfica (`background-clip:text` com foto do
-  arquivo); (2) fundador Antônio Pereira Oliveira (`images/historia1.jpg`) em cópia
-  impressa com fita kraft; (3) linha do tempo em ledger com nós na linha-gradiente
-  (1967 · 80/90 · 2003 · 2000s · Hoje) usando as fotos de `images/Fotos antigas/`;
-  (4) contact sheet "Do arquivo"; (5) fecho com valores + números (anos de estrada
-  calculado ao vivo a partir de 1967, 3 gerações, +35 países).
-  Fonte nova: **DM Mono** (legendas/índices do arquivo). Header ganhou estado
-  `.hd--solid` (escurece ao sair do hero). Reveal on scroll + count-up via
-  IntersectionObserver, com `prefers-reduced-motion` respeitado.
-- **Próximo:** seção Roteiros/Próximas viagens · Contato (formulário de lead) · Footer ·
-  WhatsApp flutuante.
-- **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por
-  local/era, ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador,
-  dá para virar um "então & agora" ao lado do retrato de hoje) · texto/números da
-  História (puxados do site atual; "até 300 pessoas", "+35 países", 2003 rebranding).
+- **Fase:** Build em andamento, página a página.
+- **Arquitetura de páginas:** o site é **multi-página**. `index.html` (home) é uma
+  **tela cheia travada** (`position:fixed`, sem rolagem, vídeo + focus-rail) e **deve
+  permanecer assim**. Cada seção institucional vira **página própria** que rola. O menu
+  "Nossa História" aponta para `nossa-historia.html`. CSS/JS da home ficam em
+  `assets/css/style.css` + `assets/js/main.js`; a página História é **standalone**
+  (`assets/css/historia.css` + `assets/js/historia.js`) para não interferir na home.
+- **Pronto:** Home (header glass · hero vídeo · coverflow dos roteiros) ·
+  **Página `nossa-historia.html`**.
+- **nossa-historia.html:** conceito "arquivo em papel" (papel morno, contraste com a home
+  cinematográfica). Blocos: (1) intro com o ano **1967** como janela fotográfica
+  (`background-clip:text` com `images/Fotos antigas/turismo3.jpg`); (2) fundador Antônio
+  Pereira Oliveira (`images/historia1.jpg`) em cópia impressa com fita kraft; (3) linha do
+  tempo em ledger (1967 · 80/90 · 2003 · 2000s · Hoje) com as fotos de
+  `images/Fotos antigas/`; (4) contact sheet "Do arquivo"; (5) fecho com números (anos
+  calculados ao vivo desde 1967, 3 gerações, +35 países); (6) **Roteiros** em carrossel de
+  **cards-destino** (porte do 21st.dev `ravikatiyar162/card-21`: imagem full-bleed,
+  overlay, título + badge de duração, stats, botão "Ver roteiro", **tilt 3D no hover**),
+  **3 visíveis** no desktop / 2 tablet / 1 mobile, com setas + swipe + contador; depois
+  footer escuro + WhatsApp flutuante. Fontes: Rubik + DM Sans + **DM Mono**. Reveal on
+  scroll + count-up via IntersectionObserver, `prefers-reduced-motion` respeitado.
+- **Próximo:** página/seção de Contato (formulário de lead) · replicar header/footer/
+  WhatsApp nas próximas páginas.
+- **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
+  ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
+  "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro
+  ou levar ao WhatsApp) · texto/números da História ("até 300 pessoas", "+35 países",
+  2003 rebranding, puxados do site atual).
 - **Pendências a decidir:** projeto Supabase (novo x compartilhado) · confirmação do
   host cPanel do domínio · manter/migrar a Google Tag · campos finais do formulário.

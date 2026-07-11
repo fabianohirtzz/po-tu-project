@@ -11,33 +11,24 @@
   --white:#ffffff;
   --font-display:"Rubik",system-ui,sans-serif;
   --font-body:"DM Sans",system-ui,sans-serif;
-  --font-mono:"DM Mono","SFMono-Regular",ui-monospace,monospace;
   --ease:cubic-bezier(.22,.61,.36,1);
-
-  /* ---- Nossa História (arquivo em papel) ---- */
-  --his-paper:#F3F0E9;      /* papel de fundo, off-white morno */
-  --his-print:#ffffff;      /* superfície das cópias impressas */
-  --his-ink:#22242B;        /* tinta principal */
-  --his-ink-soft:#6C6E75;   /* texto secundário */
-  --his-line:rgba(34,36,43,.14);
-  --his-kraft:#E3D8C3;      /* cantoneira/fita cor kraft */
 }
 
 *,*::before,*::after{box-sizing:border-box}
-html,body{margin:0;padding:0}
-html{scroll-behavior:smooth}
+html,body{height:100%;width:100%;margin:0;padding:0;overflow:hidden}
 body{
-  font-family:var(--font-body);color:var(--his-ink);background:var(--his-paper);
-  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+  font-family:var(--font-body);color:var(--white);background:#000;
+  -webkit-font-smoothing:antialiased;
+  /* trava qualquer rolagem/arraste vertical da página */
+  position:fixed;inset:0;overscroll-behavior:none;
 }
-@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 img{display:block;max-width:100%}
 a{color:inherit;text-decoration:none}
 h1,h2,h3{font-family:var(--font-display);line-height:1.05;margin:0}
 button{font-family:inherit;cursor:pointer}
 
-/* ---------- palco: primeira tela (hero) ---------- */
-.stage{position:relative;height:100vh;height:100dvh;overflow:hidden;color:#fff}
+/* ---------- palco fixo ---------- */
+.stage{position:fixed;inset:0;overflow:hidden}
 
 /* ---------- vídeo de fundo (sem desfoque) ---------- */
 .video-bg{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:#0b0f14}
@@ -64,13 +55,6 @@ button{font-family:inherit;cursor:pointer}
   box-shadow:0 10px 40px rgba(0,0,0,.35);
   backdrop-filter:blur(14px) saturate(1.2);
   -webkit-backdrop-filter:blur(14px) saturate(1.2);
-  transition:background .3s var(--ease),box-shadow .3s var(--ease),border-color .3s var(--ease);
-}
-/* ao rolar para fora do hero, escurece para manter contraste sobre o papel */
-.hd.hd--solid{
-  background:rgba(13,18,25,.9);
-  border-color:rgba(255,255,255,.1);
-  box-shadow:0 8px 30px rgba(0,0,0,.22);
 }
 .hd__logo img{height:34px;width:auto}
 .hd__nav{display:flex;align-items:center;gap:4px}
@@ -207,206 +191,4 @@ button{font-family:inherit;cursor:pointer}
   .panel__desc{font-size:.92rem;margin-top:10px;margin-bottom:16px}
   .rail__track{height:38vh}
   .slide{height:min(38vh,360px);margin-top:calc(min(38vh,360px) / -2)}
-}
-
-/* ============================================================
-   NOSSA HISTÓRIA — o arquivo em papel
-   Papel morno, cópias impressas montadas, linha do tempo em ledger.
-   Assinatura: o ano 1967 como janela fotográfica.
-============================================================ */
-.his{
-  position:relative;color:var(--his-ink);background:var(--his-paper);
-  padding:clamp(84px,11vw,150px) 0 clamp(70px,9vw,120px);
-  overflow:clip;
-}
-/* costura com o hero escuro logo acima + grão sutil de papel */
-.his::before{
-  content:"";position:absolute;left:0;right:0;top:0;height:180px;pointer-events:none;
-  background:linear-gradient(to bottom,rgba(11,15,20,.5),transparent);
-}
-.his__wrap{width:min(100% - 48px,1180px);margin-inline:auto;position:relative;z-index:2}
-
-/* utilitários tipográficos do arquivo */
-.his__tag{
-  font-family:var(--font-mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;
-  color:var(--his-ink-soft);
-}
-.his__grad{
-  background:var(--brand-grad);-webkit-background-clip:text;background-clip:text;
-  -webkit-text-fill-color:transparent;color:transparent;
-}
-.his-reveal{opacity:0;transform:translateY(26px);transition:opacity .8s var(--ease),transform .8s var(--ease)}
-.his-reveal.is-in{opacity:1;transform:none}
-.his-reveal[data-delay="1"]{transition-delay:.08s}
-.his-reveal[data-delay="2"]{transition-delay:.16s}
-.his-reveal[data-delay="3"]{transition-delay:.24s}
-
-/* cópia impressa montada (moldura branca + sombra + leve rotação) */
-.print{
-  position:relative;background:var(--his-print);padding:10px 10px 12px;border-radius:2px;
-  box-shadow:0 18px 40px rgba(34,30,20,.16),0 2px 6px rgba(34,30,20,.1);
-}
-.print img{width:100%;height:100%;object-fit:cover;display:block;border-radius:1px;
-  filter:saturate(.82) contrast(1.02) sepia(.08)}
-.print__cap{
-  font-family:var(--font-mono);font-size:.68rem;letter-spacing:.06em;color:var(--his-ink-soft);
-  padding:9px 2px 2px;display:flex;justify-content:space-between;gap:10px;
-}
-/* fita kraft no topo de algumas cópias */
-.print--tape::before{
-  content:"";position:absolute;top:-12px;left:50%;transform:translateX(-50%) rotate(-2deg);
-  width:88px;height:22px;background:rgba(227,216,195,.72);
-  box-shadow:0 1px 3px rgba(0,0,0,.12);
-}
-
-/* ---------- 1) intro: ano 1967 como janela fotográfica ---------- */
-.his-intro{
-  display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);
-  gap:clamp(28px,5vw,72px);align-items:center;margin-bottom:clamp(72px,9vw,128px);
-}
-.his-intro__eyebrow{display:flex;align-items:center;gap:12px;margin-bottom:26px}
-.his-intro__eyebrow span{width:34px;height:1px;background:var(--his-line)}
-.his-intro__title{
-  font-family:var(--font-display);font-weight:700;letter-spacing:-.015em;
-  font-size:clamp(2rem,4vw,3.15rem);line-height:1.06;margin:0 0 22px;
-}
-.his-intro__lead{
-  font-size:clamp(1.02rem,1.4vw,1.16rem);line-height:1.72;color:#3c3e45;max-width:46ch;
-}
-.his-year{position:relative;justify-self:center;width:100%;text-align:center}
-.his-year__num{
-  font-family:var(--font-display);font-weight:700;line-height:.82;letter-spacing:-.02em;
-  font-size:clamp(6rem,13vw,11.5rem);
-  color:transparent;-webkit-background-clip:text;background-clip:text;
-  background-image:url("../../images/Fotos%20antigas/turismo3.jpg");
-  background-size:cover;background-position:center 30%;
-  filter:saturate(.9) contrast(1.05);
-  -webkit-text-fill-color:transparent;
-  text-shadow:0 24px 60px rgba(34,30,20,.14);
-}
-.his-year__label{
-  font-family:var(--font-mono);font-size:.78rem;letter-spacing:.36em;text-transform:uppercase;
-  color:var(--his-ink-soft);margin-top:12px;padding-left:.36em;
-}
-
-/* ---------- 2) fundador ---------- */
-.his-founder{
-  display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);
-  gap:clamp(30px,5vw,74px);align-items:center;
-  padding:clamp(40px,6vw,72px) 0;margin-bottom:clamp(40px,6vw,72px);
-  border-top:1px solid var(--his-line);border-bottom:1px solid var(--his-line);
-}
-.his-founder__photo{max-width:400px}
-.his-founder__photo .print{transform:rotate(-2.2deg)}
-.his-founder__photo img{aspect-ratio:3/4}
-.his-founder__k{color:var(--his-ink-soft);margin-bottom:16px}
-.his-founder__h{
-  font-family:var(--font-display);font-weight:700;font-size:clamp(1.6rem,2.6vw,2.3rem);
-  line-height:1.1;margin:0 0 20px;letter-spacing:-.01em;
-}
-.his-founder__p{font-size:1.05rem;line-height:1.74;color:#3c3e45;margin:0 0 16px;max-width:52ch}
-.his-founder__sign{font-family:var(--font-mono);font-size:.74rem;letter-spacing:.1em;color:var(--his-ink-soft)}
-
-/* ---------- 3) linha do tempo (ledger) ---------- */
-.his-timeline{margin:clamp(56px,8vw,104px) 0}
-.his-timeline__head{margin-bottom:clamp(34px,4vw,56px);max-width:44ch}
-.his-timeline__head h3{
-  font-family:var(--font-display);font-weight:700;font-size:clamp(1.5rem,2.4vw,2.1rem);
-  letter-spacing:-.01em;margin:10px 0 0;
-}
-.tl{position:relative;display:grid;gap:clamp(30px,4vw,54px)}
-/* linha vertical com gradiente da marca */
-.tl::before{
-  content:"";position:absolute;top:6px;bottom:6px;left:calc(var(--tl-gutter,132px) - 1px);
-  width:2px;background:linear-gradient(to bottom,var(--brand-azul),var(--brand-verde));
-  opacity:.55;
-}
-.tl__row{
-  position:relative;display:grid;
-  grid-template-columns:var(--tl-gutter,132px) minmax(0,1fr) minmax(0,300px);
-  gap:clamp(20px,3vw,40px);align-items:start;
-}
-.tl__year{
-  font-family:var(--font-display);font-weight:700;font-size:clamp(1.1rem,1.5vw,1.4rem);
-  letter-spacing:-.01em;text-align:right;padding-right:26px;position:relative;padding-top:1px;
-}
-/* nó na linha */
-.tl__year::after{
-  content:"";position:absolute;right:-8px;top:9px;width:14px;height:14px;border-radius:50%;
-  background:var(--his-paper);border:2.5px solid var(--brand-azul);box-shadow:0 0 0 4px var(--his-paper);
-}
-.tl__body h4{
-  font-family:var(--font-display);font-weight:600;font-size:1.22rem;margin:0 0 8px;letter-spacing:-.005em;
-}
-.tl__body p{font-size:1rem;line-height:1.66;color:#4a4c53;margin:0;max-width:48ch}
-.tl__body .his__tag{margin-top:12px;display:inline-block}
-.tl__photo .print{transform:rotate(1.6deg)}
-.tl__row:nth-child(even) .tl__photo .print{transform:rotate(-1.8deg)}
-.tl__photo img{aspect-ratio:4/3}
-
-/* ---------- 4) arquivo (contact sheet) ---------- */
-.his-archive{margin:clamp(56px,8vw,104px) 0 clamp(40px,5vw,72px)}
-.his-archive__head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;
-  flex-wrap:wrap;margin-bottom:clamp(24px,3vw,40px);border-bottom:1px solid var(--his-line);padding-bottom:16px}
-.his-archive__head h3{font-family:var(--font-display);font-weight:700;font-size:clamp(1.3rem,2vw,1.8rem);margin:0}
-.his-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(14px,1.8vw,24px)}
-.his-grid .print{margin:0}
-.his-grid img{width:100%;height:100%;object-fit:cover}
-.g-a{grid-column:span 5}   .g-a img{aspect-ratio:3/2}
-.g-b{grid-column:span 4}   .g-b img{aspect-ratio:3/4}
-.g-c{grid-column:span 3}   .g-c img{aspect-ratio:3/4}
-.g-d{grid-column:span 7}   .g-d img{aspect-ratio:16/9}
-.g-e{grid-column:span 5}   .g-e img{aspect-ratio:3/2}
-.g-a .print,.g-c .print{transform:rotate(-1.4deg)}
-.g-b .print,.g-d .print,.g-e .print{transform:rotate(1.2deg)}
-
-/* ---------- 5) fecho: valores + números ---------- */
-.his-close{
-  margin-top:clamp(56px,8vw,104px);padding-top:clamp(40px,5vw,64px);border-top:1px solid var(--his-line);
-  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(30px,5vw,72px);align-items:center;
-}
-.his-close__h{font-family:var(--font-display);font-weight:700;font-size:clamp(1.5rem,2.4vw,2.15rem);
-  line-height:1.12;margin:14px 0 20px;letter-spacing:-.01em}
-.his-close__p{font-size:1.06rem;line-height:1.74;color:#3c3e45;margin:0 0 28px;max-width:50ch}
-.his-close__cta{
-  display:inline-flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:600;
-  color:var(--his-ink);font-size:1.02rem;padding-bottom:3px;border-bottom:2px solid transparent;
-  background-image:var(--brand-grad);background-size:0% 2px;background-repeat:no-repeat;
-  background-position:0 100%;transition:background-size .35s var(--ease);
-}
-.his-close__cta:hover{background-size:100% 2px}
-.his-close__cta svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;
-  transition:transform .3s var(--ease)}
-.his-close__cta:hover svg{transform:translateX(4px)}
-.his-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
-.his-stat{border-left:2px solid;border-image:var(--brand-grad) 1;padding-left:18px}
-.his-stat__n{font-family:var(--font-display);font-weight:700;font-size:clamp(2.1rem,3.4vw,3rem);
-  line-height:1;letter-spacing:-.02em}
-.his-stat__l{font-family:var(--font-mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--his-ink-soft);margin-top:10px;line-height:1.4}
-
-/* ---------- responsivo ---------- */
-@media(max-width:860px){
-  .his-intro{grid-template-columns:1fr;gap:34px;text-align:left}
-  .his-year{order:-1;max-width:340px;justify-self:start}
-  .his-founder{grid-template-columns:1fr;gap:30px}
-  .his-founder__photo{max-width:320px}
-  .tl{--tl-gutter:64px}
-  .tl__row{grid-template-columns:var(--tl-gutter) 1fr;gap:16px 18px}
-  .tl__year{font-size:1rem;padding-right:20px}
-  .tl__photo{grid-column:1 / -1;margin-left:calc(var(--tl-gutter) + 18px);max-width:360px}
-  .tl__photo .print,.tl__row:nth-child(even) .tl__photo .print{transform:rotate(-1.4deg)}
-  .his-grid{grid-template-columns:repeat(6,1fr)}
-  .g-a,.g-d,.g-e{grid-column:span 6}
-  .g-b,.g-c{grid-column:span 3}
-  .his-close{grid-template-columns:1fr;gap:36px}
-}
-@media(max-width:520px){
-  .his-stats{grid-template-columns:1fr;gap:16px}
-  .his-stat{border-left:none;border-top:2px solid;border-image:var(--brand-grad) 1;padding:14px 0 0}
-  .tl__photo{margin-left:0;grid-column:1 / -1}
-  .his-year__label{letter-spacing:.2em;font-size:.68rem}
-}
-@media(prefers-reduced-motion:reduce){
-  .his-reveal{opacity:1;transform:none;transition:none}
 }
