@@ -102,9 +102,26 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
 
 ## Estado atual
 
-- **Fase:** Passo 2 concluído (estrutura & contexto). Scaffold criado, `CLAUDE.md`
-  preenchido, git conectado ao repo, GitHub Pages de acompanhamento no ar.
-- **Próximo:** construir o site **página/seção a página** junto com o parceiro,
-  começando pelo header + hero, usando os tokens base acima.
+- **Fase:** Build em andamento, seção a seção.
+- **Pronto:** Header glass flutuante · Hero (vídeo de fundo + focus-rail/coverflow dos
+  roteiros) · **Nossa História**.
+- **Nossa História (novo):** conceito "arquivo em papel" que contrasta com o hero
+  cinematográfico. Exigiu **destravar a rolagem** da página (o hero deixou de ser
+  `position:fixed`; agora é a primeira tela `100dvh` e a página rola abaixo). Estrutura:
+  (1) intro com o ano **1967** como janela fotográfica (`background-clip:text` com foto do
+  arquivo); (2) fundador Antônio Pereira Oliveira (`images/historia1.jpg`) em cópia
+  impressa com fita kraft; (3) linha do tempo em ledger com nós na linha-gradiente
+  (1967 · 80/90 · 2003 · 2000s · Hoje) usando as fotos de `images/Fotos antigas/`;
+  (4) contact sheet "Do arquivo"; (5) fecho com valores + números (anos de estrada
+  calculado ao vivo a partir de 1967, 3 gerações, +35 países).
+  Fonte nova: **DM Mono** (legendas/índices do arquivo). Header ganhou estado
+  `.hd--solid` (escurece ao sair do hero). Reveal on scroll + count-up via
+  IntersectionObserver, com `prefers-reduced-motion` respeitado.
+- **Próximo:** seção Roteiros/Próximas viagens · Contato (formulário de lead) · Footer ·
+  WhatsApp flutuante.
+- **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por
+  local/era, ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador,
+  dá para virar um "então & agora" ao lado do retrato de hoje) · texto/números da
+  História (puxados do site atual; "até 300 pessoas", "+35 países", 2003 rebranding).
 - **Pendências a decidir:** projeto Supabase (novo x compartilhado) · confirmação do
   host cPanel do domínio · manter/migrar a Google Tag · campos finais do formulário.
