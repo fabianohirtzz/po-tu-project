@@ -14,7 +14,7 @@
       data: '11 dias · 10 a 21/12/2025',
       desc: 'A exclusiva oportunidade de viver o encanto do Natal em uma jornada única, visitando fascinantes Mercados de Natal que atraem milhares de pessoas do mundo inteiro.',
       img: 'assets/images/roteiro-mercados-natal.jpg',
-      href: '#'
+      href: 'mercados-de-natal.html'
     },
     {
       titulo: 'Vietnã, Tailândia e Doha',
@@ -22,7 +22,7 @@
       data: '21 dias · 03 a 23/03/2026',
       desc: 'Uma jornada entre culturas milenares, paisagens exóticas e contrastes fascinantes: Doha, Vietnã e Tailândia em um só roteiro inesquecível.',
       img: 'assets/images/roteiro-tesouros-asiaticos.jpg',
-      href: '#'
+      href: 'tesouros-asiaticos.html'
     },
     {
       titulo: 'Japão e Doha',
@@ -30,7 +30,7 @@
       data: '16 dias · 11 a 27/04/2026',
       desc: 'Uma viagem que celebra a floração das cerejeiras no Japão e todo o encanto da primavera oriental, e continua em Doha, onde a estação ganha tons dourados e o charme da modernidade árabe.',
       img: 'assets/images/roteiro-cerejeiras.jpg',
-      href: '#'
+      href: 'floracao-das-cerejeiras.html'
     },
     {
       titulo: 'Grécia Terra e Mar',
@@ -46,7 +46,7 @@
       data: '14 dias · 04 a 17/06/2026',
       desc: 'Dois mundos, uma viagem: da mítica Cartago às casinhas azuis de Sidi Bou Said, do anfiteatro de El Jem ao oásis de Tozeur, até Valletta (UNESCO), a charmosa Gozo e Marsaxlokk.',
       img: 'assets/images/roteiro-mediterraneo.jpg',
-      href: '#'
+      href: 'encantos-do-mediterraneo.html'
     }
   ];
 

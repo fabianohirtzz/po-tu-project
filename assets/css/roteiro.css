@@ -238,6 +238,7 @@ button{font-family:inherit;cursor:pointer}
 .invest__head h2{color:#fff;font-size:clamp(1.8rem,3vw,2.6rem)}
 .invest__head p{color:rgba(255,255,255,.62);margin:14px 0 0;line-height:1.6}
 .invest__cards{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:860px;margin:0 auto}
+.invest__cards--single{grid-template-columns:1fr;max-width:480px}
 .pcard{position:relative;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);
   border-radius:22px;padding:30px 30px 32px;overflow:hidden}
 .pcard--feat{border-color:transparent;background:linear-gradient(160deg,rgba(31,168,221,.16),rgba(132,196,64,.1))}

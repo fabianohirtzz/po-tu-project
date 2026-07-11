@@ -110,8 +110,9 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   `assets/css/style.css` + `assets/js/main.js`; a página História é **standalone**
   (`assets/css/historia.css` + `assets/js/historia.js`) para não interferir na home.
 - **Pronto:** Home (header glass · hero vídeo · coverflow dos roteiros) ·
-  **Página `nossa-historia.html`** · **Página de roteiro `grecia-terra-mar.html`**
-  (template das páginas de roteiro).
+  **Página `nossa-historia.html`** · **as 5 páginas de roteiro** (`grecia-terra-mar`,
+  `mercados-de-natal`, `tesouros-asiaticos`, `floracao-das-cerejeiras`,
+  `encantos-do-mediterraneo`), todas no mesmo template.
 - **nossa-historia.html:** conceito "arquivo em papel" (papel morno, contraste com a home
   cinematográfica). Blocos: (1) intro com o ano **1967** como janela fotográfica
   (`background-clip:text` com `images/Fotos antigas/turismo3.jpg`); (2) fundador Antônio
@@ -137,11 +138,20 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   footer + WhatsApp. IDs de vídeo de cada roteiro coletados do site atual: Mercados de Natal
   `K6l4OFPdqkw` · Tesouros Asiáticos `S4Z-125K3_0` · Cerejeiras `6gQV0HJALEE` · **Grécia
   `8Z2kpec0TSE`** · Mediterrâneo `b5SY6WY498I`. No painel haverá campo para o link do vídeo.
-  Fotos reais da Grécia em `images/roteiros/grecia/grecia1..20.jpg` (baixadas do site atual;
-  o set `images/galeria-de-imagens/` é genérico de outras viagens, **não** usar em roteiro).
-  Botão "Ver roteiro" da Grécia (home + História) já aponta para a página.
-- **Próximo:** demais páginas de roteiro (mesmo template) · página/seção de Contato geral
-  (formulário de lead) · backend `enviar.php` + Supabase · replicar header/footer/WhatsApp.
+  Fotos reais de cada destino em `images/roteiros/<slug>/` (baixadas do site atual: Grécia
+  como `grecia1..20`, os demais normalizados como `img1..N`; o set `images/galeria-de-imagens/`
+  é genérico de outras viagens, **não** usar em roteiro). Todos os botões "Ver roteiro"
+  (home + História) já apontam para as páginas.
+- **As 5 páginas de roteiro** seguem o mesmo template do `grecia-terra-mar.html`. O bloco
+  "outros roteiros" é **data-driven**: catálogo único em `roteiro.js`, cada página declara
+  `data-current="<slug>"` no `#more-track` e exclui a si mesma; o nome do roteiro no lead
+  vem do input `#f-roteiro`. Investimento adapta-se: Grécia tem 2 cards (duplo €6.115+€535 /
+  individual €7.635, entrada 30% + 10x); os demais têm **1 card** (`.invest__cards--single`) —
+  Mercados de Natal €6.635, Tesouros Asiáticos R$ 42.311,48, Cerejeiras R$ 57.891,52,
+  Mediterrâneo R$ 34.145,00 (sem forma de pagamento informada). Dias da semana calculados e
+  conferidos (os do site atual estavam errados).
+- **Próximo:** página/seção de Contato geral (formulário de lead na home) · backend
+  `enviar.php` + Supabase · painel de leads.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro

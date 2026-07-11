@@ -82,15 +82,19 @@
   }
 
   /* ============================================================ OUTROS ROTEIROS — carrossel */
-  const OUTROS = [
-    { titulo: 'Mercados de Natal', badge: '11 dias', local: 'Suíça, França, Alemanha e Holanda', data: '10 a 21/12/2025', img: 'assets/images/roteiro-mercados-natal.jpg', href: '#' },
-    { titulo: 'Tesouros Asiáticos', badge: '21 dias', local: 'Vietnã, Tailândia e Doha', data: '03 a 23/03/2026', img: 'assets/images/roteiro-tesouros-asiaticos.jpg', href: '#' },
-    { titulo: 'Floração das Cerejeiras', badge: '16 dias', local: 'Japão e Doha', data: '11 a 27/04/2026', img: 'assets/images/roteiro-cerejeiras.jpg', href: '#' },
-    { titulo: 'Encantos do Mediterrâneo', badge: '14 dias', local: 'Tunísia e Malta', data: '04 a 17/06/2026', img: 'assets/images/roteiro-mediterraneo.jpg', href: '#' }
+  // catálogo único; cada página exclui a si mesma via data-current no #more-track
+  const ROTEIROS_ALL = [
+    { slug: 'mercados-de-natal', titulo: 'Mercados de Natal', badge: '11 dias', local: 'Suíça, França, Alemanha e Holanda', data: '10 a 21/12/2025', img: 'assets/images/roteiro-mercados-natal.jpg', href: 'mercados-de-natal.html' },
+    { slug: 'tesouros-asiaticos', titulo: 'Tesouros Asiáticos', badge: '21 dias', local: 'Vietnã, Tailândia e Doha', data: '03 a 23/03/2026', img: 'assets/images/roteiro-tesouros-asiaticos.jpg', href: 'tesouros-asiaticos.html' },
+    { slug: 'floracao-das-cerejeiras', titulo: 'Floração das Cerejeiras', badge: '16 dias', local: 'Japão e Doha', data: '11 a 27/04/2026', img: 'assets/images/roteiro-cerejeiras.jpg', href: 'floracao-das-cerejeiras.html' },
+    { slug: 'grecia-terra-mar', titulo: 'Grécia Terra e Mar', badge: '16 dias', local: 'Grécia com Cruzeiro', data: '02 a 18/05/2026', img: 'assets/images/roteiro-grecia.jpg', href: 'grecia-terra-mar.html' },
+    { slug: 'encantos-do-mediterraneo', titulo: 'Encantos do Mediterrâneo', badge: '14 dias', local: 'Tunísia e Malta', data: '04 a 17/06/2026', img: 'assets/images/roteiro-mediterraneo.jpg', href: 'encantos-do-mediterraneo.html' }
   ];
 
   const track = document.getElementById('more-track');
   if (track) {
+    const current = track.dataset.current || '';
+    const OUTROS = ROTEIROS_ALL.filter((r) => r.slug !== current);
     const viewport = track.parentElement;
     const prevBtn = document.getElementById('more-prev');
     const nextBtn = document.getElementById('more-next');
@@ -165,6 +169,8 @@
   if (form) {
     const msg = document.getElementById('form-msg');
     const wa = '5548996048882';
+    const roteiroInput = document.getElementById('f-roteiro');
+    const roteiroNome = (roteiroInput && roteiroInput.value) || 'este roteiro';
 
     // carimba tempo de abertura (time-trap) e captura origem/UTM
     const startTs = Date.now();
@@ -201,7 +207,7 @@
 
       const toWhats = () => {
         const linhas = [
-          'Olá! Tenho interesse no roteiro Grécia Terra e Mar.',
+          'Olá! Tenho interesse no roteiro ' + roteiroNome + '.',
           'Nome: ' + nome,
           'WhatsApp: ' + tel,
           'E-mail: ' + email,
@@ -220,7 +226,7 @@
         })
         .then((res) => {
           if (res && res.ok === false) throw new Error('rejeitado');
-          form.reset(); setV('f-roteiro', 'Grécia Terra e Mar');
+          form.reset(); setV('f-roteiro', roteiroNome);
           setMsg('ok', 'Recebemos seus dados. Nossa equipe entra em contato em breve com os valores.');
         })
         .catch(() => {
