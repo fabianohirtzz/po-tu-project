@@ -448,3 +448,24 @@ button{font-family:inherit;cursor:pointer}
   .hero__scroll svg{animation:none}
   .gal__item:hover img{transform:none}
 }
+
+/* ============================================================ MODAL de lead */
+.lead-modal{position:fixed;inset:0;z-index:95;display:none;place-items:center;padding:20px;
+  background:rgba(10,14,20,.72);backdrop-filter:blur(6px)}
+.lead-modal[data-open="true"]{display:grid;animation:lm-fade .2s var(--ease)}
+@keyframes lm-fade{from{opacity:0}to{opacity:1}}
+.lead-modal__scrim{position:absolute;inset:0;cursor:pointer}
+.lead-modal__card{position:relative;z-index:2;width:min(560px,100%);max-height:92vh;overflow:auto;
+  background:var(--surface);border:1px solid var(--line);border-radius:22px;
+  padding:clamp(24px,4vw,40px);box-shadow:0 30px 80px rgba(10,15,25,.42);
+  animation:lm-rise .26s var(--ease)}
+@keyframes lm-rise{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
+.lead-modal__close{position:absolute;top:14px;right:16px;width:38px;height:38px;border-radius:11px;border:none;
+  background:#eef0f3;color:#333;font-size:22px;line-height:1;cursor:pointer;transition:.15s var(--ease)}
+.lead-modal__close:hover{background:#e2e5ea;transform:rotate(90deg)}
+.lead-modal__h{font-family:var(--font-display);font-weight:700;color:var(--ink);line-height:1.1;
+  font-size:clamp(1.5rem,3vw,2rem);margin:12px 0 8px}
+.lead-modal__lead{color:#3c3e45;line-height:1.6;margin:0 0 22px;font-size:.98rem}
+/* dentro do modal o form não é um card (o card é o modal) */
+.lead-modal .form{background:none;border:none;border-radius:0;padding:0;box-shadow:none}
+body.lm-open{overflow:hidden}

@@ -11,6 +11,32 @@
   const form = document.getElementById('lead-form');
   if (!form) return;
 
+  /* ---------- modal (páginas de roteiro): abre no lugar de rolar até o form ---------- */
+  const modal = document.getElementById('lead-modal');
+  if (modal) {
+    const openModal = () => {
+      modal.setAttribute('data-open', 'true');
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('lm-open');
+      const first = form.querySelector('input,select,textarea');
+      if (first) setTimeout(() => first.focus(), 60);
+    };
+    const closeModal = () => {
+      modal.setAttribute('data-open', 'false');
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('lm-open');
+    };
+    // qualquer link para #contato abre o modal (header, hero, investimento, flutuante)
+    document.querySelectorAll('a[href="#contato"], a[href$="#contato"]').forEach((a) => {
+      a.addEventListener('click', (e) => { e.preventDefault(); openModal(); });
+    });
+    modal.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', closeModal));
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.getAttribute('data-open') === 'true') closeModal();
+    });
+    modal._close = closeModal;
+  }
+
   const msg = document.getElementById('form-msg');
   const roteiroInput = document.getElementById('f-roteiro');
   const startTs = Date.now();

@@ -368,7 +368,7 @@
       <div class="invest__foot reveal">
         <p class="invest__note">Valores sujeitos a alteração sem aviso prévio. Apenas cotação.</p>
         <div class="invest__actions">
-          <a class="btn" href="#contato">Solicitar valores atualizados
+          <a class="btn" href="#contato">Quero este roteiro
             <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </a>
         </div>
@@ -425,26 +425,60 @@
     </div>
   </section>
 
-  <!-- ============================================================ CONTATO / lead -->
-  <section class="sec cta" id="contato">
-    <div class="wrap cta__grid">
-      <div class="cta__lead reveal">
-        <p class="tag sec__eyebrow"><span></span>Fale com a gente</p>
-        <h2 class="sec__h">Quero conhecer a Ásia.</h2>
-        <p>Preencha os dados abaixo e nossa equipe entra em contato com os valores atualizados, condições e disponibilidade deste roteiro.</p>
-        <div class="cta__contacts">
-          <div class="cta__contact">
-            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.3" cy="6.7" r="1"/></svg>
-            <div><b>Instagram</b><span>@pereiraoliveiraturismo</span></div>
-          </div>
-          <div class="cta__contact">
-            <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
-            <div><b>Atendimento presencial</b><span>Rua Almirante Lamego 1090, sala 801, Centro, Florianópolis/SC, com hora marcada</span></div>
-          </div>
+  <!-- ============================================================ FOOTER -->
+  <footer class="ft">
+    <div class="ft__wrap">
+      <div>
+        <a href="index.html" class="ft__logo"><img src="assets/images/logo.png" alt="Pereira Oliveira Turismo"></a>
+        <p class="ft__tag">Realizando sonhos desde 1967</p>
+        <p>Operadora de viagens em grupo com roteiros internacionais e datas fixas. Atendimento presencial em Florianópolis, com hora marcada.</p>
+      </div>
+      <div>
+        <h4>Navegar</h4>
+        <div class="ft__links">
+          <a href="index.html">Início</a>
+          <a href="nossa-historia.html">Nossa História</a>
+          <a href="index.html#inicio">Roteiros</a>
+          <a href="#contato">Contato</a>
         </div>
       </div>
+      <div>
+        <h4>Contato</h4>
+        <div class="ft__links">
+          <a href="contato.html">Fale conosco</a>
+          <a href="https://instagram.com/pereiraoliveiraturismo" target="_blank" rel="noopener">@pereiraoliveiraturismo</a>
+          <a href="https://maps.google.com/?q=Rua+Almirante+Lamego+1090+Florianópolis" target="_blank" rel="noopener">Rua Almirante Lamego 1090, sala 801, Centro, Florianópolis/SC</a>
+        </div>
+      </div>
+    </div>
+    <div class="ft__bottom">
+      <span>© Pereira Oliveira Consultoria em Turismo e Viagens LTDA · CNPJ 05.622.878/0001-82</span>
+      <span>Florianópolis · Santa Catarina</span>
+    </div>
+  </footer>
 
-      <form class="form reveal" id="lead-form" data-delay="1" novalidate>
+  <a class="wa-float" href="#contato" aria-label="Fale conosco">
+    <svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4-8 5-8-5V6l8 5 8-5v2Z"/></svg>
+  </a>
+
+  <!-- LIGHTBOX -->
+  <div class="lb" id="lb" data-open="false" aria-hidden="true">
+    <button class="lb__close" id="lb-close" aria-label="Fechar">×</button>
+    <button class="lb__btn lb__prev" id="lb-prev" aria-label="Anterior"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+    <img id="lb-img" src="" alt="">
+    <button class="lb__btn lb__next" id="lb-next" aria-label="Próxima"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+    <span class="lb__count" id="lb-count"></span>
+  </div>
+
+  <!-- MODAL de lead (abre pelos botões "Quero este roteiro"/Contato) -->
+  <div class="lead-modal" id="lead-modal" data-open="false" aria-hidden="true">
+    <div class="lead-modal__scrim" data-close></div>
+    <div class="lead-modal__card" role="dialog" aria-modal="true" aria-label="Quero este roteiro">
+      <button class="lead-modal__close" data-close aria-label="Fechar">&times;</button>
+      <p class="tag sec__eyebrow"><span></span>Fale com a gente</p>
+      <h2 class="lead-modal__h">Quero este roteiro</h2>
+      <p class="lead-modal__lead">Preencha seus dados e nossa equipe entra em contato com os valores atualizados, condições e disponibilidade deste roteiro.</p>
+      <form class="form" id="lead-form" novalidate>
         <div class="form__grid">
           <div class="field field--full">
             <label for="f-nome">Nome completo <b>*</b></label>
@@ -493,58 +527,13 @@
         <input type="hidden" name="gclid" id="f-gclid">
         <input type="hidden" name="referrer" id="f-referrer">
         <input type="hidden" name="landing_page" id="f-landing">
-        <button type="submit" class="btn form__submit">Enviar e receber os valores
+        <button type="submit" class="btn form__submit">Enviar roteiro
           <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <p class="form__legal">Seus dados são usados apenas para este atendimento. Retornamos pelo WhatsApp ou e-mail informado.</p>
         <div class="form__msg" id="form-msg"></div>
       </form>
     </div>
-  </section>
-
-  <!-- ============================================================ FOOTER -->
-  <footer class="ft">
-    <div class="ft__wrap">
-      <div>
-        <a href="index.html" class="ft__logo"><img src="assets/images/logo.png" alt="Pereira Oliveira Turismo"></a>
-        <p class="ft__tag">Realizando sonhos desde 1967</p>
-        <p>Operadora de viagens em grupo com roteiros internacionais e datas fixas. Atendimento presencial em Florianópolis, com hora marcada.</p>
-      </div>
-      <div>
-        <h4>Navegar</h4>
-        <div class="ft__links">
-          <a href="index.html">Início</a>
-          <a href="nossa-historia.html">Nossa História</a>
-          <a href="index.html#inicio">Roteiros</a>
-          <a href="#contato">Contato</a>
-        </div>
-      </div>
-      <div>
-        <h4>Contato</h4>
-        <div class="ft__links">
-          <a href="contato.html">Fale conosco</a>
-          <a href="https://instagram.com/pereiraoliveiraturismo" target="_blank" rel="noopener">@pereiraoliveiraturismo</a>
-          <a href="https://maps.google.com/?q=Rua+Almirante+Lamego+1090+Florianópolis" target="_blank" rel="noopener">Rua Almirante Lamego 1090, sala 801, Centro, Florianópolis/SC</a>
-        </div>
-      </div>
-    </div>
-    <div class="ft__bottom">
-      <span>© Pereira Oliveira Consultoria em Turismo e Viagens LTDA · CNPJ 05.622.878/0001-82</span>
-      <span>Florianópolis · Santa Catarina</span>
-    </div>
-  </footer>
-
-  <a class="wa-float" href="#contato" aria-label="Fale conosco">
-    <svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4-8 5-8-5V6l8 5 8-5v2Z"/></svg>
-  </a>
-
-  <!-- LIGHTBOX -->
-  <div class="lb" id="lb" data-open="false" aria-hidden="true">
-    <button class="lb__close" id="lb-close" aria-label="Fechar">×</button>
-    <button class="lb__btn lb__prev" id="lb-prev" aria-label="Anterior"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
-    <img id="lb-img" src="" alt="">
-    <button class="lb__btn lb__next" id="lb-next" aria-label="Próxima"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
-    <span class="lb__count" id="lb-count"></span>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

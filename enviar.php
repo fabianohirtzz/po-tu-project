@@ -18,11 +18,11 @@
 $SMTP_HOST   = 'mail.pereiraoliveiraturismo.com.br';   // servidor de saída (ver cPanel)
 $SMTP_PORT   = 465;                                    // 465 = SSL | 587 = TLS
 $SMTP_SECURE = 'ssl';                                  // 'ssl' p/ 465 | 'tls' p/ 587
-$SMTP_USER   = 'contato@pereiraoliveiraturismo.com.br';// usuário = e-mail completo
+$SMTP_USER   = 'site@pereiraoliveiraturismo.com.br';   // usuário = e-mail completo
 $SMTP_PASS   = 'COLOQUE_NO_config.local.php';          // senha — definir no config.local.php
 
-$DESTINO   = 'contato@pereiraoliveiraturismo.com.br';  // para onde o lead chega
-$REMETENTE = 'contato@pereiraoliveiraturismo.com.br';  // "De" — precisa ser a conta autenticada
+$DESTINO   = 'site@pereiraoliveiraturismo.com.br';     // para onde o lead chega
+$REMETENTE = 'site@pereiraoliveiraturismo.com.br';     // "De" — precisa ser a conta autenticada
 $NOME_SITE = 'Site Pereira Oliveira Turismo';
 
 // Supabase (painel de leads) — projeto COMPARTILHADO (hd360/NOX).
