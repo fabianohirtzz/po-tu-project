@@ -6,10 +6,11 @@
    Antispam: honeypot + time-trap. Sem WhatsApp.
    Requer: @supabase/supabase-js + po-config.js carregados antes.
 ============================================================ */
-(function () {
+function initLeadForm() {
   'use strict';
   const form = document.getElementById('lead-form');
-  if (!form) return;
+  if (!form || form.dataset.wired) return;
+  form.dataset.wired = '1';
 
   /* ---------- modal (páginas de roteiro): abre no lugar de rolar até o form ---------- */
   const modal = document.getElementById('lead-modal');
@@ -122,4 +123,7 @@
     }
     if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
   });
-})();
+}
+
+window.initLeadForm = initLeadForm;
+if (!window.__deferLeadInit) initLeadForm();

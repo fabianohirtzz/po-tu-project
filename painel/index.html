@@ -159,6 +159,10 @@
       <div class="toolbar">
         <div style="flex:1"></div>
         <input type="file" id="imp-file" accept=".docx,.pdf,.pptx" hidden>
+        <button class="btn-soft" id="rot-refresh">
+          <svg viewBox="0 0 24 24"><path d="M20 11A8 8 0 1 0 12 20a8 8 0 0 0 6.9-4M20 5v6h-6"/></svg>
+          Atualizar
+        </button>
         <button class="btn-soft" id="imp-btn">
           <svg viewBox="0 0 24 24"><path d="M12 3v12m0-12 4 4m-4-4-4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
           Importar (Word/PDF/PPT)
@@ -239,6 +243,7 @@
   <div class="dr-body" id="rdr-body"><!-- form injetado via JS --></div>
   <div class="dr-foot">
     <button class="btn btn-danger" id="rdr-del" style="display:none">Excluir</button>
+    <button class="btn btn-ghost" id="rdr-view">Ver roteiro ↗</button>
     <button class="btn btn-ghost" id="rdr-cancel">Fechar</button>
     <button class="btn btn-primary" id="rdr-save">Salvar roteiro</button>
     <span class="save-flash" id="rsave-flash">✓ Salvo</span>

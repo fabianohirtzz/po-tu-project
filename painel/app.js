@@ -227,6 +227,10 @@ function renderTimeline(rows){
 }
 
 /* ============================================================ ROTEIROS — grid */
+const STATIC_ROTEIRO={'mercados-de-natal':'mercados-de-natal.html','tesouros-asiaticos':'tesouros-asiaticos.html','floracao-das-cerejeiras':'floracao-das-cerejeiras.html','grecia-terra-mar':'grecia-terra-mar.html','encantos-do-mediterraneo':'encantos-do-mediterraneo.html'};
+function pubHref(slug){return '../'+(STATIC_ROTEIRO[slug]||('roteiro.html?slug='+encodeURIComponent(slug)));}
+$('#rot-refresh').onclick=async()=>{await reloadRoteiros();toast('Lista de roteiros atualizada. O site já reflete os ativos.');};
+$('#rdr-view').onclick=()=>{if(!editRot||!editRot.id){toast('Salve o roteiro primeiro para visualizar.',true);return;}window.open(pubHref(editRot.slug),'_blank');};
 function renderRoteiros(){
   const g=$('#rot-grid');
   if(!ROTEIROS.length){g.innerHTML=`<div class="empty" style="grid-column:1/-1">Nenhum roteiro. Clique em “Novo roteiro” ou importe um arquivo.</div>`;return;}
@@ -235,8 +239,9 @@ function renderRoteiros(){
     <div class="rcard__b">
       <div class="rcard__t">${esc(r.titulo||'(sem título)')}</div>
       <div class="rcard__s">${esc(r.data_label||r.periodo||'—')} · ${esc(r.local_label||'')}</div>
-      <div class="rcard__foot"><button class="edit" data-id="${r.id}">Editar</button><button class="del" data-id="${r.id}">Excluir</button></div>
+      <div class="rcard__foot"><button class="ver" data-id="${r.id}">Ver ↗</button><button class="edit" data-id="${r.id}">Editar</button><button class="del" data-id="${r.id}">Excluir</button></div>
     </div></div>`).join('');
+  $$('#rot-grid .ver').forEach(b=>b.onclick=e=>{e.stopPropagation();const r=ROTEIROS.find(x=>String(x.id)===b.dataset.id);window.open(pubHref(r.slug),'_blank');});
   $$('#rot-grid .edit').forEach(b=>b.onclick=e=>{e.stopPropagation();openRot(ROTEIROS.find(x=>String(x.id)===b.dataset.id));});
   $$('#rot-grid .del').forEach(b=>b.onclick=async e=>{e.stopPropagation();const r=ROTEIROS.find(x=>String(x.id)===b.dataset.id);if(!confirm('Excluir o roteiro “'+(r.titulo||'')+'”?'))return;const {error}=await sb.from('po_roteiros').delete().eq('id',r.id);if(error){toast('Erro ao excluir: '+error.message,true);return;}ROTEIROS=ROTEIROS.filter(x=>x.id!==r.id);renderRoteiros();toast('Roteiro excluído.');});
 }
