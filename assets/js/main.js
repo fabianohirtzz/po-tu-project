@@ -43,6 +43,29 @@
     };
   }
 
+  /* extrai a data de partida do rótulo p/ ordenar o carrossel pela viagem.
+     Ex.: "11 dias · 10 a 21/12/2025" → 10/12/2025. Sem data reconhecida vai pro fim. */
+  const MESES = { jan:0, fev:1, mar:2, abr:3, mai:4, jun:5, jul:6, ago:7, set:8, out:9, nov:10, dez:11 };
+  function tripTime(data) {
+    const s = String(data || '');
+    // "10 a 21/12/2025" → dia inicial com mês/ano do fim
+    let m = s.match(/(\d{1,2})\s*a\s*\d{1,2}\/(\d{1,2})\/(\d{4})/);
+    if (m) return new Date(+m[3], +m[2] - 1, +m[1]).getTime();
+    // qualquer DD/MM/YYYY (usa o primeiro)
+    m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (m) return new Date(+m[3], +m[2] - 1, +m[1]).getTime();
+    // "25 de novembro ... de 2026" (formato periodo)
+    m = s.match(/(\d{1,2})\s+de\s+([a-zç]+)\D+(\d{4})/i);
+    if (m) {
+      const mes = MESES[m[2].slice(0, 3).toLowerCase()];
+      if (mes != null) return new Date(+m[3], mes, +m[1]).getTime();
+    }
+    return Infinity;
+  }
+  function ordenarPorData(list) {
+    return list.slice().sort((a, b) => tripTime(a.data) - tripTime(b.data));
+  }
+
   function initSlider(ROTEIROS) {
     if (!track || !ROTEIROS.length) return;
     const N = ROTEIROS.length;
@@ -119,6 +142,6 @@
       const db = await window.poFetchRoteiros();
       if (db && db.length) list = db.map(mapDb);
     }
-    initSlider(list || FALLBACK);
+    initSlider(ordenarPorData(list || FALLBACK));
   })();
 })();
