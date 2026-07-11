@@ -286,6 +286,13 @@ button{font-family:inherit;cursor:pointer}
 .ft__bottom{width:min(100% - 48px,1180px);margin:clamp(36px,5vw,52px) auto 0;padding-top:22px;
   border-top:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
   font-size:.82rem;color:rgba(255,255,255,.5)}
+.ft__social{display:flex;gap:12px;margin-top:20px}
+.ft__social a{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;
+  border:1px solid rgba(255,255,255,.16);color:rgba(255,255,255,.82);transition:.18s var(--ease)}
+.ft__social a:hover{background:var(--brand-grad);border-color:transparent;color:#fff;transform:translateY(-2px)}
+.ft__social svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8}
+.ft__credit a{color:rgba(255,255,255,.72);text-decoration:underline;text-underline-offset:2px;transition:.15s}
+.ft__credit a:hover{color:#fff}
 
 /* WhatsApp flutuante */
 .wa-float{position:fixed;right:20px;bottom:20px;z-index:70;width:58px;height:58px;border-radius:50%;
