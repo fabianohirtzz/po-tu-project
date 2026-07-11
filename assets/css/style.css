@@ -1,110 +1,194 @@
 /* ============================================================
-   Pereira Oliveira Turismo — base / tokens
-   Tokens extraídos do site atual. Refinar seção a seção.
+   Pereira Oliveira Turismo — Home
+   Tela fixa 100vh/100vw, vídeo ao fundo, focus-rail dos roteiros.
+   Tokens extraídos do site atual.
 ============================================================ */
 :root{
-  /* marca (logo pin+globo) */
   --brand-azul:#1FA8DD;
   --brand-verde:#84C440;
-  --brand-grad:linear-gradient(160deg,var(--brand-azul),var(--brand-verde));
-  /* texto & superfícies */
-  --ink:#2C2B2B;
-  --text:#333333;
-  --muted:#7A7A7A;
-  --line:rgba(0,0,0,.10);
-  --bg:#FFFFFF;
-  --bg-2:#F9F9F9;
-  --white:#FFFFFF;
-  /* layout */
-  --wrap:1180px;
-  --radius:14px;
-  --shadow:0 18px 50px rgba(0,0,0,.18);
-  --header-h:84px;
-  /* tipografia */
+  --brand-grad:linear-gradient(135deg,var(--brand-azul),var(--brand-verde));
+  --ink:#1a1a1a;
+  --white:#ffffff;
   --font-display:"Rubik",system-ui,sans-serif;
   --font-body:"DM Sans",system-ui,sans-serif;
+  --ease:cubic-bezier(.22,.61,.36,1);
 }
 
 *,*::before,*::after{box-sizing:border-box}
-html{scroll-behavior:smooth}
+html,body{height:100%;width:100%;margin:0;padding:0;overflow:hidden}
 body{
-  margin:0;font-family:var(--font-body);color:var(--text);
-  background:var(--bg);line-height:1.6;-webkit-font-smoothing:antialiased;
+  font-family:var(--font-body);color:var(--white);background:#000;
+  -webkit-font-smoothing:antialiased;
+  /* trava qualquer rolagem/arraste vertical da página */
+  position:fixed;inset:0;overscroll-behavior:none;
 }
-img{max-width:100%;display:block}
+img{display:block;max-width:100%}
 a{color:inherit;text-decoration:none}
-h1,h2,h3{font-family:var(--font-display);color:var(--ink);line-height:1.1;margin:0}
+h1,h2,h3{font-family:var(--font-display);line-height:1.05;margin:0}
+button{font-family:inherit;cursor:pointer}
 
-.wrap{width:min(100% - 40px,var(--wrap));margin-inline:auto}
+/* ---------- palco fixo ---------- */
+.stage{position:fixed;inset:0;overflow:hidden}
 
-/* ---------- header ---------- */
+/* ---------- vídeo de fundo (sem desfoque) ---------- */
+.video-bg{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:#0b0f14}
+.video-bg iframe{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:100vw;height:56.25vw;min-height:100vh;min-width:177.78vh;border:0;
+}
+/* overlay de leitura — gradiente, NUNCA blur no vídeo */
+.stage::after{
+  content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:
+    linear-gradient(90deg,rgba(6,10,16,.82) 0%,rgba(6,10,16,.55) 34%,rgba(6,10,16,.12) 60%,rgba(6,10,16,.35) 100%),
+    linear-gradient(to top,rgba(6,10,16,.55),transparent 32%);
+}
+
+/* ============================================================ HEADER glass flutuante */
 .hd{
-  position:fixed;inset:0 0 auto 0;height:var(--header-h);z-index:50;
-  display:flex;align-items:center;
-  background:linear-gradient(to bottom,rgba(0,0,0,.45),transparent);
+  position:fixed;top:22px;left:50%;transform:translateX(-50%);z-index:50;
+  width:min(100% - 32px,1080px);
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:10px 12px 10px 18px;border-radius:16px;
+  background:rgba(16,22,30,.55);
+  border:1px solid rgba(255,255,255,.14);
+  box-shadow:0 10px 40px rgba(0,0,0,.35);
+  backdrop-filter:blur(14px) saturate(1.2);
+  -webkit-backdrop-filter:blur(14px) saturate(1.2);
 }
-.hd__in{display:flex;align-items:center;gap:32px;width:100%}
-.hd__logo img{height:48px;width:auto}
-.hd__nav{display:flex;gap:28px;margin-left:8px}
-.hd__nav a{color:#fff;font-weight:500;font-size:.98rem;opacity:.92}
-.hd__nav a:hover{opacity:1}
-.hd__right{margin-left:auto;display:flex;align-items:center;gap:18px}
-.hd__tag{color:#fff;font-family:var(--font-display);font-weight:500;font-size:.92rem;opacity:.9}
-.hd__social{display:flex;gap:10px}
-.hd__social a{
-  width:38px;height:38px;border-radius:50%;display:grid;place-items:center;
-  background:rgba(255,255,255,.15);color:#fff;backdrop-filter:blur(4px);
+.hd__logo img{height:34px;width:auto}
+.hd__nav{display:flex;align-items:center;gap:4px}
+.hd__nav a{
+  padding:8px 14px;border-radius:10px;font-weight:500;font-size:.95rem;
+  color:rgba(255,255,255,.85);transition:.15s var(--ease);
 }
-.hd__social a:hover{background:var(--brand-grad)}
-
-/* ---------- hero ---------- */
-.hero{
-  position:relative;min-height:100vh;display:flex;align-items:center;
-  color:#fff;padding-top:var(--header-h);overflow:hidden;
+.hd__nav a:hover{background:rgba(255,255,255,.12);color:#fff}
+.hd__cta{
+  display:inline-flex;align-items:center;gap:8px;padding:9px 18px;border-radius:11px;
+  background:var(--brand-grad);color:#fff;font-weight:600;font-family:var(--font-display);
+  font-size:.92rem;border:none;transition:.18s var(--ease);
 }
-.hero__bg{position:absolute;inset:0;z-index:-2}
-.hero__bg img{width:100%;height:100%;object-fit:cover}
-.hero::after{content:"";position:absolute;inset:0;z-index:-1;
-  background:linear-gradient(90deg,rgba(0,0,0,.72),rgba(0,0,0,.35) 60%,rgba(0,0,0,.15))}
-.hero__grid{display:grid;grid-template-columns:1.1fr 1fr;gap:40px;align-items:center;width:100%}
-.hero__kicker{font-family:var(--font-display);letter-spacing:.14em;text-transform:uppercase;
-  font-size:.8rem;opacity:.85;margin-bottom:14px}
-.hero__title{font-size:clamp(2.6rem,7vw,5rem);font-weight:600;color:#fff}
-.hero__lead{max-width:46ch;margin:18px 0 28px;font-size:1.08rem;opacity:.92}
-.btn{display:inline-block;padding:14px 30px;border-radius:999px;font-weight:600;
-  font-family:var(--font-display);transition:.2s}
-.btn--ghost{border:1px solid rgba(255,255,255,.6);color:#fff}
-.btn--ghost:hover{background:#fff;color:var(--ink)}
-.btn--brand{background:var(--brand-grad);color:#fff;border:none}
-.btn--brand:hover{filter:brightness(1.06)}
+.hd__cta:hover{filter:brightness(1.07);transform:translateY(-1px)}
+.hd__cta svg{width:16px;height:16px;fill:currentColor}
+.hd__burger{
+  display:none;width:42px;height:42px;border-radius:11px;align-items:center;justify-content:center;
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:#fff;
+}
+.hd__burger svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2}
 
-/* ---------- cards de roteiro (carrossel simples) ---------- */
-.roteiros{display:flex;gap:18px;overflow-x:auto;padding-bottom:8px;scroll-snap-type:x mandatory}
-.roteiros::-webkit-scrollbar{height:6px}
-.roteiros::-webkit-scrollbar-thumb{background:rgba(255,255,255,.35);border-radius:999px}
-.rcard{position:relative;flex:0 0 240px;aspect-ratio:350/560;border-radius:var(--radius);
-  overflow:hidden;scroll-snap-align:start;box-shadow:var(--shadow)}
-.rcard img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:.4s}
-.rcard:hover img{transform:scale(1.06)}
-.rcard::after{content:"";position:absolute;inset:0;
-  background:linear-gradient(to top,rgba(0,0,0,.8),transparent 55%)}
-.rcard__body{position:absolute;left:0;right:0;bottom:0;padding:18px;z-index:1}
-.rcard__title{font-size:1.05rem;font-weight:600;color:#fff}
-.rcard__meta{font-size:.82rem;opacity:.85;margin-top:4px}
+/* menu mobile (sheet) */
+.sheet{position:fixed;inset:0;z-index:60;visibility:hidden}
+.sheet[data-open="true"]{visibility:visible}
+.sheet__scrim{position:absolute;inset:0;background:rgba(0,0,0,.5);opacity:0;transition:.25s}
+.sheet[data-open="true"] .sheet__scrim{opacity:1}
+.sheet__panel{
+  position:absolute;top:0;left:0;bottom:0;width:min(82vw,320px);
+  background:rgba(14,19,26,.92);backdrop-filter:blur(16px);
+  border-right:1px solid rgba(255,255,255,.12);
+  padding:76px 20px 24px;transform:translateX(-100%);transition:transform .28s var(--ease);
+  display:flex;flex-direction:column;gap:8px;
+}
+.sheet[data-open="true"] .sheet__panel{transform:translateX(0)}
+.sheet__panel a{padding:14px 16px;border-radius:12px;font-weight:500;font-size:1.05rem;color:rgba(255,255,255,.9)}
+.sheet__panel a:hover{background:rgba(255,255,255,.1)}
+.sheet__panel .hd__cta{justify-content:center;margin-top:12px}
+.sheet__close{position:absolute;top:20px;right:20px;width:40px;height:40px;border-radius:10px;
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:#fff;font-size:20px}
 
-/* ---------- whatsapp flutuante ---------- */
-.wa{position:fixed;left:22px;bottom:22px;z-index:60;width:58px;height:58px;border-radius:50%;
-  background:#25D366;display:grid;place-items:center;box-shadow:0 10px 30px rgba(0,0,0,.3)}
-.wa svg{width:30px;height:30px;fill:#fff}
-.wa:hover{transform:translateY(-2px)}
+/* ============================================================ HOME layout */
+.home{
+  position:relative;z-index:10;height:100%;
+  display:grid;grid-template-columns:minmax(320px,42%) 1fr;align-items:center;gap:24px;
+  width:min(100% - 64px,1280px);margin-inline:auto;
+  padding-top:40px;
+}
 
-/* ---------- footer stub ---------- */
-.ft{background:var(--ink);color:#cfcfcf;padding:48px 0;text-align:center;font-size:.9rem}
-.ft b{color:#fff;font-family:var(--font-display)}
+/* ---------- painel de texto ---------- */
+.panel{max-width:520px}
+.panel__kicker{
+  font-family:var(--font-display);text-transform:uppercase;letter-spacing:.18em;
+  font-size:.74rem;color:var(--brand-verde);font-weight:600;margin-bottom:14px;
+}
+.panel__sub{
+  font-family:var(--font-display);font-weight:500;font-size:1rem;
+  color:rgba(255,255,255,.82);margin-bottom:6px;
+}
+.panel__title{
+  font-size:clamp(2.4rem,4.6vw,4rem);font-weight:700;letter-spacing:-.01em;
+  text-shadow:0 4px 30px rgba(0,0,0,.4);
+}
+.panel__date{
+  display:inline-block;margin-top:16px;padding:6px 14px;border-radius:999px;
+  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
+  font-size:.85rem;font-weight:500;
+}
+.panel__desc{margin:18px 0 26px;font-size:1.04rem;line-height:1.62;color:rgba(255,255,255,.9);max-width:44ch}
+.panel__btn{
+  display:inline-flex;align-items:center;gap:10px;padding:15px 30px;border-radius:999px;
+  background:var(--brand-grad);color:#fff;font-weight:600;font-family:var(--font-display);
+  font-size:1rem;transition:.2s var(--ease);box-shadow:0 12px 34px rgba(31,168,221,.32);
+}
+.panel__btn:hover{transform:translateY(-2px);filter:brightness(1.06)}
+.panel__btn svg{width:18px;height:18px;fill:currentColor}
+/* transição de troca de roteiro */
+.panel__anim{transition:opacity .4s var(--ease),transform .4s var(--ease)}
+.panel.is-switching .panel__anim{opacity:0;transform:translateY(14px)}
 
-/* ---------- responsivo ---------- */
-@media(max-width:860px){
-  .hd__nav,.hd__tag{display:none}
-  .hero__grid{grid-template-columns:1fr;gap:28px}
-  .hero{min-height:auto;padding-block:calc(var(--header-h) + 40px) 60px}
+/* ---------- focus-rail (coverflow) ---------- */
+.rail{position:relative;height:100%;display:flex;align-items:center;justify-content:center;perspective:1600px}
+.rail__track{position:relative;width:100%;height:74vh;max-height:660px;transform-style:preserve-3d}
+.slide{
+  position:absolute;top:50%;left:50%;
+  width:clamp(230px,26vw,340px);aspect-ratio:350/560;
+  margin-left:calc(clamp(230px,26vw,340px) / -2);
+  margin-top:calc(min(74vh,660px) / -2);
+  height:min(74vh,660px);
+  border-radius:20px;overflow:hidden;cursor:pointer;
+  box-shadow:0 30px 60px rgba(0,0,0,.5);
+  transition:transform .6s var(--ease),filter .6s var(--ease),opacity .6s var(--ease);
+  will-change:transform,filter,opacity;
+}
+.slide img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.slide::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(to top,rgba(0,0,0,.72),transparent 46%)}
+.slide__label{
+  position:absolute;left:0;right:0;bottom:0;z-index:2;padding:22px 20px;
+  transition:opacity .5s var(--ease);
+}
+.slide__label .t{font-family:var(--font-display);font-weight:600;font-size:1.15rem;line-height:1.2}
+.slide__label .d{font-size:.82rem;opacity:.85;margin-top:5px}
+.slide:not(.is-active) .slide__label{opacity:0}
+.slide.is-active{filter:none}
+.slide.is-active::after{background:linear-gradient(to top,rgba(0,0,0,.6),transparent 52%)}
+
+/* setas */
+.rail__nav{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);z-index:40;display:flex;gap:14px}
+.rail__nav button{
+  width:52px;height:52px;border-radius:50%;display:grid;place-items:center;
+  background:rgba(16,22,30,.5);border:1px solid rgba(255,255,255,.22);color:#fff;
+  backdrop-filter:blur(8px);transition:.18s var(--ease);
+}
+.rail__nav button:hover{background:var(--brand-grad);border-color:transparent;transform:scale(1.05)}
+.rail__nav svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2.2}
+
+/* ============================================================ RESPONSIVO */
+@media(max-width:960px){
+  .home{grid-template-columns:1fr;gap:10px;padding-top:96px;align-content:center;
+    width:min(100% - 40px,640px);text-align:center}
+  .panel{max-width:none;order:2}
+  .panel__desc{margin-inline:auto}
+  .rail{order:1}
+  .rail__track{height:44vh}
+  .slide{height:min(44vh,420px);margin-top:calc(min(44vh,420px) / -2);
+    width:clamp(180px,52vw,250px);margin-left:calc(clamp(180px,52vw,250px) / -2)}
+  .rail__nav{bottom:auto;top:calc(44vh + 8px)}
+  .hd__nav{display:none}
+  .hd__cta{display:none}
+  .hd__burger{display:flex}
+}
+@media(max-width:960px) and (max-height:720px){
+  .panel__title{font-size:clamp(1.8rem,7vw,2.4rem)}
+  .panel__desc{font-size:.92rem;margin-top:10px;margin-bottom:16px}
+  .rail__track{height:38vh}
+  .slide{height:min(38vh,360px);margin-top:calc(min(38vh,360px) / -2)}
 }

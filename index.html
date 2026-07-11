@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <!-- PREVIEW/ACOMPANHAMENTO — manter noindex enquanto não for produção -->
   <meta name="robots" content="noindex, nofollow">
   <title>Pereira Oliveira Turismo — Realizando sonhos desde 1967</title>
@@ -15,10 +15,19 @@
 </head>
 <body>
 
-  <!-- HEADER -->
-  <header class="hd">
-    <div class="wrap hd__in">
-      <a href="#" class="hd__logo" aria-label="Pereira Oliveira Turismo">
+  <main class="stage">
+
+    <!-- VÍDEO DE FUNDO (autoplay, mudo, loop, sem controles) -->
+    <div class="video-bg">
+      <iframe
+        src="https://www.youtube-nocookie.com/embed/QjX1lU-r7Kg?autoplay=1&mute=1&controls=0&loop=1&playlist=QjX1lU-r7Kg&modestbranding=1&showinfo=0&rel=0&iv_load_policy=3&playsinline=1&disablekb=1&fs=0&cc_load_policy=0"
+        title="Pereira Oliveira Turismo" frameborder="0"
+        allow="autoplay; encrypted-media" allowfullscreen></iframe>
+    </div>
+
+    <!-- HEADER glass flutuante -->
+    <header class="hd">
+      <a href="#inicio" class="hd__logo" aria-label="Pereira Oliveira Turismo">
         <img src="assets/images/logo.png" alt="Pereira Oliveira Turismo">
       </a>
       <nav class="hd__nav">
@@ -26,58 +35,60 @@
         <a href="#historia">Nossa História</a>
         <a href="#contato">Contato</a>
       </nav>
-      <div class="hd__right">
-        <span class="hd__tag">Realizando sonhos desde 1967</span>
-        <div class="hd__social">
-          <a href="https://wa.me/5548996048882" target="_blank" rel="noopener" aria-label="WhatsApp">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15l-1 3.6 3.7-1A10 10 0 1 0 12 2Zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3-.6-2.6-1-4.2-3.6-4.3-3.8-.1-.2-1-1.3-1-2.5s.6-1.8.9-2c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.4.5-.3.3c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2 1.2.9 2 .1.3.3.2.5 0l.7-.8c.2-.3.4-.2.6-.1l1.9.9c.2.1.4.2.4.3.1.2.1.6 0 1Z"/></svg>
-          </a>
-          <a href="https://www.instagram.com/pereiraoliveiraturismo" target="_blank" rel="noopener" aria-label="Instagram">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.2c3.2 0 3.6 0 4.8.1 1.2.1 1.8.3 2.2.4.6.2 1 .5 1.4.9.4.4.7.8.9 1.4.1.4.3 1 .4 2.2.1 1.2.1 1.6.1 4.8s0 3.6-.1 4.8c-.1 1.2-.3 1.8-.4 2.2-.2.6-.5 1-.9 1.4-.4.4-.8.7-1.4.9-.4.1-1 .3-2.2.4-1.2.1-1.6.1-4.8.1s-3.6 0-4.8-.1c-1.2-.1-1.8-.3-2.2-.4a3.8 3.8 0 0 1-1.4-.9 3.8 3.8 0 0 1-.9-1.4c-.1-.4-.3-1-.4-2.2C2.2 15.6 2.2 15.2 2.2 12s0-3.6.1-4.8c.1-1.2.3-1.8.4-2.2.2-.6.5-1 .9-1.4.4-.4.8-.7 1.4-.9.4-.1 1-.3 2.2-.4C8.4 2.2 8.8 2.2 12 2.2Zm0 3.2A6.6 6.6 0 1 0 12 18.6 6.6 6.6 0 0 0 12 5.4Zm0 10.9a4.3 4.3 0 1 1 0-8.6 4.3 4.3 0 0 1 0 8.6Zm6.8-11.1a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z"/></svg>
+      <a class="hd__cta" href="https://wa.me/5548996048882" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24"><path d="M17.5 14.4c-.3-.1-1.7-.8-1.9-.9-.3-.1-.4-.1-.6.1-.2.3-.7.9-.8 1-.2.2-.3.2-.6.1-.3-.1-1.2-.4-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6.1-.1.3-.3.4-.5.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5-.1-.1-.6-1.5-.9-2-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.2.3-.9.9-.9 2.2 0 1.3.9 2.5 1.1 2.7.1.2 1.8 2.8 4.4 3.9.6.3 1.1.4 1.5.5.6.2 1.2.2 1.6.1.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2 0-.1-.2-.2-.5-.3zM12 2a10 10 0 0 0-8.7 15l-1.3 4 4.1-1.3A10 10 0 1 0 12 2Zm0 18.3c-1.5 0-3-.4-4.3-1.2l-.3-.2-2.5.8.8-2.4-.2-.3A8.3 8.3 0 1 1 12 20.3Z"/></svg>
+        WhatsApp
+      </a>
+      <button class="hd__burger" id="burger" aria-label="Abrir menu">
+        <svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </header>
+
+    <!-- MENU MOBILE (sheet) -->
+    <div class="sheet" id="sheet" data-open="false">
+      <div class="sheet__scrim"></div>
+      <nav class="sheet__panel">
+        <button class="sheet__close" id="sheet-close" aria-label="Fechar menu">×</button>
+        <a href="#inicio">Início</a>
+        <a href="#historia">Nossa História</a>
+        <a href="#contato">Contato</a>
+        <a class="hd__cta" href="https://wa.me/5548996048882" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24"><path d="M17.5 14.4c-.3-.1-1.7-.8-1.9-.9-.3-.1-.4-.1-.6.1-.2.3-.7.9-.8 1-.2.2-.3.2-.6.1-.3-.1-1.2-.4-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6.1-.1.3-.3.4-.5.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5-.1-.1-.6-1.5-.9-2-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.2.3-.9.9-.9 2.2 0 1.3.9 2.5 1.1 2.7.1.2 1.8 2.8 4.4 3.9.6.3 1.1.4 1.5.5.6.2 1.2.2 1.6.1.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2 0-.1-.2-.2-.5-.3zM12 2a10 10 0 0 0-8.7 15l-1.3 4 4.1-1.3A10 10 0 1 0 12 2Zm0 18.3c-1.5 0-3-.4-4.3-1.2l-.3-.2-2.5.8.8-2.4-.2-.3A8.3 8.3 0 1 1 12 20.3Z"/></svg>
+          Falar no WhatsApp
+        </a>
+      </nav>
+    </div>
+
+    <!-- HOME: painel de texto + focus-rail -->
+    <section class="home" id="inicio">
+      <div class="panel" id="panel">
+        <p class="panel__kicker">Próximas viagens em grupo</p>
+        <div class="panel__anim">
+          <p class="panel__sub" id="p-sub">Suíça, França, Alemanha e Holanda</p>
+          <h1 class="panel__title" id="p-title">Mercados de Natal</h1>
+          <span class="panel__date" id="p-date">11 dias · 10 a 21/12/2025</span>
+          <p class="panel__desc" id="p-desc">A exclusiva oportunidade de viver o encanto do Natal em uma jornada única, visitando fascinantes Mercados de Natal que atraem milhares de pessoas do mundo inteiro.</p>
+          <a class="panel__btn" id="p-btn" href="#">
+            Ver roteiro
+            <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </a>
         </div>
       </div>
-    </div>
-  </header>
 
-  <!-- HERO -->
-  <section class="hero" id="inicio">
-    <div class="hero__bg"><img src="assets/images/roteiro-mercados-natal.jpg" alt=""></div>
-    <div class="wrap hero__grid">
-      <div>
-        <p class="hero__kicker">Próximas viagens em grupo</p>
-        <h1 class="hero__title">Mercados de Natal</h1>
-        <p class="hero__lead">A oportunidade de viver o encanto do Natal em uma jornada única, visitando os mercados que atraem milhares de viajantes do mundo inteiro.</p>
-        <a href="#contato" class="btn btn--ghost">Ver roteiro</a>
+      <div class="rail" id="rail" aria-label="Roteiros">
+        <div class="rail__track" id="rail-track"></div>
+        <div class="rail__nav">
+          <button id="nav-prev" aria-label="Roteiro anterior">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+          <button id="nav-next" aria-label="Próximo roteiro">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+        </div>
       </div>
-      <div class="roteiros" aria-label="Roteiros">
-        <article class="rcard"><img src="assets/images/roteiro-mercados-natal.jpg" alt="Suíça, França, Alemanha e Holanda">
-          <div class="rcard__body"><div class="rcard__title">Suíça, França, Alemanha e Holanda</div><div class="rcard__meta">11 dias · 10 a 21/12/25</div></div></article>
-        <article class="rcard"><img src="assets/images/roteiro-tesouros-asiaticos.jpg" alt="Tesouros Asiáticos">
-          <div class="rcard__body"><div class="rcard__title">Tesouros Asiáticos</div><div class="rcard__meta">21 dias · 03 a 23/03/26</div></div></article>
-        <article class="rcard"><img src="assets/images/roteiro-cerejeiras.jpg" alt="Na Floração das Cerejeiras">
-          <div class="rcard__body"><div class="rcard__title">Na Floração das Cerejeiras</div><div class="rcard__meta">16 dias · 11 a 27/04/26</div></div></article>
-        <article class="rcard"><img src="assets/images/roteiro-grecia.jpg" alt="Grécia com Cruzeiro">
-          <div class="rcard__body"><div class="rcard__title">Grécia com Cruzeiro</div><div class="rcard__meta">16 dias · 02 a 18/05/26</div></div></article>
-        <article class="rcard"><img src="assets/images/roteiro-mediterraneo.jpg" alt="Encantos do Mediterrâneo">
-          <div class="rcard__body"><div class="rcard__title">Encantos do Mediterrâneo</div><div class="rcard__meta">14 dias · 04 a 17/06/26</div></div></article>
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- FOOTER stub (seções serão construídas em conjunto) -->
-  <footer class="ft" id="contato">
-    <div class="wrap">
-      <b>Pereira Oliveira Turismo</b> — Realizando sonhos desde 1967<br>
-      Rua Almirante Lamego 1090, Sala 801, Centro, Florianópolis/SC · WhatsApp 48 99604-8882<br>
-      <small style="opacity:.6">Site em construção · preview de acompanhamento</small>
-    </div>
-  </footer>
-
-  <!-- WHATSAPP flutuante -->
-  <a class="wa" href="https://wa.me/5548996048882" target="_blank" rel="noopener" aria-label="Falar no WhatsApp">
-    <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15l-1 3.6 3.7-1A10 10 0 1 0 12 2Zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3-.6-2.6-1-4.2-3.6-4.3-3.8-.1-.2-1-1.3-1-2.5s.6-1.8.9-2c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.4.5-.3.3c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2 1.2.9 2 .1.3.3.2.5 0l.7-.8c.2-.3.4-.2.6-.1l1.9.9c.2.1.4.2.4.3.1.2.1.6 0 1Z"/></svg>
-  </a>
+  </main>
 
   <script src="assets/js/main.js"></script>
 </body>

@@ -10,7 +10,7 @@ scratch_*.html
 _*.css
 *.tmp
 .playwright-mcp/
-po-current-site.jpeg
+po-*.jpeg
 
 # sistema
 .DS_Store
