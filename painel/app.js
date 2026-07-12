@@ -417,32 +417,56 @@ function prefill(p){
   if(p.galeria&&p.galeria.length&&!$('#r-capa').value){$('#r-capa').value=p.galeria[0];$('#r-capa-wrap').innerHTML=`<div class="gal-thumb" style="background-image:url('${p.galeria[0]}')" data-capa><button type="button">✕</button></div>`;}
 }
 /* ---- parser comum (parágrafos → estrutura) ---- */
+const RX_WEEKDAY=/(segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)(\s*[-–]?\s*feira)?/i;
+const RX_LONGDATE=/\d{1,2}\s*de\s*[a-zà-ú]+/i;
+// Linha de cidade/destino: curta, toda em maiúsculas, não começa com dígito
+// (ex.: "BRASIL", "COPENHAGUE – CASTELO DE KRONBORG"). Distingue do texto descritivo.
+function isCityLine(s){return s.length<=90 && /[A-ZÀ-Ý]/.test(s) && s===s.toUpperCase() && !/^\d/.test(s);}
+// Detecta refeições explicitamente incluídas no texto do dia.
+function dayMeals(desc){
+  const m=[];
+  if(/caf[ée]\s+da\s+manh/i.test(desc))m.push('Café da manhã');
+  if(/almo[çc]o\s+inclu|inclu[ií]d[ao][^.]{0,25}almo[çc]o/i.test(desc))m.push('Almoço');
+  if(/jantar\s+inclu|inclu[ií]d[ao][^.]{0,25}jantar/i.test(desc))m.push('Jantar');
+  return [...new Set(m)].join(', ');
+}
 function parseParas(paras){
   const out={titulo:'',periodo:'',dias:null,noites:null,roteiro_dias:[],inclui:[],nao_inclui:[],hoteis:[],descricao_curta:''};
-  let section=null;
+  let section=null, expectCity=false;
   paras.forEach(line=>{
     const L=(line||'').replace(/\s+/g,' ').trim();if(!L)return;const up=L.toUpperCase();
     if(!out.titulo){out.titulo=L;return;}
     if(!out.periodo&&/\d+\s*dias?/i.test(L)&&/\d/.test(L)){out.periodo=L;const md=L.match(/(\d+)\s*dias?/i);if(md)out.dias=+md[1];const mn=L.match(/(\d+)\s*noites?/i);if(mn)out.noites=+mn[1];return;}
-    if(/HOT[ÉE]IS/.test(up)){section='hoteis';return;}
-    if(/N[ÃA]O\s+INCLUI/.test(up)){section='nao';return;}
-    if(/PACOTE\s+INCLUI|^INCLUI\b/.test(up)){section='inc';return;}
-    if(/VALORES/.test(up)){section='val';return;}
-    const dm=L.match(/^(\d+)\s*[ºo]?\s*DIA\b\s*[–\-:]?\s*(.*)$/i);
+    if(/HOT[ÉE]IS|HOTELARIA/.test(up)){section='hoteis';expectCity=false;return;}
+    if(/N[ÃA]O\s+INCLUI/.test(up)){section='nao';expectCity=false;return;}
+    if(/PACOTE\s+INCLUI|^INCLUI\b|EST[ÃA]O\s+INCLU/.test(up)){section='inc';expectCity=false;return;}
+    if(/VALORES|VALOR\s+TOTAL|FORMA\s+DE\s+PAGAMENTO/.test(up)){section='val';expectCity=false;return;}
+    // Cabeçalho de dia — aceita "Dia N – data – dia da semana" (formato da cliente)
+    // e o antigo "N[º] DIA – Cidade : descrição".
+    const dm=L.match(/^Dia\s*(\d{1,3})\b\s*(.*)$/i) || L.match(/^(\d{1,3})\s*[ºo]?\s*DIA\b\s*(.*)$/i);
     if(dm){
-      const rest=dm[2];const ci=rest.indexOf(':');
-      const header=ci>=0?rest.slice(0,ci):rest;const desc=ci>=0?rest.slice(ci+1).trim():'';
-      const hp=header.split(/\s+[–—-]\s+/);
-      const dataP=(hp.find(x=>/\d{1,2}\/\d{1,2}/.test(x))||'').trim();
-      const semP=(hp.find(x=>/FEIRA|S[ÁA]BADO|DOMINGO/i.test(x))||'').trim();
-      const cid=hp.filter(x=>x.trim()&&x!==dataP&&x!==semP).join(' – ').trim()||header.trim();
-      out.roteiro_dias.push({n:+dm[1],data:dataP,dia_semana:semP,cidades:cid,descricao:desc});
-      section='day';return;
+      let rest=dm[2].replace(/^[–—\-:.\s]+/,'');
+      const ci=rest.indexOf(':');
+      let header=rest, desc='';
+      if(ci>=0){header=rest.slice(0,ci);desc=rest.slice(ci+1).trim();}
+      const hp=header.split(/\s*[–—]\s*|\s+-\s+/).map(s=>s.trim()).filter(Boolean);
+      const dataP=(hp.find(x=>/\d{1,2}\s*\/\s*\d{1,2}/.test(x)||RX_LONGDATE.test(x)||/\d{1,2}\.\d{1,2}/.test(x))||'').trim();
+      const semP=(hp.find(x=>RX_WEEKDAY.test(x))||'').trim();
+      const cid=hp.filter(x=>x!==dataP&&x!==semP&&!RX_WEEKDAY.test(x)&&!RX_LONGDATE.test(x)).join(' – ').trim();
+      out.roteiro_dias.push({n:+dm[1],data:dataP,dia_semana:semP,cidades:cid,descricao:desc,refeicoes:dayMeals(desc)});
+      section='day';expectCity=!cid; // sem cidade no cabeçalho → a próxima linha de destino é a cidade
+      return;
     }
     if(section==='hoteis')out.hoteis.push(L);
     else if(section==='inc')out.inclui.push(L);
     else if(section==='nao')out.nao_inclui.push(L);
-    else if(section==='day'&&out.roteiro_dias.length){const last=out.roteiro_dias[out.roteiro_dias.length-1];last.descricao=(last.descricao?last.descricao+' ':'')+L;}
+    else if(section==='day'&&out.roteiro_dias.length){
+      const last=out.roteiro_dias[out.roteiro_dias.length-1];
+      if(expectCity&&isCityLine(L)){last.cidades=L;expectCity=false;return;}
+      expectCity=false;
+      last.descricao=(last.descricao?last.descricao+' ':'')+L;
+      last.refeicoes=dayMeals(last.descricao);
+    }
   });
   if(!out.dias&&out.roteiro_dias.length)out.dias=out.roteiro_dias.length;
   if(out.roteiro_dias.length){const c=out.roteiro_dias.map(d=>d.cidades).filter(Boolean);out.descricao_curta=out.descricao_curta||('Roteiro por '+[...new Set(c.join(' · ').split(/[·–—]/).map(s=>s.trim()))].slice(0,4).join(', ')+'.');}
