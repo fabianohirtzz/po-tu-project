@@ -96,10 +96,55 @@ página do roteiro**.
 
 ## Deploy
 
-- **Produção:** hospedagem cPanel/PHP (padrão NOX). Domínio `pereiraoliveiraturismo.com.br`.
+- **Produção:** hospedagem **erehost** (cPanel/PHP, padrão NOX). Domínio
+  `pereiraoliveiraturismo.com.br`. Deploy é **manual via FTP** (não há CI/GitHub Action).
 - **Preview/acompanhamento:** **GitHub Pages** deste repo — sempre com `noindex`
   (o backend PHP não roda no Pages; o preview serve o front-end em construção).
 - Repo: https://github.com/fabianohirtzz/po-tu-project
+
+### Como fazer deploy na hospedagem (FTP erehost)
+
+- **Protocolo:** FTPS explícito (porta 21). O certificado do servidor tem nome
+  divergente (hospedagem compartilhada), então o `curl` precisa de `-k` para pular a
+  verificação do certificado (a conexão continua criptografada).
+- **Host:** `ftp.pereiraoliveiraturismo.com.br`
+- **Usuário:** `sitepo@pereiraoliveiraturismo.com.br`
+- **Senha:** NÃO versionada aqui (o CLAUDE.md vai pro GitHub). O cliente/dono fornece
+  na hora do deploy; usar via arquivo `.netrc` temporário no scratchpad (fora do Git),
+  nunca colar a senha inline no comando. Apagar o `.netrc` ao terminar.
+- **A raiz do FTP já é o docroot** do site — `index.html`, as páginas de roteiro,
+  `enviar.php`, `importar.php`, `config.local.php` e as pastas `assets/`, `images/`,
+  `lib/`, `painel/` ficam direto na raiz. Ou seja, cada arquivo do repo sobe para o
+  caminho equivalente (ex.: `painel/app.js` → `/painel/app.js`).
+- **Segredos:** `config.local.php` (chaves SMTP/Supabase) e a chave `GEMINI_API_KEY`
+  já vivem só no servidor; **nunca** sobrescrever esses no deploy.
+
+Receita (ajustar o `<ARQUIVO>` e o caminho de destino):
+
+```bash
+# 1) netrc temporario no scratchpad (fora do Git)
+cat > "$SCRATCH/.netrc" <<'EOF'
+machine ftp.pereiraoliveiraturismo.com.br
+login sitepo@pereiraoliveiraturismo.com.br
+password <SENHA_FORNECIDA_NA_HORA>
+EOF
+chmod 600 "$SCRATCH/.netrc"
+
+# 2) listar (conferir estrutura antes de sobrescrever)
+curl -sS -k --ssl-reqd --netrc-file "$SCRATCH/.netrc" --ftp-pasv \
+  "ftp://ftp.pereiraoliveiraturismo.com.br/painel/"
+
+# 3) subir um arquivo (upload = -T)
+curl -sS -k --ssl-reqd --netrc-file "$SCRATCH/.netrc" --ftp-pasv \
+  -T "painel/app.js" "ftp://ftp.pereiraoliveiraturismo.com.br/painel/app.js"
+
+# 4) conferir tamanho/data no servidor e apagar o netrc
+curl -sS -k --ssl-reqd --netrc-file "$SCRATCH/.netrc" --ftp-pasv \
+  "ftp://ftp.pereiraoliveiraturismo.com.br/painel/" | grep app.js
+rm -f "$SCRATCH/.netrc"
+```
+
+Depois do deploy, testar com **Ctrl+F5** (cache do navegador para JS/CSS).
 
 ## Regras de copy (Freela)
 
@@ -169,8 +214,12 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   usa a capa de cada roteiro (`assets/images/roteiro-*.jpg`) e a da Grécia nas páginas gerais.
   `roteiro.html` (template dinâmico) fica `noindex` e fora do sitemap. Criado **`404.html`**
   branded (`noindex`) + `ErrorDocument 404` no `.htaccess`. `sitemap.xml` + `robots.txt` já ok.
-  **Falta (pós-deploy):** validar no Rich Results Test + Search Console (verificar propriedade,
-  submeter sitemap) e confirmar a Google Tag `GT-TNH4L3BV` disparando em produção.
+  **Deploy (12/07/2026):** as 8 páginas + `404.html` + `.htaccess` publicados na ereHost por
+  FTP (docroot direto); verificado no ar (OG, JSON-LD, 404 = HTTP 404). Meta
+  `google-site-verification` (token `nGYv…dAVg`) já no `index.html` em produção. Google Tag
+  `GT-TNH4L3BV` confirmada pela cliente como a correta.
+  **Falta (cliente):** no Search Console, clicar **Verify** (método HTML tag já está no ar),
+  submeter o `sitemap.xml` e rodar o Rich Results Test nas URLs reais.
 - **Próximo:** página/seção de Contato geral (formulário de lead na home) · backend
   `enviar.php` + Supabase · painel de leads.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
