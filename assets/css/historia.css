@@ -81,13 +81,13 @@ button{font-family:inherit;cursor:pointer}
 .sheet[data-open="true"] .sheet__panel{transform:translateX(0)}
 .sheet__panel a{padding:14px 16px;border-radius:12px;font-weight:500;font-size:1.05rem;color:rgba(255,255,255,.9)}
 .sheet__panel a:hover{background:rgba(255,255,255,.1)}
-.sheet__panel .hd__cta{display:inline-flex;justify-content:center;margin-top:12px}
+.sheet__panel .hd__cta{display:inline-flex;justify-content:flex-start;padding:14px 16px;margin-top:12px}
 .sheet__close{position:absolute;top:20px;right:20px;width:40px;height:40px;border-radius:10px;
   background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:#fff;font-size:20px}
 /* redes sociais no rodapé do menu mobile */
 .sheet__social{display:flex;gap:12px;margin-top:auto;padding-top:22px}
 .sheet__social a{
-  width:46px;height:46px;border-radius:13px;display:grid;place-items:center;
+  width:46px;height:46px;border-radius:13px;padding:0;display:grid;place-items:center;
   background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);
   color:rgba(255,255,255,.9);transition:.18s var(--ease);
 }

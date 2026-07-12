@@ -91,13 +91,13 @@ button{font-family:inherit;cursor:pointer}
 .sheet[data-open="true"] .sheet__panel{transform:translateX(0)}
 .sheet__panel a{padding:14px 16px;border-radius:12px;font-weight:500;font-size:1.05rem;color:rgba(255,255,255,.9)}
 .sheet__panel a:hover{background:rgba(255,255,255,.1)}
-.sheet__panel .hd__cta{display:inline-flex;justify-content:center;margin-top:12px}
+.sheet__panel .hd__cta{display:inline-flex;justify-content:flex-start;padding:14px 16px;margin-top:12px}
 .sheet__close{position:absolute;top:20px;right:20px;width:40px;height:40px;border-radius:10px;
   background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:#fff;font-size:20px}
 /* redes sociais no rodapé do menu mobile */
 .sheet__social{display:flex;gap:12px;margin-top:auto;padding-top:22px}
 .sheet__social a{
-  width:46px;height:46px;border-radius:13px;display:grid;place-items:center;
+  width:46px;height:46px;border-radius:13px;padding:0;display:grid;place-items:center;
   background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);
   color:rgba(255,255,255,.9);transition:.18s var(--ease);
 }
@@ -207,20 +207,56 @@ button{font-family:inherit;cursor:pointer}
   .hd__cta{display:none}
   .hd__burger{display:flex}
 }
-/* telas médias/baixas: aperta o texto e o card pra caber sem rolagem */
-@media(max-width:960px) and (max-height:760px){
-  .home{gap:8px;padding-top:76px}
-  .panel__kicker{margin-bottom:4px;font-size:.7rem}
-  .panel__sub{font-size:.92rem;margin-bottom:4px}
-  .panel__title{font-size:clamp(1.55rem,6vw,2.05rem)}
-  .panel__desc{font-size:.85rem;line-height:1.5;margin:6px auto 10px}
-  .panel__date{margin-top:8px}
-  .rail__track{height:min(29vh,290px)}
-  .slide{height:min(29vh,290px);margin-top:calc(min(29vh,290px) / -2)}
+/* ===================== SÓ CELULAR (≤640px) =====================
+   Ajustes exclusivos de celular; tablet (641–960) e desktop ficam
+   com o layout do bloco acima, inalterados. */
+@media(max-width:640px){
+  .home{gap:14px;padding-top:78px;padding-bottom:16px}
+
+  /* card maior + setas nas laterais, sobre a imagem, sem círculo */
+  .rail{position:relative}
+  .rail__track{height:min(48vh,460px)}
+  .slide{
+    height:min(48vh,460px);margin-top:calc(min(48vh,460px) / -2);
+    width:clamp(190px,58vw,300px);margin-left:calc(clamp(190px,58vw,300px) / -2);
+  }
+  .rail__nav{
+    position:absolute;inset:0;margin:0;padding:0 2px;z-index:30;pointer-events:none;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .rail__nav button{
+    pointer-events:auto;width:46px;height:46px;
+    background:none;border:none;box-shadow:none;backdrop-filter:none;
+  }
+  .rail__nav button:hover{background:none;border-color:transparent;transform:none}
+  .rail__nav svg{width:36px;height:36px;stroke-width:2.4;
+    filter:drop-shadow(0 2px 7px rgba(0,0,0,.65))}
+
+  /* dentro do card: só dias (linha 1) + data (linha 2), sem subtítulo */
+  .slide__label{padding:18px 18px 20px}
+  .slide__label .t{display:none}
+  .slide__label .d-sep{display:none}
+  .slide__label .d{display:flex;flex-direction:column;gap:3px;margin-top:0}
+  .slide__label .d-days{font-family:var(--font-display);font-weight:700;font-size:1.2rem;line-height:1.1}
+  .slide__label .d-date{font-size:.92rem;opacity:.9;line-height:1.2}
+
+  /* painel: sem kicker e sem data (o resto continua) */
+  .panel__kicker{display:none}
+  .panel__date{display:none}
+  .panel__sub{font-size:.98rem;margin-bottom:4px}
+  .panel__title{font-size:clamp(1.7rem,7.4vw,2.4rem);margin:0}
+  .panel__desc{font-size:.95rem;margin:10px auto 18px;max-width:50ch}
 }
-/* telas bem baixas: prioriza card + título + botão, oculta a descrição */
-@media(max-width:960px) and (max-height:640px){
-  .panel__sub,.panel__desc{display:none}
-  .rail__track{height:min(27vh,250px)}
-  .slide{height:min(27vh,250px);margin-top:calc(min(27vh,250px) / -2)}
+/* celular baixo: aperta card e texto pra caber sem rolagem */
+@media(max-width:640px) and (max-height:740px){
+  .home{gap:10px;padding-top:74px}
+  .rail__track{height:min(42vh,380px)}
+  .slide{height:min(42vh,380px);margin-top:calc(min(42vh,380px) / -2)}
+  .panel__title{font-size:clamp(1.5rem,6.6vw,2rem)}
+  .panel__desc{font-size:.88rem;margin:8px auto 12px}
+}
+@media(max-width:640px) and (max-height:640px){
+  .panel__desc{display:none}
+  .rail__track{height:min(40vh,320px)}
+  .slide{height:min(40vh,320px);margin-top:calc(min(40vh,320px) / -2)}
 }

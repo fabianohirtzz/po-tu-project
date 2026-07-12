@@ -75,8 +75,16 @@
     const slides = ROTEIROS.map((r, i) => {
       const s = document.createElement('article');
       s.className = 'slide'; s.dataset.index = i;
+      // separa "N dias · data" em dias + data; o CSS decide o formato por tela
+      // (desktop/tablet: subtítulo + "N dias · data" inline; celular: dias e data em 2 linhas)
+      const parts = String(r.data || '').split(' · ');
+      const days = parts.length > 1 ? parts[0] : '';
+      const date = parts.length > 1 ? parts.slice(1).join(' · ') : (parts[0] || '');
+      const dLabel = days
+        ? '<span class="d-days">' + days + '</span><span class="d-sep"> · </span><span class="d-date">' + date + '</span>'
+        : '<span class="d-date">' + date + '</span>';
       s.innerHTML = '<img src="' + r.img + '" alt="' + (r.subtitulo || r.titulo) + '">' +
-        '<div class="slide__label"><div class="t">' + (r.subtitulo || r.titulo) + '</div><div class="d">' + r.data + '</div></div>';
+        '<div class="slide__label"><div class="t">' + (r.subtitulo || r.titulo) + '</div><div class="d">' + dLabel + '</div></div>';
       s.addEventListener('click', () => { if (i !== active) go(i); });
       track.appendChild(s);
       return s;
