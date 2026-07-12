@@ -91,9 +91,18 @@ button{font-family:inherit;cursor:pointer}
 .sheet[data-open="true"] .sheet__panel{transform:translateX(0)}
 .sheet__panel a{padding:14px 16px;border-radius:12px;font-weight:500;font-size:1.05rem;color:rgba(255,255,255,.9)}
 .sheet__panel a:hover{background:rgba(255,255,255,.1)}
-.sheet__panel .hd__cta{justify-content:center;margin-top:12px}
+.sheet__panel .hd__cta{display:inline-flex;justify-content:center;margin-top:12px}
 .sheet__close{position:absolute;top:20px;right:20px;width:40px;height:40px;border-radius:10px;
   background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:#fff;font-size:20px}
+/* redes sociais no rodapé do menu mobile */
+.sheet__social{display:flex;gap:12px;margin-top:auto;padding-top:22px}
+.sheet__social a{
+  width:46px;height:46px;border-radius:13px;display:grid;place-items:center;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);
+  color:rgba(255,255,255,.9);transition:.18s var(--ease);
+}
+.sheet__social a:hover{background:var(--brand-grad);border-color:transparent;color:#fff;transform:translateY(-1px)}
+.sheet__social svg{width:21px;height:21px}
 
 /* ============================================================ HOME layout */
 .home{
@@ -173,22 +182,45 @@ button{font-family:inherit;cursor:pointer}
 
 /* ============================================================ RESPONSIVO */
 @media(max-width:960px){
-  .home{grid-template-columns:1fr;gap:10px;padding-top:96px;align-content:center;
-    width:min(100% - 40px,640px);text-align:center}
-  .panel{max-width:none;order:2}
-  .panel__desc{margin-inline:auto}
-  .rail{order:1}
-  .rail__track{height:44vh}
-  .slide{height:min(44vh,420px);margin-top:calc(min(44vh,420px) / -2);
-    width:clamp(180px,52vw,250px);margin-left:calc(clamp(180px,52vw,250px) / -2)}
-  .rail__nav{bottom:auto;top:calc(44vh + 8px)}
+  .home{
+    display:flex;flex-direction:column;justify-content:safe center;align-items:center;
+    gap:10px;width:min(100% - 40px,640px);
+    padding-top:80px;padding-bottom:16px;text-align:center;
+  }
+  /* rail vira um bloco: card + setas empilhados na vertical, sem sobreposição */
+  .rail{order:1;height:auto;width:100%;flex:none;flex-direction:column;gap:10px;perspective:1200px}
+  .rail__track{height:min(31vh,300px);max-height:none}
+  .slide{
+    height:min(31vh,300px);margin-top:calc(min(31vh,300px) / -2);
+    width:clamp(164px,40vw,216px);margin-left:calc(clamp(164px,40vw,216px) / -2);
+  }
+  /* setas em linha própria, logo abaixo do card */
+  .rail__nav{position:static;transform:none;left:auto;bottom:auto;margin-top:0}
+
+  .panel{order:2;max-width:none;width:100%}
+  .panel__kicker{margin-bottom:8px}
+  .panel__title{font-size:clamp(1.85rem,6.8vw,2.5rem)}
+  .panel__date{margin-top:12px}
+  .panel__desc{margin:10px auto 16px;max-width:52ch}
+
   .hd__nav{display:none}
   .hd__cta{display:none}
   .hd__burger{display:flex}
 }
-@media(max-width:960px) and (max-height:720px){
-  .panel__title{font-size:clamp(1.8rem,7vw,2.4rem)}
-  .panel__desc{font-size:.92rem;margin-top:10px;margin-bottom:16px}
-  .rail__track{height:38vh}
-  .slide{height:min(38vh,360px);margin-top:calc(min(38vh,360px) / -2)}
+/* telas médias/baixas: aperta o texto e o card pra caber sem rolagem */
+@media(max-width:960px) and (max-height:760px){
+  .home{gap:8px;padding-top:76px}
+  .panel__kicker{margin-bottom:4px;font-size:.7rem}
+  .panel__sub{font-size:.92rem;margin-bottom:4px}
+  .panel__title{font-size:clamp(1.55rem,6vw,2.05rem)}
+  .panel__desc{font-size:.85rem;line-height:1.5;margin:6px auto 10px}
+  .panel__date{margin-top:8px}
+  .rail__track{height:min(29vh,290px)}
+  .slide{height:min(29vh,290px);margin-top:calc(min(29vh,290px) / -2)}
+}
+/* telas bem baixas: prioriza card + título + botão, oculta a descrição */
+@media(max-width:960px) and (max-height:640px){
+  .panel__sub,.panel__desc{display:none}
+  .rail__track{height:min(27vh,250px)}
+  .slide{height:min(27vh,250px);margin-top:calc(min(27vh,250px) / -2)}
 }
