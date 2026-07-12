@@ -5,6 +5,9 @@
 # index.html tem prioridade sobre qualquer index.php remanescente
 DirectoryIndex index.html index.php
 
+# Página de erro personalizada
+ErrorDocument 404 /404.html
+
 # Força HTTPS
 RewriteEngine On
 RewriteCond %{HTTPS} off

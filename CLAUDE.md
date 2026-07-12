@@ -70,7 +70,15 @@ página do roteiro**.
 - **PPT (.pptx):** viável (XML/zip), extrai texto e imagens dos slides.
 - **PDF:** melhor esforço — texto sem estrutura e imagens dependentes de layout.
 - **Recomendação:** padronizar no **.docx** com estrutura mínima de campos.
-- **Status:** backlog. Por ora o conteúdo é fornecido manualmente pela Freela.
+- **Status:** **implementado com IA (Gemini)**. O painel tem importador (`painel/app.js`)
+  que manda o arquivo pro `importar.php` (proxy PHP no cPanel; chave `GEMINI_API_KEY` no
+  `config.local.php`, valida login Supabase). PDF vai inteiro pro `gemini-2.5-flash`
+  multimodal (resolve capa embaralhada e alocação errada); docx/pptx mandam texto.
+  Saída em JSON estruturado (responseSchema) casando 1:1 com o formulário. Fallback: se
+  a IA falhar (preview sem PHP), cai no parser regex local. Imagens: extraídas no
+  navegador (PDF via pdf.js embedded XObjects com filtro <200px + dedup; docx/pptx do zip)
+  e vão **só pra galeria** — capa é sempre manual. Tier gratuito do AI Studio cobre o
+  volume (~10 roteiros/ano). Spec: `docs/superpowers/specs/2026-07-12-importador-roteiros-ia-design.md`.
 
 ## Design tokens (base — extraídos do site atual, refinar página a página)
 
@@ -150,6 +158,19 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   Mercados de Natal €6.635, Tesouros Asiáticos R$ 42.311,48, Cerejeiras R$ 57.891,52,
   Mediterrâneo R$ 34.145,00 (sem forma de pagamento informada). Dias da semana calculados e
   conferidos (os do site atual estavam errados).
+- **SEO (feito):** todas as 8 páginas indexáveis (home, História, Contato e os 5 roteiros)
+  têm `<title>`/`description` únicos, **canonical**, **Open Graph** (type/site_name/locale/
+  title/description/url/image/image:alt), **Twitter Card** `summary_large_image`,
+  `meta robots` (`index,follow,max-image-preview:large`), `theme-color` e `apple-touch-icon`.
+  **JSON-LD**: home = `TravelAgency` (com CNPJ/endereço/telefone/foundingDate 1967) + `WebSite`;
+  História = `AboutPage` + `BreadcrumbList`; Contato = `ContactPage` + `BreadcrumbList`; cada
+  roteiro = `TouristTrip` + `Offer` (preço/moeda reais, casando com a página) + `BreadcrumbList`.
+  Cada página com **1 `<h1>`** (Contato promovido de h2→h1); todas as `<img>` com `alt`. og:image
+  usa a capa de cada roteiro (`assets/images/roteiro-*.jpg`) e a da Grécia nas páginas gerais.
+  `roteiro.html` (template dinâmico) fica `noindex` e fora do sitemap. Criado **`404.html`**
+  branded (`noindex`) + `ErrorDocument 404` no `.htaccess`. `sitemap.xml` + `robots.txt` já ok.
+  **Falta (pós-deploy):** validar no Rich Results Test + Search Console (verificar propriedade,
+  submeter sitemap) e confirmar a Google Tag `GT-TNH4L3BV` disparando em produção.
 - **Próximo:** página/seção de Contato geral (formulário de lead na home) · backend
   `enviar.php` + Supabase · painel de leads.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
