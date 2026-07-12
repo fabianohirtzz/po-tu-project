@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
 Disallow: /painel/
+Disallow: /old/
 
 Sitemap: https://pereiraoliveiraturismo.com.br/sitemap.xml
