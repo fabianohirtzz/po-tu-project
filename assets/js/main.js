@@ -25,21 +25,18 @@
     if (p && p.catch) p.catch(function () {});
   })();
 
-  /* ---------- fallback (se o banco não responder) ---------- */
-  const FALLBACK = [
-    { titulo: 'Mercados de Natal', subtitulo: 'Suíça, França, Alemanha e Holanda', data: '11 dias · 10 a 21/12/2025', desc: 'A exclusiva oportunidade de viver o encanto do Natal em uma jornada única, visitando fascinantes Mercados de Natal que atraem milhares de pessoas do mundo inteiro.', img: 'assets/images/roteiro-mercados-natal.jpg', href: 'mercados-de-natal.html' },
-    { titulo: 'Vietnã, Tailândia e Doha', subtitulo: 'Tesouros Asiáticos', data: '21 dias · 03 a 23/03/2026', desc: 'Uma jornada entre culturas milenares, paisagens exóticas e contrastes fascinantes: Doha, Vietnã e Tailândia em um só roteiro inesquecível.', img: 'assets/images/roteiro-tesouros-asiaticos.jpg', href: 'tesouros-asiaticos.html' },
-    { titulo: 'Japão e Doha', subtitulo: 'Na Floração das Cerejeiras', data: '16 dias · 11 a 27/04/2026', desc: 'Uma viagem que celebra a floração das cerejeiras no Japão e todo o encanto da primavera oriental, e continua em Doha, onde a estação ganha tons dourados e o charme da modernidade árabe.', img: 'assets/images/roteiro-cerejeiras.jpg', href: 'floracao-das-cerejeiras.html' },
-    { titulo: 'Grécia Terra e Mar', subtitulo: 'Grécia com Cruzeiro', data: '16 dias · 02 a 18/05/2026', desc: 'Embarque em uma jornada pelos monumentos de Meteora, a vibrante Tessalônica e as deslumbrantes Ilhas Gregas. A bordo do Celestyal Journey, explore Santorini, Mykonos, Creta e muito mais.', img: 'assets/images/roteiro-grecia.jpg', href: 'grecia-terra-mar.html' },
-    { titulo: 'Tunísia e Malta', subtitulo: 'Encantos do Mediterrâneo', data: '14 dias · 04 a 17/06/2026', desc: 'Dois mundos, uma viagem: da mítica Cartago às casinhas azuis de Sidi Bou Said, do anfiteatro de El Jem ao oásis de Tozeur, até Valletta (UNESCO), a charmosa Gozo e Marsaxlokk.', img: 'assets/images/roteiro-mediterraneo.jpg', href: 'encantos-do-mediterraneo.html' }
-  ];
-
   const track = document.getElementById('rail-track');
   const panel = document.getElementById('panel');
   const els = {
     sub: document.getElementById('p-sub'), title: document.getElementById('p-title'),
     date: document.getElementById('p-date'), desc: document.getElementById('p-desc'), btn: document.getElementById('p-btn')
   };
+
+  /* O painel nasce com a chamada institucional e os roteiros só chegam depois da
+     resposta do banco. Esconder o texto agora evita que a chamada apareça e troque
+     na cara do visitante; o primeiro render revela já com o roteiro certo.
+     Esconder daqui, e não no HTML, é de propósito: sem JS o texto continua visível. */
+  if (panel) panel.classList.add('is-switching');
 
   /* ---------- menu mobile (independe dos dados) ---------- */
   const sheet = document.getElementById('sheet');
@@ -86,7 +83,9 @@
   }
 
   function initSlider(ROTEIROS) {
-    if (!track || !ROTEIROS.length) return;
+    // sem roteiros (banco fora do ar) a home fica só com a chamada institucional:
+    // melhor não ter carrossel do que anunciar viagem que não existe mais.
+    if (!track || !ROTEIROS.length) { if (panel) panel.classList.remove('is-switching'); return; }
     const N = ROTEIROS.length;
     let active = 0, autoTimer = null;
     const AUTOPLAY_MS = 5200;
@@ -129,14 +128,18 @@
       });
       updatePanel();
     }
+    let primeiroRender = true;
     function updatePanel() {
       const r = ROTEIROS[active];
-      panel.classList.add('is-switching');
-      setTimeout(() => {
+      const preencher = () => {
         els.sub.textContent = r.subtitulo; els.title.textContent = r.titulo;
         els.date.textContent = r.data; els.desc.textContent = r.desc; els.btn.href = r.href;
         panel.classList.remove('is-switching');
-      }, 200);
+      };
+      // o painel já está escondido desde o boot: preenche e revela, sem fade-out
+      if (primeiroRender) { primeiroRender = false; preencher(); return; }
+      panel.classList.add('is-switching');
+      setTimeout(preencher, 200);
     }
     function go(i) { active = ((i % N) + N) % N; render(); restartAuto(); }
     const next = () => go(active + 1), prev = () => go(active - 1);
@@ -162,13 +165,15 @@
     render(); startAuto();
   }
 
-  /* ---------- boot: banco → fallback ---------- */
+  /* ---------- boot: o banco é a única fonte dos roteiros ----------
+     Sem lista fixa aqui de propósito: um fallback escrito na mão envelhece sem
+     ninguém perceber e reapresenta roteiro já excluído ou com data vencida. */
   (async function () {
-    let list = null;
+    let list = [];
     if (window.poFetchRoteiros) {
       const db = await window.poFetchRoteiros();
       if (db && db.length) list = db.map(mapDb);
     }
-    initSlider(ordenarPorData(list || FALLBACK));
+    initSlider(ordenarPorData(list));
   })();
 })();

@@ -102,11 +102,15 @@
       <div class="panel" id="panel">
         <p class="panel__kicker">Próximas viagens em grupo</p>
         <div class="panel__anim">
-          <p class="panel__sub" id="p-sub">Suíça, França, Alemanha e Holanda</p>
-          <h1 class="panel__title" id="p-title">Mercados de Natal</h1>
-          <span class="panel__date" id="p-date">11 dias · 10 a 21/12/2025</span>
-          <p class="panel__desc" id="p-desc">A exclusiva oportunidade de viver o encanto do Natal em uma jornada única, visitando fascinantes Mercados de Natal que atraem milhares de pessoas do mundo inteiro.</p>
-          <a class="panel__btn" id="p-btn" href="#">
+          <!-- Chamada institucional: é o que aparece para quem está sem JS e para
+               crawlers que não renderizam. Os roteiros vêm do banco (po_roteiros) e
+               o main.js troca este texto pelo roteiro ativo. NÃO colocar dados de um
+               roteiro aqui: eles envelhecem e piscam na tela antes da troca. -->
+          <p class="panel__sub" id="p-sub">Realizando sonhos desde 1967</p>
+          <h1 class="panel__title" id="p-title">Viagens em grupo pelo mundo</h1>
+          <span class="panel__date" id="p-date">Próximas saídas confirmadas</span>
+          <p class="panel__desc" id="p-desc">Roteiros internacionais com datas fixas, grupos acompanhados e tudo organizado do começo ao fim.</p>
+          <a class="panel__btn" id="p-btn" href="contato.html">
             Ver roteiro
             <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </a>
@@ -131,6 +135,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="assets/js/po-config.js"></script>
   <script src="assets/js/roteiros-shared.js?v=2"></script>
-  <script src="assets/js/main.js?v=3"></script>
+  <script src="assets/js/main.js?v=4"></script>
 </body>
 </html>
