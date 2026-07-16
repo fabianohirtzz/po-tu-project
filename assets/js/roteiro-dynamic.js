@@ -54,6 +54,7 @@
       (r.subtitulo ? '<p class="hero__sub">' + esc(r.subtitulo) + '</p>' : '') +
       '<div class="hero__meta">' + heroChips(r) + '</div>' +
       '<div class="hero__actions"><a class="btn" href="#contato">Quero este roteiro<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>' +
+      '<a class="btn btn--wa" href="https://wa.me/5548996048882" target="_blank" rel="noopener">Reserve pelo WhatsApp<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18a8 8 0 0 1-4.1-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8 8 0 1 1 12 20Zm4.4-6c-.2-.1-1.4-.7-1.6-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.5 6.5 0 0 1-1.9-1.2 7.3 7.3 0 0 1-1.4-1.7c-.1-.2 0-.4.1-.5l.4-.5c.1-.2.2-.3.3-.5 0-.2 0-.3 0-.5l-.8-1.9c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.2.3-.9.9-.9 2.1 0 1.2.9 2.4 1 2.6.1.2 1.7 2.7 4.2 3.8.6.3 1 .4 1.4.5.6.2 1.1.2 1.5.1.5-.1 1.4-.6 1.6-1.1.2-.6.2-1 .1-1.1Z"/></svg></a>' +
       (valores.length ? '<a class="btn btn--ghost" href="#investimento">Ver investimento</a>' : '') + '</div>' +
       '</div><a class="hero__scroll" href="#sobre" aria-label="Rolar"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg></a></section>';
 
@@ -105,7 +106,9 @@
           (v.extra ? '<p class="pcard__extra">' + esc(v.extra) + '</p>' : '') + '</div>';
       });
       h += '</div><div class="invest__foot reveal"><p class="invest__note">Valores sujeitos a alteração sem aviso prévio. Apenas cotação.</p>' +
-        '<div class="invest__actions"><a class="btn" href="#contato">Quero este roteiro<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></a></div></div></div></section>';
+        '<div class="invest__actions"><a class="btn" href="#contato">Quero este roteiro<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>' +
+        '<a class="btn btn--wa" href="https://wa.me/5548996048882" target="_blank" rel="noopener">Reserve pelo WhatsApp<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18a8 8 0 0 1-4.1-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8 8 0 1 1 12 20Zm4.4-6c-.2-.1-1.4-.7-1.6-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.5 6.5 0 0 1-1.9-1.2 7.3 7.3 0 0 1-1.4-1.7c-.1-.2 0-.4.1-.5l.4-.5c.1-.2.2-.3.3-.5 0-.2 0-.3 0-.5l-.8-1.9c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.2.3-.9.9-.9 2.1 0 1.2.9 2.4 1 2.6.1.2 1.7 2.7 4.2 3.8.6.3 1 .4 1.4.5.6.2 1.1.2 1.5.1.5-.1 1.4-.6 1.6-1.1.2-.6.2-1 .1-1.1Z"/></svg></a>' +
+        '</div></div></div></section>';
     }
 
     /* GALERIA */

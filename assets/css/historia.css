@@ -7,6 +7,7 @@
   --brand-azul:#1FA8DD;
   --brand-verde:#84C440;
   --brand-grad:linear-gradient(135deg,var(--brand-azul),var(--brand-verde));
+  --wa:#25D366;
   --white:#ffffff;
   --font-display:"Rubik",system-ui,sans-serif;
   --font-body:"DM Sans",system-ui,sans-serif;
@@ -60,6 +61,14 @@ button{font-family:inherit;cursor:pointer}
 }
 .hd__cta:hover{filter:brightness(1.07);transform:translateY(-1px)}
 .hd__cta svg{width:16px;height:16px;fill:currentColor}
+.hd__actions{display:flex;align-items:center;gap:8px}
+.hd__wa{
+  display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:11px;
+  background:var(--wa);color:#fff;font-weight:600;font-family:var(--font-display);
+  font-size:.92rem;border:none;transition:.18s var(--ease);
+}
+.hd__wa:hover{filter:brightness(1.07);transform:translateY(-1px)}
+.hd__wa svg{width:16px;height:16px;fill:currentColor}
 .hd__burger{
   display:none;width:42px;height:42px;border-radius:11px;align-items:center;justify-content:center;
   background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:#fff;
@@ -82,6 +91,9 @@ button{font-family:inherit;cursor:pointer}
 .sheet__panel a{padding:14px 16px;border-radius:12px;font-weight:500;font-size:1.05rem;color:rgba(255,255,255,.9)}
 .sheet__panel a:hover{background:rgba(255,255,255,.1)}
 .sheet__panel .hd__cta{display:inline-flex;justify-content:flex-start;padding:14px 16px;margin-top:12px}
+.sheet__panel .hd__wa{display:inline-flex;justify-content:flex-start;padding:14px 16px;margin-top:8px;
+  color:#fff}
+.sheet__panel .hd__wa:hover{background:var(--wa);color:#fff}
 .sheet__close{position:absolute;top:20px;right:20px;width:40px;height:40px;border-radius:10px;
   background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:#fff;font-size:20px}
 /* redes sociais no rodapé do menu mobile */
@@ -205,6 +217,17 @@ button{font-family:inherit;cursor:pointer}
 .g-a .print,.g-c .print{transform:rotate(-1.4deg)}
 .g-b .print,.g-d .print,.g-e .print{transform:rotate(1.2deg)}
 
+/* botão pill (mesmo porte do usado nas páginas de roteiro) */
+.btn{
+  display:inline-flex;align-items:center;gap:10px;padding:14px 26px;border-radius:999px;
+  background:var(--brand-grad);color:#fff;font-family:var(--font-display);font-weight:600;font-size:1rem;
+  border:none;box-shadow:0 12px 28px rgba(31,168,221,.32);transition:.2s var(--ease);
+}
+.btn:hover{filter:brightness(1.07);gap:14px;transform:translateY(-1px)}
+.btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2}
+.btn--wa{background:var(--wa);color:#fff;box-shadow:0 12px 28px rgba(37,211,102,.32)}
+.btn--wa svg{fill:currentColor;stroke:none}
+
 /* 5) fecho */
 .his-close{margin-top:clamp(56px,8vw,104px);padding-top:clamp(40px,5vw,64px);border-top:1px solid var(--his-line);
   display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(30px,5vw,72px);align-items:center}
@@ -218,6 +241,8 @@ button{font-family:inherit;cursor:pointer}
 .his-close__cta:hover{background-size:100% 2px}
 .his-close__cta svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;transition:transform .3s var(--ease)}
 .his-close__cta:hover svg{transform:translateX(4px)}
+/* o .his-close__p acima já traz a margem inferior de 28px */
+.his-close__actions{display:flex;flex-wrap:wrap;gap:14px}
 .his-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
 .his-stat{border-left:2px solid;border-image:var(--brand-grad) 1;padding-left:18px}
 .his-stat__n{font-family:var(--font-display);font-weight:700;font-size:clamp(2.1rem,3.4vw,3rem);line-height:1;letter-spacing:-.02em}
@@ -300,19 +325,21 @@ button{font-family:inherit;cursor:pointer}
   border:1px solid rgba(255,255,255,.16);color:rgba(255,255,255,.82);transition:.18s var(--ease)}
 .ft__social a:hover{background:var(--brand-grad);border-color:transparent;color:#fff;transform:translateY(-2px)}
 .ft__social svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8}
+/* glifos que são desenhados por preenchimento (WhatsApp), não por traço */
+.ft__social svg.ic-fill,.sheet__social svg.ic-fill{fill:currentColor;stroke:none}
 .ft__credit a{color:rgba(255,255,255,.72);text-decoration:underline;text-underline-offset:2px;transition:.15s}
 .ft__credit a:hover{color:#fff}
 
 /* WhatsApp flutuante */
 .wa-float{position:fixed;right:20px;bottom:20px;z-index:70;width:58px;height:58px;border-radius:50%;
-  display:grid;place-items:center;background:var(--brand-grad);color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.3);
+  display:grid;place-items:center;background:var(--wa);color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.3);
   transition:.2s var(--ease)}
 .wa-float:hover{transform:translateY(-3px) scale(1.05)}
 .wa-float svg{width:30px;height:30px;fill:currentColor}
 
 /* ============================================================ RESPONSIVO */
 @media(max-width:960px){
-  .hd__nav,.hd__cta{display:none}
+  .hd__nav,.hd__cta,.hd__actions{display:none}
   .hd__burger{display:flex}
   .rot-card{flex:0 0 calc((100% - var(--gap)) / 2)}
   .ft__wrap{grid-template-columns:1fr 1fr}

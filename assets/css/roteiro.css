@@ -8,6 +8,7 @@
   --brand-azul:#1FA8DD;
   --brand-verde:#84C440;
   --brand-grad:linear-gradient(135deg,var(--brand-azul),var(--brand-verde));
+  --wa:#25D366;
   --white:#ffffff;
   --font-display:"Rubik",system-ui,sans-serif;
   --font-body:"DM Sans",system-ui,sans-serif;
@@ -62,6 +63,14 @@ button{font-family:inherit;cursor:pointer}
 }
 .hd__cta:hover{filter:brightness(1.07);transform:translateY(-1px)}
 .hd__cta svg{width:16px;height:16px;fill:currentColor}
+.hd__actions{display:flex;align-items:center;gap:8px}
+.hd__wa{
+  display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:11px;
+  background:var(--wa);color:#fff;font-weight:600;font-family:var(--font-display);
+  font-size:.92rem;border:none;transition:.18s var(--ease);
+}
+.hd__wa:hover{filter:brightness(1.07);transform:translateY(-1px)}
+.hd__wa svg{width:16px;height:16px;fill:currentColor}
 .hd__burger{
   display:none;width:42px;height:42px;border-radius:11px;align-items:center;justify-content:center;
   background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:#fff;
@@ -84,6 +93,9 @@ button{font-family:inherit;cursor:pointer}
 .sheet__panel a{padding:14px 16px;border-radius:12px;font-weight:500;font-size:1.05rem;color:rgba(255,255,255,.9)}
 .sheet__panel a:hover{background:rgba(255,255,255,.1)}
 .sheet__panel .hd__cta{display:inline-flex;justify-content:flex-start;padding:14px 16px;margin-top:12px}
+.sheet__panel .hd__wa{display:inline-flex;justify-content:flex-start;padding:14px 16px;margin-top:8px;
+  color:#fff}
+.sheet__panel .hd__wa:hover{background:var(--wa);color:#fff}
 .sheet__close{position:absolute;top:20px;right:20px;width:40px;height:40px;border-radius:10px;
   background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:#fff;font-size:20px}
 /* redes sociais no rodapé do menu mobile */
@@ -130,6 +142,8 @@ button{font-family:inherit;cursor:pointer}
 }
 .btn--ghost:hover{background:rgba(255,255,255,.14);filter:none}
 .btn--dark{background:var(--ink-invert);box-shadow:0 12px 28px rgba(12,16,23,.24)}
+.btn--wa{background:var(--wa);color:#fff;box-shadow:0 12px 28px rgba(37,211,102,.32)}
+.btn--wa svg{fill:currentColor;stroke:none}
 
 /* ============================================================ HERO (vídeo) */
 .hero{position:relative;height:100svh;min-height:600px;overflow:hidden;background:#0C1017;color:#fff}
@@ -275,7 +289,8 @@ button{font-family:inherit;cursor:pointer}
 .day__rail::after{content:"";position:absolute;right:-8px;top:5px;width:14px;height:14px;border-radius:50%;
   background:var(--surface);border:2.5px solid var(--brand-azul);box-shadow:0 0 0 4px var(--surface)}
 .day__city{font-family:var(--font-display);font-weight:600;font-size:1.18rem;margin:0 0 8px;letter-spacing:-.005em}
-.day__p{font-size:1rem;line-height:1.66;color:#4a4c53;margin:0;max-width:60ch}
+.day__p{font-size:1rem;line-height:1.66;color:#4a4c53;margin:0;max-width:60ch;
+  text-align:justify;text-justify:inter-word;hyphens:auto;-webkit-hyphens:auto}
 .day__meals{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
 .pill{font-family:var(--font-mono);font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;
   padding:5px 11px;border-radius:999px;border:1px solid var(--line-strong);color:var(--ink-soft);
@@ -427,6 +442,9 @@ button{font-family:inherit;cursor:pointer}
 .cta__contacts{display:grid;gap:12px;margin:30px 0 0}
 .cta__contact{display:flex;align-items:center;gap:14px;font-size:1rem;color:var(--ink)}
 .cta__contact svg{width:20px;height:20px;fill:none;stroke:var(--brand-azul);stroke-width:2;flex-shrink:0}
+.cta__contact svg.ic-fill{fill:var(--wa);stroke:none}
+a.cta__contact{transition:.18s var(--ease)}
+a.cta__contact:hover b{color:var(--wa)}
 .cta__contact b{font-weight:600}
 .cta__contact span{color:var(--ink-soft);font-size:.9rem;display:block}
 
@@ -478,19 +496,21 @@ button{font-family:inherit;cursor:pointer}
   border:1px solid rgba(255,255,255,.16);color:rgba(255,255,255,.82);transition:.18s var(--ease)}
 .ft__social a:hover{background:var(--brand-grad);border-color:transparent;color:#fff;transform:translateY(-2px)}
 .ft__social svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8}
+/* glifos que são desenhados por preenchimento (WhatsApp), não por traço */
+.ft__social svg.ic-fill,.sheet__social svg.ic-fill{fill:currentColor;stroke:none}
 .ft__credit a{color:rgba(255,255,255,.72);text-decoration:underline;text-underline-offset:2px;transition:.15s}
 .ft__credit a:hover{color:#fff}
 
 /* WhatsApp flutuante */
 .wa-float{position:fixed;right:20px;bottom:20px;z-index:70;width:58px;height:58px;border-radius:50%;
-  display:grid;place-items:center;background:var(--brand-grad);color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.3);
+  display:grid;place-items:center;background:var(--wa);color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.3);
   transition:.2s var(--ease)}
 .wa-float:hover{transform:translateY(-3px) scale(1.05)}
 .wa-float svg{width:30px;height:30px;fill:currentColor}
 
 /* ============================================================ RESPONSIVO */
 @media(max-width:960px){
-  .hd__nav,.hd__cta{display:none}
+  .hd__nav,.hd__cta,.hd__actions{display:none}
   .hd__burger{display:flex}
   .rot-card{flex:0 0 calc((100% - var(--gap)) / 2)}
   .ft__wrap{grid-template-columns:1fr 1fr}

@@ -7,6 +7,7 @@
   --brand-azul:#1FA8DD;
   --brand-verde:#84C440;
   --brand-grad:linear-gradient(135deg,var(--brand-azul),var(--brand-verde));
+  --wa:#25D366;
   --ink:#1a1a1a;
   --white:#ffffff;
   --font-display:"Rubik",system-ui,sans-serif;
@@ -78,6 +79,14 @@ button{font-family:inherit;cursor:pointer}
 }
 .hd__cta:hover{filter:brightness(1.07);transform:translateY(-1px)}
 .hd__cta svg{width:16px;height:16px;fill:currentColor}
+.hd__actions{display:flex;align-items:center;gap:8px}
+.hd__wa{
+  display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:11px;
+  background:var(--wa);color:#fff;font-weight:600;font-family:var(--font-display);
+  font-size:.92rem;border:none;transition:.18s var(--ease);
+}
+.hd__wa:hover{filter:brightness(1.07);transform:translateY(-1px)}
+.hd__wa svg{width:16px;height:16px;fill:currentColor}
 .hd__burger{
   display:none;width:42px;height:42px;border-radius:11px;align-items:center;justify-content:center;
   background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:#fff;
@@ -100,6 +109,16 @@ button{font-family:inherit;cursor:pointer}
 .sheet__panel a{padding:14px 16px;border-radius:12px;font-weight:500;font-size:1.05rem;color:rgba(255,255,255,.9)}
 .sheet__panel a:hover{background:rgba(255,255,255,.1)}
 .sheet__panel .hd__cta{display:inline-flex;justify-content:flex-start;padding:14px 16px;margin-top:12px}
+.sheet__panel .hd__wa{display:inline-flex;justify-content:flex-start;padding:14px 16px;margin-top:8px;
+  color:#fff}
+.sheet__panel .hd__wa:hover{background:var(--wa);color:#fff}
+
+/* WhatsApp flutuante (mesmo porte das outras páginas) */
+.wa-float{position:fixed;right:20px;bottom:20px;z-index:70;width:58px;height:58px;border-radius:50%;
+  display:grid;place-items:center;background:var(--wa);color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.3);
+  transition:.2s var(--ease)}
+.wa-float:hover{transform:translateY(-3px) scale(1.05)}
+.wa-float svg{width:30px;height:30px;fill:currentColor}
 .sheet__close{position:absolute;top:20px;right:20px;width:40px;height:40px;border-radius:10px;
   background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:#fff;font-size:20px}
 /* redes sociais no rodapé do menu mobile */
@@ -212,7 +231,7 @@ button{font-family:inherit;cursor:pointer}
   .panel__desc{margin:10px auto 16px;max-width:52ch}
 
   .hd__nav{display:none}
-  .hd__cta{display:none}
+  .hd__cta,.hd__actions{display:none}
   .hd__burger{display:flex}
 }
 /* ===================== SÓ CELULAR (≤640px) =====================

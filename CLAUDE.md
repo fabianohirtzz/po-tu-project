@@ -327,6 +327,33 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   sobra de sessão antiga, que fez uma verificação passar com dado falso. Se o teste
   divergir do `curl`, conferir se a resposta tem os cabeçalhos `sb-project-ref`/`CF-Ray`;
   limpar com `context.unrouteAll()`.
+- **WhatsApp em todo o site (16/07/2026):** o número é **(48) 99604-8882** e o link é
+  **`https://wa.me/5548996048882`** — com o **55** na frente. O cliente passou
+  `wa.me/48996048882` (sem código do país), que o WhatsApp não resolve de forma
+  confiável; o site já usava a forma completa e ela foi mantida em todos os pontos.
+  Onde ele aparece: botão **`.hd__wa`** ao lado do CTA de contato no header (os dois
+  agora vivem dentro de um `.hd__actions`, para o `justify-content:space-between` do
+  `.hd` seguir com 4 filhos) · mesmo botão no **menu mobile** (o header some abaixo de
+  960px) · **`.btn--wa` "Reserve pelo WhatsApp"** ao lado de todo "Quero este roteiro"
+  (hero + investimento, nas 5 páginas estáticas e no `roteiro-dynamic.js`) · ícone no
+  **`.ft__social`** e telefone (`tel:`) no bloco Contato do rodapé · **`.cta__contact`**
+  do WhatsApp abaixo do Instagram na página Contato · botões **"Reservar um roteiro" +
+  "Falar no WhatsApp"** no fecho da Nossa História (o `historia.css` não tinha `.btn`,
+  foi adicionado no mesmo porte do `roteiro.css`).
+  **Botão flutuante:** era um envelope apontando pro formulário; agora é o WhatsApp
+  (`--wa:#25D366`) em todas as páginas. **Passou a existir também na home** — lá o
+  header esconde o botão no celular, então o flutuante é o único acesso; ele fica fora
+  da `.stage` travada e não colide com o "Ver roteiro" (conferido a 390px).
+  **Texto e ícone dos botões verdes são brancos, por decisão do cliente** (16/07), para
+  casar com o botão Contato ao lado. Fica registrado que **branco sobre `#25D366` dá
+  ~1.9:1** de contraste (o mínimo AA para texto normal é 4.5:1); é o mesmo par que o
+  próprio WhatsApp usa, mas se um dia o contraste virar requisito, a saída é **escurecer
+  o verde** e manter o branco, não voltar o texto para escuro.
+  No menu mobile o branco precisa de `.sheet__panel .hd__wa{color:#fff}` explícito: o
+  `.sheet__panel a` genérico (0,2,0) ganha do `.hd__wa` (0,1,0), então qualquer cor que
+  se queira ali tem que vencer aquela regra.
+  **Descrição dos dias (`.day__p`) agora é justificada** (`text-align:justify` +
+  `hyphens:auto`, que depende do `lang="pt-BR"` que todas as páginas já têm).
 - **Próximo:** página/seção de Contato geral (formulário de lead na home) · backend
   `enviar.php` + Supabase · painel de leads.
 - **Dívida relacionada (não tratada):** o `mercados-de-natal.html` continua existindo e
