@@ -299,8 +299,41 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
 - **Leads zerados (16/07/2026):** os 3 leads da `po_leads` eram todos de teste
   ("TESTE Fabiano (preview)", "Fabiano Teste UI", "Fabiano Hirtz / teste 1") e foram
   apagados por ID via REST com a `service_role`. Base em 0.
+- **Home sem roteiro escrito na mão (16/07/2026):** o `index.html` trazia o Mercados de
+  Natal no painel (título, subtítulo, data e descrição). O navegador pintava isso no
+  primeiro frame e o `main.js` só sobrescrevia depois da resposta do Supabase, então o
+  roteiro **já excluído piscava ~1s em toda recarga** — e, por estar no fonte do HTML,
+  cache e guia anônima não tinham efeito. Agora o painel nasce com **chamada
+  institucional** (sem dado de roteiro nenhum): é o que veem quem está sem JS e os
+  crawlers que não renderizam. **REGRA: nunca colocar dados de roteiro no `index.html`** —
+  eles envelhecem e piscam.
+  O esconderijo mora num **`<script>` inline no `<head>`** (classe `.po-boot` no `<html>`),
+  não no `main.js`: o `main.js` carrega no fim do `<body>` e **na rede real o HTML pinta
+  antes** — a primeira tentativa escondia pelo `main.js` e só trocou um flash por outro
+  (a chamada institucional piscando ~400ms). **Cuidado: localhost esconde esse bug**, o
+  servidor responde instantâneo e o teste local passa como falso positivo; testar com
+  latência (CDP `Network.emulateNetworkConditions`, 400ms) ou direto em produção.
+  Ser um `<script>` é o que garante o progressive enhancement (sem JS a classe nunca entra).
+  Tem **rede de segurança de 5s** que remove a `.po-boot` sozinha: sem ela, se o `main.js`
+  não carregar, ninguém tira a classe e o painel (`opacity:0`) fica invisível para sempre.
+  O `FALLBACK` do `main.js` **foi removido** — as 5 viagens dele estavam todas com data
+  vencida (12/2025 a 06/2026) e uma era a excluída, então ele reapresentaria o bug se o
+  banco piscasse. **O banco é a única fonte dos roteiros da home.** Sem banco: só a chamada
+  institucional, sem carrossel. **Deploy feito** (`index.html` + `assets/js/main.js`,
+  `main.js?v=5`); verificado em produção com 400ms de latência: nada pisca, 6 cards, zero
+  erro no console.
+  **Armadilha de teste:** o perfil do Chrome do Playwright tinha um **mock interceptando o
+  Supabase** (fixture com `"data_label":"x"` e um `grecia-terra-mar` inexistente no banco),
+  sobra de sessão antiga, que fez uma verificação passar com dado falso. Se o teste
+  divergir do `curl`, conferir se a resposta tem os cabeçalhos `sb-project-ref`/`CF-Ray`;
+  limpar com `context.unrouteAll()`.
 - **Próximo:** página/seção de Contato geral (formulário de lead na home) · backend
   `enviar.php` + Supabase · painel de leads.
+- **Dívida relacionada (não tratada):** o `mercados-de-natal.html` continua existindo e
+  **no `sitemap.xml`**, e os catálogos do `historia.js` e do `roteiro.js` ainda listam os 5
+  roteiros antigos — a página do roteiro excluído segue no ar e indexável. Mesma raiz (dado
+  do banco duplicado à mão), mas mexe em SEO; decidir junto com "as 5 estáticas entram no
+  banco ou são aposentadas".
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro
