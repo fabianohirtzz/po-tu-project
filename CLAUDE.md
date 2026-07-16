@@ -268,13 +268,25 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   então virariam órfãos eternos na troca. Por isso a limpeza do `insta` também varre o padrão
   legado, com regex **fechada em 8 dígitos hex** (`^<slug>-[0-9a-f]{8}\.mp4$`) — assim um
   `<slug>-capa-<hash>.mp4` nunca casa, e a limpeza do reels jamais alcança o vídeo capa.
-  **Falta:** rodar as 2 migrations no Supabase e subir por FTP `upload-video.php`,
-  `painel/video-encode.js`, `painel/index.html`, `painel/app.js`, `painel/painel.css`,
-  `assets/css/roteiro.css`, `assets/js/roteiro.js`, `assets/js/roteiros-shared.js`,
-  `assets/js/roteiro-dynamic.js` e as 8 páginas HTML (cache-buster: `roteiro.css?v=5`,
-  `roteiro.js?v=2`, `roteiros-shared.js?v=2` — o `.htaccess` cacheia JS/CSS por 1 mês, sem
-  isso o visitante recorrente fica com o arquivo velho). A pasta `/videos` precisa ter
-  permissão de escrita. Depois: a cliente sobe os 5 vídeos capa pelo painel.
+  **Deploy (16/07/2026): FEITO.** Migrations rodadas (conferido: `video_capa_url` existe,
+  `video_id` e `video_list` retornam 400) e tudo publicado por FTP — as 10 páginas HTML,
+  `assets/css/{style,roteiro}.css`, `assets/js/{main,roteiro,roteiros-shared,roteiro-dynamic,
+  lead-form}.js`, `upload-video.php`, `painel/*`, `videos/home.mp4`, o poster e o `.htaccess`.
+  Verificado no ar: `videos/home.mp4` HTTP 200 `video/mp4`, poster 200, `.hero__vid` no CSS,
+  `wireHero` no JS, e **zero ocorrência de "youtube" na home**. Cache-buster aplicado
+  (`style.css?v=9`, `main.js?v=3`, `roteiro.css?v=5`, `roteiro.js?v=2`, `roteiros-shared.js?v=2`)
+  — o `.htaccess` cacheia JS/CSS por 1 mês, sem isso o visitante recorrente ficaria com o
+  arquivo velho. `/videos` já tem permissão de escrita (a cliente já subiu reels por lá).
+  **Falta:** a cliente subir os vídeos capa pelo painel.
+  **ATENÇÃO — as 5 páginas estáticas não estão no banco.** O `po_roteiros` tem 6 roteiros
+  (`caminhos-da-india`, `turquia-com-antalia`, `chile-santiago-e-deserto-do-atacama`,
+  `tesouros-asiaticos2`, `coreia-do-sul-japao-dubai`, `um-roteiro-...-escandinavia`), e
+  **nenhum** é `grecia-terra-mar`/`mercados-de-natal`/`tesouros-asiaticos`/
+  `floracao-das-cerejeiras`/`encantos-do-mediterraneo`. Como o vídeo capa das páginas
+  estáticas vem do banco via `poFetchRoteiro(slug)`, **elas nunca vão receber vídeo** —
+  o fetch devolve null e fica a capa parada (fallback correto, mas sem vídeo). Os roteiros
+  do banco são servidos pela `roteiro.html` dinâmica e esses sim recebem. Decidir se as 5
+  estáticas entram no banco ou são aposentadas.
 - **Home também saiu do YouTube (16/07/2026):** o fundo da `index.html` virou `<video>`
   self-hosted, pelo mesmo motivo (autoplay não funcionava no mobile). **`videos/home.mp4`**
   = 1280x720, sem áudio, ~900 kbps, 24 s, **2,5 MB** (encodado de `videos/video site2.mp4`,
