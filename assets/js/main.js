@@ -6,6 +6,25 @@
 (function () {
   'use strict';
 
+  /* ---------- vídeo de fundo ----------
+     Entra com fade só quando já dá para tocar; até lá quem preenche a tela é o
+     poster, que é fundo da .video-bg. Quem pediu "reduzir animações" no sistema
+     fica com o poster: o vídeo sai e não chega a baixar. */
+  (function videoFundo() {
+    const v = document.querySelector('.video-bg video');
+    if (!v) return;
+    let reduz = false;
+    try { reduz = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+    if (reduz) { v.remove(); return; }
+    const mostra = () => v.classList.add('is-ready');
+    if (v.readyState >= 3) mostra();
+    else v.addEventListener('canplay', mostra, { once: true });
+    // Aba aberta em background faz o navegador rejeitar o play(). O poster segue
+    // na tela e o autoplay pega quando a aba ganhar foco: não há o que tratar.
+    const p = v.play();
+    if (p && p.catch) p.catch(function () {});
+  })();
+
   /* ---------- fallback (se o banco não responder) ---------- */
   const FALLBACK = [
     { titulo: 'Mercados de Natal', subtitulo: 'Suíça, França, Alemanha e Holanda', data: '11 dias · 10 a 21/12/2025', desc: 'A exclusiva oportunidade de viver o encanto do Natal em uma jornada única, visitando fascinantes Mercados de Natal que atraem milhares de pessoas do mundo inteiro.', img: 'assets/images/roteiro-mercados-natal.jpg', href: 'mercados-de-natal.html' },

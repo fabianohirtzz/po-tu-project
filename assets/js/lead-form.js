@@ -125,5 +125,46 @@ function initLeadForm() {
   });
 }
 
+/* ============================================================
+   Popula o <select id="f-roteiro"> (contato.html) com os roteiros
+   ATIVOS do banco (po_roteiros), sempre atualizado: some se um for
+   excluído/desativado, aparece se um for adicionado. Mantém a 1ª
+   opção "quero uma sugestão" e o fallback do HTML se o banco falhar.
+   Nas páginas de roteiro o #f-roteiro é um <input> readonly (roteiro
+   fixo), então esta função ignora e não faz nada.
+============================================================ */
+async function populateRoteiroSelect() {
+  'use strict';
+  const sel = document.getElementById('f-roteiro');
+  if (!sel || sel.tagName !== 'SELECT') return;
+  if (typeof window.poFetchRoteiros !== 'function') return;
+
+  const list = await window.poFetchRoteiros();
+  if (!list || !list.length) return; // banco indisponível → mantém o fallback do HTML
+
+  const prev = sel.value;
+  // preserva a 1ª opção ("Ainda não sei / quero uma sugestão")
+  let firstOpt = sel.querySelector('option[value=""]');
+  if (!firstOpt) {
+    firstOpt = document.createElement('option');
+    firstOpt.value = '';
+    firstOpt.textContent = 'Ainda não sei / quero uma sugestão';
+  }
+  sel.innerHTML = '';
+  sel.appendChild(firstOpt);
+
+  list.forEach((r) => {
+    const t = (r.titulo || '').trim();
+    if (!t) return;
+    const o = document.createElement('option');
+    o.textContent = t; // value = título (name="roteiro")
+    sel.appendChild(o);
+  });
+
+  // restaura a seleção anterior se o roteiro ainda existir
+  if (prev && Array.from(sel.options).some((o) => o.value === prev)) sel.value = prev;
+}
+
 window.initLeadForm = initLeadForm;
-if (!window.__deferLeadInit) initLeadForm();
+window.populateRoteiroSelect = populateRoteiroSelect;
+if (!window.__deferLeadInit) { initLeadForm(); populateRoteiroSelect(); }

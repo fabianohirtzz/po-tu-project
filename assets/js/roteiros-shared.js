@@ -84,6 +84,28 @@
       '</figure>';
   };
 
+  /* O vídeo do topo (hero).
+     REGRA ÚNICA (vale p/ página estática e dinâmica): tem vídeo capa → <video>
+     por cima da capa; não tem → só a capa parada, como sempre foi.
+
+     É textura de fundo, não conteúdo: toca sozinho, mudo, em loop, sem controle
+     nenhum, e fica fora do foco e do leitor de tela. Os quatro atributos
+     autoplay+muted+playsinline+loop juntos são o que destrava o autoplay no
+     iOS/Android — era exatamente isso que o embed do YouTube nunca conseguiu,
+     porque a plataforma bloqueia autoplay de iframe no celular.
+
+     Sem poster no <video>: o .hero__poster atrás já mostra a capa, e é ele que
+     segura a tela até o vídeo poder tocar (o LCP não espera vídeo). */
+  window.poHeroVideo = function (r) {
+    if (!r.video_capa_url) return '';
+    // Quem pediu "reduzir animações" no sistema não deve receber vídeo tocando
+    // sozinho na cara. Fica a capa parada — mesma regra do resto do site.
+    try { if (matchMedia('(prefers-reduced-motion: reduce)').matches) return ''; } catch (e) {}
+    return '<video class="hero__vid" src="' + esc(r.video_capa_url) + '" ' +
+      'autoplay muted loop playsinline preload="auto" ' +
+      'disablepictureinpicture disableremoteplayback tabindex="-1" aria-hidden="true"></video>';
+  };
+
   // registro do banco → card do slider/carrossel
   window.poCard = function (r) {
     return {

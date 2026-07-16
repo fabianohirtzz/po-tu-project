@@ -136,12 +136,15 @@ button{font-family:inherit;cursor:pointer}
 .hero__media{position:absolute;inset:0;z-index:0}
 .hero__poster{position:absolute;inset:0;background-size:cover;background-position:center;
   transform:scale(1.04);filter:saturate(1.02)}
-.hero__video{position:absolute;inset:0;overflow:hidden;opacity:0;transition:opacity 1s var(--ease)}
-.hero__video.is-ready{opacity:1}
-.hero__video iframe{
-  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);border:0;
-  width:100vw;height:56.25vw;min-height:100%;min-width:177.78svh;pointer-events:none;
+/* Vídeo capa: preenche o topo inteiro sem distorcer, no retrato do celular e no
+   paisagem do desktop. O object-fit:cover corta o excedente, que é o que o
+   iframe do YouTube só conseguia imitar com aquela conta de 100vw/56.25vw.
+   Entra com fade quando pode tocar; até lá quem aparece é o .hero__poster. */
+.hero__vid{
+  position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border:0;
+  opacity:0;transition:opacity 1s var(--ease);pointer-events:none;
 }
+.hero__vid.is-ready{opacity:1}
 .hero__scrim{position:absolute;inset:0;z-index:1;pointer-events:none;
   background:
     linear-gradient(to top,rgba(6,9,14,.9) 2%,rgba(6,9,14,.35) 32%,rgba(6,9,14,.12) 55%,rgba(6,9,14,.5) 100%);

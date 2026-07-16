@@ -1,10 +1,19 @@
 <?php
 /* ============================================================
-   Pereira Oliveira Turismo — upload do vídeo do Instagram (reels).
+   Pereira Oliveira Turismo — upload de vídeo do roteiro.
 
-   Recebe do painel (/painel) o reels de um roteiro e grava em
-   /videos/<slug>-<hash>.mp4 no docroot. Devolve a URL pública,
-   que o painel salva em po_roteiros.video_insta_url.
+   Recebe do painel (/painel) um vídeo de um roteiro e grava em
+   /videos/<slug>-<tipo>-<hash>.mp4 no docroot. Devolve a URL pública.
+
+   SÃO DOIS VÍDEOS POR ROTEIRO, e o "tipo" é o que os separa:
+     insta → reels 9:16 da seção "por que viajar". Com áudio, só toca
+             no clique. Salvo em po_roteiros.video_insta_url.
+     capa  → vídeo do hero. Sem áudio, autoplay, mudo, em loop.
+             Salvo em po_roteiros.video_capa_url.
+
+   O TIPO PRECISA ENTRAR NO NOME DO ARQUIVO: a limpeza dos vídeos
+   antigos varre por glob. Se os dois usassem <slug>-*.mp4, subir um
+   apagaria o outro sem avisar. Por isso o glob é <slug>-<tipo>-*.mp4.
 
    Hospedagem: cPanel   ·   Domínio: pereiraoliveiraturismo.com.br
 
@@ -25,6 +34,7 @@
      sb_token : access_token do Supabase (valida o login)
      action   : "chunk" (padrão) | "delete"
      slug     : slug do roteiro (define o nome do arquivo)
+     tipo     : "insta" | "capa" (isola os dois vídeos do roteiro)
      uid      : id hex da sessão de upload (agrupa as fatias)
      offset   : byte em que esta fatia começa (garante a ordem)
      last     : "1" na última fatia
@@ -97,6 +107,11 @@ $slug = preg_replace('/[^a-z0-9\-]/', '', $slug);
 $slug = trim((string) $slug, '-');
 if ($slug === '') fail(400, 'Slug do roteiro ausente.');
 
+// Lista fechada: o tipo entra no nome do arquivo e no glob da limpeza.
+// Qualquer valor fora daqui poderia fazer um tipo apagar os vídeos do outro.
+$tipo = strtolower(trim((string) ($_POST['tipo'] ?? 'insta')));
+if (!in_array($tipo, ['insta', 'capa'], true)) fail(400, 'Tipo de vídeo inválido.');
+
 $action = (string) ($_POST['action'] ?? 'chunk');
 
 if (!is_dir($VIDEO_DIR) && !@mkdir($VIDEO_DIR, 0755, true)) {
@@ -110,18 +125,20 @@ function baseUrl() {
     return ($https ? 'https://' : 'http://') . $host;
 }
 
-// Apaga os reels anteriores deste roteiro. Sem isso, cada troca de vídeo
-// deixaria o arquivo antigo ocupando disco para sempre.
-function limpaAntigos($dir, $slug, $manter = null) {
-    foreach (glob($dir . '/' . $slug . '-*.mp4') ?: [] as $f) {
+// Apaga os vídeos anteriores DESTE roteiro E DESTE TIPO. Sem isso, cada troca
+// de vídeo deixaria o arquivo antigo ocupando disco para sempre.
+// O $tipo no glob é essencial: com <slug>-*.mp4 o vídeo capa e o do Instagram
+// casariam no mesmo padrão e um apagaria o outro.
+function limpaAntigos($dir, $slug, $tipo, $manter = null) {
+    foreach (glob($dir . '/' . $slug . '-' . $tipo . '-*.mp4') ?: [] as $f) {
         if ($manter !== null && realpath($f) === realpath($manter)) continue;
         @unlink($f);
     }
 }
 
-/* -------- action=delete: remove o vídeo do roteiro -------- */
+/* -------- action=delete: remove o vídeo do roteiro (só o tipo pedido) -------- */
 if ($action === 'delete') {
-    limpaAntigos($VIDEO_DIR, $slug);
+    limpaAntigos($VIDEO_DIR, $slug, $tipo);
     echo json_encode(['ok' => true]);
     exit;
 }
@@ -188,9 +205,9 @@ if (substr($head, 4, 4) !== 'ftyp') {
     fail(415, 'Arquivo não é um MP4 válido.');
 }
 
-$final = $VIDEO_DIR . '/' . $slug . '-' . substr(bin2hex(random_bytes(4)), 0, 8) . '.mp4';
+$final = $VIDEO_DIR . '/' . $slug . '-' . $tipo . '-' . substr(bin2hex(random_bytes(4)), 0, 8) . '.mp4';
 if (!@rename($part, $final)) { @unlink($part); fail(500, 'Falha ao publicar o vídeo.'); }
 @chmod($final, 0644);
-limpaAntigos($VIDEO_DIR, $slug, $final);
+limpaAntigos($VIDEO_DIR, $slug, $tipo, $final);
 
 echo json_encode(['ok' => true, 'url' => baseUrl() . '/videos/' . basename($final)]);

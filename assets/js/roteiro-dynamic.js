@@ -47,7 +47,7 @@
     /* HERO */
     h += '<section class="hero" id="topo"><div class="hero__media">' +
       '<div class="hero__poster" style="background-image:url(\'' + capa + '\')"></div>' +
-      (r.video_id ? '<div class="hero__video" id="hero-video" data-yt="' + esc(r.video_id) + '"></div>' : '') +
+      window.poHeroVideo(r) +
       '</div><div class="hero__scrim"></div><div class="hero__inner">' +
       '<p class="hero__crumb"><a href="index.html">Início</a><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg><a href="index.html#inicio">Roteiros</a><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg><span>' + esc(r.titulo) + '</span></p>' +
       '<h1 class="hero__title">' + esc(r.titulo) + '</h1>' +

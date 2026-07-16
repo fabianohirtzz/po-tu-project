@@ -31,11 +31,19 @@ button{font-family:inherit;cursor:pointer}
 .stage{position:fixed;inset:0;overflow:hidden}
 
 /* ---------- vídeo de fundo (sem desfoque) ---------- */
-.video-bg{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:#0b0f14}
-.video-bg iframe{
-  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  width:100vw;height:56.25vw;min-height:100vh;min-width:177.78vh;border:0;
+/* O poster mora no fundo da .video-bg: é ele que preenche a tela até o vídeo
+   poder tocar (e é o que fica quando o visitante pede "reduzir animações"). */
+.video-bg{
+  position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none;
+  background:#0b0f14 center/cover no-repeat url('../images/home-poster.jpg');
 }
+/* object-fit:cover preenche sem distorcer no retrato do celular e no paisagem
+   do desktop — dispensa a conta de 100vw/56.25vw que o iframe do YouTube exigia. */
+.video-bg video{
+  position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border:0;
+  opacity:0;transition:opacity 1s ease;
+}
+.video-bg video.is-ready{opacity:1}
 /* overlay de leitura — gradiente, NUNCA blur no vídeo */
 .stage::after{
   content:"";position:absolute;inset:0;z-index:1;pointer-events:none;

@@ -1,6 +1,6 @@
 /* ============================================================
    Pereira Oliveira Turismo — Página de Roteiro
-   Menu mobile · reveal · hero vídeo (YouTube) · lightbox da galeria ·
+   Menu mobile · reveal · vídeo capa (hero) · lightbox da galeria ·
    carrossel "outros roteiros" (lê do banco). O formulário fica no
    lead-form.js. Pode rodar sozinho (páginas estáticas) ou ser
    chamado por roteiro-dynamic.js (window.initRoteiro()).
@@ -30,25 +30,21 @@ function initRoteiro() {
     reveals.forEach((el) => io.observe(el));
   }
 
-  /* ---------- hero: vídeo do YouTube em background ---------- */
-  const heroVideo = document.getElementById('hero-video');
-  if (heroVideo && !reduce && !heroVideo.querySelector('iframe')) {
-    const id = heroVideo.dataset.yt;
-    if (id) {
-      // playlist=<id> é o truque padrão do YouTube p/ repetir um vídeo único.
-      const params = 'autoplay=1&mute=1&controls=0&loop=1&playlist=' + id +
-        '&modestbranding=1&showinfo=0&rel=0&iv_load_policy=3&playsinline=1&disablekb=1&fs=0&cc_load_policy=0';
-      const iframe = document.createElement('iframe');
-      iframe.src = 'https://www.youtube-nocookie.com/embed/' + id + '?' + params;
-      const heroTitle = document.querySelector('.hero__title');
-      iframe.title = (heroTitle && heroTitle.textContent.trim()) || 'Roteiro Pereira Oliveira';
-      iframe.setAttribute('frameborder', '0');
-      iframe.setAttribute('allow', 'autoplay; encrypted-media');
-      iframe.setAttribute('allowfullscreen', '');
-      iframe.addEventListener('load', () => heroVideo.classList.add('is-ready'));
-      heroVideo.appendChild(iframe);
-    }
+  /* ---------- hero: vídeo capa (autoplay, mudo, loop, sem controles) ----------
+     Só fica visível quando já dá para tocar: até lá quem segura a tela é o
+     .hero__poster (a capa), então o LCP nunca espera o vídeo.
+     O <video> já nasce com autoplay — o play() abaixo é só a rede de segurança
+     para o caso de o atributo ser ignorado. */
+  function wireHero(v) {
+    const mostra = () => v.classList.add('is-ready');
+    if (v.readyState >= 3) mostra();
+    else v.addEventListener('canplay', mostra, { once: true });
+    // Aba aberta em background faz o navegador rejeitar o play(). A capa fica na
+    // tela e o autoplay pega quando a aba ganhar foco: não há o que tratar.
+    const p = v.play();
+    if (p && p.catch) p.catch(function () {});
   }
+  document.querySelectorAll('.hero__vid').forEach(wireHero);
 
   /* ---------- reels do Instagram (seção "por que viajar") ----------
      Nunca toca sozinho: o poster é a capa e o vídeo só baixa no clique
@@ -83,28 +79,43 @@ function initRoteiro() {
   };
   document.querySelectorAll('.intro__media').forEach(wireReels);
 
-  /* Páginas estáticas: o HTML nasce com a capa (bom p/ SEO e p/ o LCP) e troca
-     pelo reels se o painel tiver um. A dinâmica já nasce certa, então não entra
-     aqui. Sem rede ou sem vídeo, a capa fica — que é o fallback desejado. */
+  /* Páginas estáticas: o HTML nasce com a capa parada (bom p/ SEO e p/ o LCP) e
+     recebe os vídeos que o painel tiver — o do topo e o reels. A dinâmica já
+     nasce certa, então não entra aqui. Sem rede ou sem vídeo, a capa fica, que
+     é exatamente o fallback desejado. Uma consulta só alimenta os dois. */
   const staticFig = document.querySelector('.intro__photo');
+  const heroMedia = document.querySelector('.hero__media');
   const slugEl = document.getElementById('more-track');
   const slug = slugEl && slugEl.dataset.current;
-  // #rt-main só existe na roteiro.html (dinâmica), que já renderiza a figura certa
-  // a partir do banco. Sem esta guarda ela refaria a consulta à toa.
+  // #rt-main só existe na roteiro.html (dinâmica), que já renderiza tudo a
+  // partir do banco. Sem esta guarda ela refaria a consulta à toa.
   const ehDinamica = !!document.getElementById('rt-main');
-  if (staticFig && slug && !ehDinamica && window.poFetchRoteiro) {
+  if (slug && !ehDinamica && window.poFetchRoteiro) {
     window.poFetchRoteiro(slug).then((r) => {
-      if (!r || !r.video_insta_url || !window.poIntroMedia) return;
-      // Preserva a capa e o alt do HTML: o banco pode ter capa_url diferente.
-      const img = staticFig.querySelector('img');
-      const fig = document.createRange().createContextualFragment(window.poIntroMedia({
-        video_insta_url: r.video_insta_url,
-        capa_url: (img && img.getAttribute('src')) || r.capa_url,
-        titulo: r.titulo
-      })).firstElementChild;
-      fig.classList.add('is-in');  // já está na tela; não espera o reveal
-      staticFig.replaceWith(fig);
-      wireReels(fig);
+      if (!r) return;
+
+      // topo: o vídeo capa entra por cima da capa parada, se houver um
+      if (heroMedia && !heroMedia.querySelector('.hero__vid') && window.poHeroVideo) {
+        const html = window.poHeroVideo(r);
+        if (html) {
+          heroMedia.insertAdjacentHTML('beforeend', html);
+          wireHero(heroMedia.querySelector('.hero__vid'));
+        }
+      }
+
+      // "por que viajar": a capa vira o reels, se houver um
+      if (staticFig && r.video_insta_url && window.poIntroMedia) {
+        // Preserva a capa e o alt do HTML: o banco pode ter capa_url diferente.
+        const img = staticFig.querySelector('img');
+        const fig = document.createRange().createContextualFragment(window.poIntroMedia({
+          video_insta_url: r.video_insta_url,
+          capa_url: (img && img.getAttribute('src')) || r.capa_url,
+          titulo: r.titulo
+        })).firstElementChild;
+        fig.classList.add('is-in');  // já está na tela; não espera o reveal
+        staticFig.replaceWith(fig);
+        wireReels(fig);
+      }
     });
   }
 

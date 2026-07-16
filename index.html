@@ -29,7 +29,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/style.css?v=8">
+  <link rel="stylesheet" href="assets/css/style.css?v=9">
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"TravelAgency","@id":"https://pereiraoliveiraturismo.com.br/#organization","name":"Pereira Oliveira Turismo","legalName":"Pereira Oliveira Consultoria em Turismo e Viagens LTDA","taxID":"05.622.878/0001-82","slogan":"Realizando sonhos desde 1967","url":"https://pereiraoliveiraturismo.com.br/","logo":"https://pereiraoliveiraturismo.com.br/assets/images/logo.png","image":"https://pereiraoliveiraturismo.com.br/assets/images/roteiro-grecia.jpg","foundingDate":"1967","telephone":"+55-48-99604-8882","priceRange":"$$$","areaServed":"BR","address":{"@type":"PostalAddress","streetAddress":"Rua Almirante Lamego 1090, Sala 801, Centro","addressLocality":"Florianópolis","addressRegion":"SC","addressCountry":"BR"},"sameAs":["https://instagram.com/pereiraoliveiraturismo"]}
   </script>
@@ -41,12 +41,18 @@
 
   <main class="stage">
 
-    <!-- VÍDEO DE FUNDO (autoplay, mudo, loop, sem controles) -->
+    <!-- VÍDEO DE FUNDO (autoplay, mudo, loop, sem controles)
+         Self-hosted, não YouTube: o embed do YouTube não faz autoplay no mobile
+         (bloqueio de plataforma, não configuração), então o fundo ficava parado
+         no celular. Um <video muted playsinline> toca, e ainda poupa o ~1 MB de
+         JS do player que todo visitante baixava.
+         PARA TROCAR O VÍDEO: substituir videos/home.mp4 (720p, sem faixa de
+         áudio, ~900 kbps) e o poster assets/images/home-poster.jpg. Não há campo
+         no painel — é troca por código/FTP mesmo. -->
     <div class="video-bg">
-      <iframe
-        src="https://www.youtube-nocookie.com/embed/QjX1lU-r7Kg?autoplay=1&mute=1&controls=0&loop=1&playlist=QjX1lU-r7Kg&modestbranding=1&showinfo=0&rel=0&iv_load_policy=3&playsinline=1&disablekb=1&fs=0&cc_load_policy=0"
-        title="Pereira Oliveira Turismo" frameborder="0"
-        allow="autoplay; encrypted-media" allowfullscreen></iframe>
+      <video src="videos/home.mp4" autoplay muted loop playsinline preload="auto"
+             disablepictureinpicture disableremoteplayback
+             tabindex="-1" aria-hidden="true"></video>
     </div>
 
     <!-- HEADER glass flutuante -->
@@ -124,7 +130,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="assets/js/po-config.js"></script>
-  <script src="assets/js/roteiros-shared.js"></script>
-  <script src="assets/js/main.js?v=2"></script>
+  <script src="assets/js/roteiros-shared.js?v=2"></script>
+  <script src="assets/js/main.js?v=3"></script>
 </body>
 </html>

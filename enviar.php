@@ -21,7 +21,7 @@ $SMTP_SECURE = 'ssl';                                  // 'ssl' p/ 465 | 'tls' p
 $SMTP_USER   = 'site@pereiraoliveiraturismo.com.br';   // usuário = e-mail completo
 $SMTP_PASS   = 'COLOQUE_NO_config.local.php';          // senha — definir no config.local.php
 
-$DESTINO   = 'site@pereiraoliveiraturismo.com.br';     // para onde o lead chega
+$DESTINO   = 'poturismo@poturismo.com.br';             // para onde o lead chega (sobrescreva no config.local.php)
 $REMETENTE = 'site@pereiraoliveiraturismo.com.br';     // "De" — precisa ser a conta autenticada
 $NOME_SITE = 'Site Pereira Oliveira Turismo';
 
@@ -114,7 +114,9 @@ $corpo .= "------------------------------------------\n";
 $corpo .= "Origem: " . campo('origem') . "\n";
 $corpo .= "Enviado em " . date('d/m/Y') . " as " . date('H:i') . "\n";
 
-$assunto = 'Novo lead' . ($roteiro !== '' ? " — $roteiro" : '') . " — $nome";
+// O nome entra no assunto para que cada lead vire um e-mail separado: assunto
+// idêntico faz o Gmail empilhar todos numa thread só e esconder os novos.
+$assunto = 'NOVO LEAD SITE PO TURISMO' . ($nome !== '' ? " — $nome" : '');
 
 /* Grava no Supabase (po_leads) com a service_role key. Roda ANTES do e-mail
    para nunca perder o lead; não bloqueia o envio se falhar. */

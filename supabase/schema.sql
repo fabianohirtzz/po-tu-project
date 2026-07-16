@@ -27,10 +27,11 @@ create table if not exists public.po_leads (
   landing_page  text,
   -- gestão no painel
   status        text not null default 'semresposta',  -- atendimento|negociacao|venda|semresposta|perdido
-  origem_manual text,
+  origem_manual text,                                 -- pago|organico|social|direto|instagram|whatsapp
   orcamento     numeric not null default 0,
   venda         numeric not null default 0,
-  observacoes   text
+  notas         jsonb not null default '[]'::jsonb,   -- [{ts,txt}] linha temporal de anotações
+  venda_at      timestamptz                           -- carimbo do fechamento. Ciclo = venda_at - created_at
 );
 create index if not exists po_leads_created_idx on public.po_leads (created_at desc);
 
@@ -50,7 +51,8 @@ create table if not exists public.po_roteiros (
   local_label    text,              -- card/slider: "Suíça, França, Alemanha e Holanda"
   badge          text,              -- card: "11 dias"
   capa_url       text,              -- capa (retrato) usada na home e no "por que viajar"
-  video_id       text,              -- id do YouTube (hero)
+  video_capa_url text,              -- vídeo do hero (upload p/ ereHost). Autoplay, mudo, loop,
+                                    -- sem controles. Vazio → hero usa capa_url estática.
   video_insta_url text,             -- reels do Instagram (upload p/ ereHost). Se preenchido,
                                     -- substitui a capa na seção "por que viajar".
   roteiro_dias   jsonb default '[]'::jsonb,  -- [{n,data,dia_semana,cidades,descricao,refeicoes}]

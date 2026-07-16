@@ -218,8 +218,11 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   FTP (docroot direto); verificado no ar (OG, JSON-LD, 404 = HTTP 404). Meta
   `google-site-verification` (token `nGYv…dAVg`) já no `index.html` em produção. Google Tag
   `GT-TNH4L3BV` confirmada pela cliente como a correta.
-  **Falta (cliente):** no Search Console, clicar **Verify** (método HTML tag já está no ar),
-  submeter o `sitemap.xml` e rodar o Rich Results Test nas URLs reais.
+  **Search Console (13/07/2026):** propriedade **verificada** e **`sitemap.xml` submetido**
+  pelo cliente (verificação pelo método HTML tag; não há TXT no DNS, e não precisa). Saúde
+  externa conferida: sitemap HTTP 200 `application/xml`, `robots.txt` apontando o sitemap,
+  e **as 8 URLs do sitemap retornam 200 sem redirect**, todas com `meta robots index,follow`.
+  Indexação e relatórios do Search Console levam de horas a dias para popular.
 - **Vídeo do Instagram no roteiro (16/07/2026):** a seção "por que viajar" mostra o **reels
   do roteiro** quando existe, e a **capa + selo de dias** quando não (regra única em
   `poIntroMedia()`, no `roteiros-shared.js`; vale p/ as páginas estáticas e a dinâmica).
@@ -237,14 +240,48 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   a ~1,2 Mbps (**áudio copiado sem re-encodar**) e o `upload-video.php` recebe **em fatias de
   5 MB**, contornando o `upload_max_filesize` do cPanel. Se o re-encode sair maior que o
   original, manda o original. Medido: 38,7 MB → 1,1 MB.
-  **Vídeo fica na ereHost, em `/videos/<slug>-<hash>.mp4`, NÃO no Supabase Storage** — o
+  **Vídeo fica na ereHost, em `/videos/<slug>-<tipo>-<hash>.mp4`, NÃO no Supabase Storage** — o
   projeto Supabase é compartilhado com NOX/hd360 e o free tier dá 1 GB de storage e 5 GB de
   egress/mês pro projeto inteiro; um reels de 10 MB visto 500× já come 5 GB. Coluna nova:
   `po_roteiros.video_insta_url` (migration em `supabase/migrations/`).
-  **Falta:** rodar a migration no Supabase e subir por FTP `upload-video.php`,
+- **Vídeo capa no hero + fim do YouTube (16/07/2026):** o hero de cada roteiro deixou de ser
+  embed do YouTube e virou **`<video>` self-hosted**. Motivo: o **YouTube não faz autoplay no
+  mobile** — é bloqueio de plataforma, não configuração (o código já tinha `mute=1` +
+  `playsinline=1` + `allow="autoplay"` e mesmo assim o hero ficava parado no celular). Um
+  `<video autoplay muted loop playsinline>` toca, e ainda economiza o ~1 MB de JS do player
+  que todo visitante baixava. Coluna `video_id` **removida**; entra `po_roteiros.video_capa_url`
+  (migration `2026-07-16-video-capa.sql`). Sem vídeo, o hero mostra a `capa_url` parada.
+  **São 2 vídeos por roteiro e os perfis são diferentes de propósito** (`painel/video-encode.js`):
+  `insta` = 1,2 Mbps, áudio copiado, sem corte, `preload="none"` (só baixa no clique);
+  `capa` = **700 kbps, áudio descartado, corte em 15 s** — porque ele **autoplay para todo
+  visitante**, então o orçamento de peso não é o mesmo. Medido no fonte 4K de 40 MB da home:
+  1280x720/15 s → **1,33 MB** (500k→0,97 MB · 800k→1,51 MB). A **guarda de tamanho não vale
+  para a capa**: lá o re-encode não é só compressão (tira áudio e corta), então cair no
+  original publicaria vídeo com som e sem corte. Sem WebCodecs o painel **recusa** a capa
+  (aceita o reels).
+  **Colisão de arquivo (corrigida):** o `upload-video.php` limpa os vídeos antigos por glob.
+  Com o nome `<slug>-<hash>.mp4`, o glob `<slug>-*.mp4` casava com os DOIS vídeos e subir um
+  apagava o outro em silêncio. Agora o POST manda `tipo` (`insta|capa`, lista fechada) e nome
+  e limpeza são escopados: `<slug>-<tipo>-<hash>.mp4` / glob `<slug>-<tipo>-*.mp4`.
+  **Falta:** rodar as 2 migrations no Supabase e subir por FTP `upload-video.php`,
   `painel/video-encode.js`, `painel/index.html`, `painel/app.js`, `painel/painel.css`,
   `assets/css/roteiro.css`, `assets/js/roteiro.js`, `assets/js/roteiros-shared.js`,
-  `assets/js/roteiro-dynamic.js`. A pasta `/videos` precisa ter permissão de escrita.
+  `assets/js/roteiro-dynamic.js` e as 8 páginas HTML (cache-buster: `roteiro.css?v=5`,
+  `roteiro.js?v=2`, `roteiros-shared.js?v=2` — o `.htaccess` cacheia JS/CSS por 1 mês, sem
+  isso o visitante recorrente fica com o arquivo velho). A pasta `/videos` precisa ter
+  permissão de escrita. Depois: a cliente sobe os 5 vídeos capa pelo painel.
+- **Home também saiu do YouTube (16/07/2026):** o fundo da `index.html` virou `<video>`
+  self-hosted, pelo mesmo motivo (autoplay não funcionava no mobile). **`videos/home.mp4`**
+  = 1280x720, sem áudio, ~900 kbps, 24 s, **2,5 MB** (encodado de `videos/video site2.mp4`,
+  o fonte 4K de 40 MB, que segue no repo). O poster `assets/images/home-poster.jpg` (52 KB)
+  é **background da `.video-bg`**: preenche a tela antes do vídeo e é o que fica com
+  `prefers-reduced-motion` (aí o `main.js` remove o vídeo, que nem chega a baixar).
+  **Não há campo no painel para a home** — trocar o vídeo é substituir `videos/home.mp4` +
+  o poster, por código/FTP. Decisão do cliente: o volume não justifica UI.
+  **Com isso o YouTube saiu 100% do site** (home + 5 roteiros).
+- **Leads zerados (16/07/2026):** os 3 leads da `po_leads` eram todos de teste
+  ("TESTE Fabiano (preview)", "Fabiano Teste UI", "Fabiano Hirtz / teste 1") e foram
+  apagados por ID via REST com a `service_role`. Base em 0.
 - **Próximo:** página/seção de Contato geral (formulário de lead na home) · backend
   `enviar.php` + Supabase · painel de leads.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,

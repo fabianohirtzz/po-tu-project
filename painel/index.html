@@ -78,6 +78,10 @@
           <button class="chip active" data-orig="todos">Todas origens</button>
           <button class="chip c-pago" data-orig="pago">Pago</button>
           <button class="chip c-org" data-orig="organico">Orgânico</button>
+          <button class="chip c-social" data-orig="social">Social</button>
+          <button class="chip c-insta" data-orig="instagram">Instagram</button>
+          <button class="chip c-wpp" data-orig="whatsapp">WhatsApp</button>
+          <button class="chip c-direto" data-orig="direto">Direto</button>
         </div>
         <select class="fselect" id="status-filter">
           <option value="todos">Todos os status</option>
@@ -87,6 +91,10 @@
           <option value="semresposta">Sem resposta</option>
           <option value="perdido">Perdido</option>
         </select>
+        <button class="btn-add" id="lead-new">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          Adicionar lead
+        </button>
       </div>
       <div class="table-wrap">
         <div class="tscroll">
@@ -95,7 +103,7 @@
               <tr>
                 <th>Origem</th><th>Data</th><th>Nome</th><th>Contato</th>
                 <th>Roteiro</th><th>Viajantes</th><th>Cidade</th>
-                <th>Status</th><th>Orçamento</th><th>Venda</th>
+                <th>Status</th><th>Orçamento</th><th>Venda</th><th>Ciclo</th>
               </tr>
             </thead>
             <tbody id="lead-rows"></tbody>
@@ -146,6 +154,12 @@
           <div class="spec-row"><span class="spec-k">Ticket médio</span><span class="spec-v" id="m-ticket">—</span></div>
         </div>
         <div class="card full">
+          <div class="card-title">Ciclo de venda por lead</div>
+          <div class="card-sub">Dias entre a entrada do lead e o fechamento</div>
+          <div class="cycles" id="cycle-list"></div>
+          <div class="cycle-foot" id="cycle-foot"></div>
+        </div>
+        <div class="card full">
           <div class="card-title">Leads ao longo do mês</div>
           <div class="card-sub">Distribuição diária de contatos recebidos</div>
           <div class="tl" id="timeline"></div>
@@ -194,6 +208,7 @@
     <div class="spec-row"><span class="spec-k">Nº de viajantes</span><span class="spec-v" id="dr-viajantes"></span></div>
     <div class="spec-row"><span class="spec-k">Roteiro</span><span class="spec-v" id="dr-roteiro"></span></div>
     <div class="spec-row"><span class="spec-k">Recebido em</span><span class="spec-v" id="dr-data"></span></div>
+    <div class="spec-row"><span class="spec-k">Ciclo de venda</span><span class="spec-v" id="dr-ciclo"></span></div>
     <div class="dr-section-l">Origem (rastreada)</div>
     <div class="spec-row"><span class="spec-k">Canal</span><span class="spec-v" id="dr-canal"></span></div>
     <div class="spec-row"><span class="spec-k">Campanha</span><span class="spec-v" id="dr-camp"></span></div>
@@ -217,6 +232,8 @@
         <option value="pago">Tráfego pago</option>
         <option value="organico">Orgânico</option>
         <option value="social">Social</option>
+        <option value="instagram">Instagram</option>
+        <option value="whatsapp">WhatsApp</option>
         <option value="direto">Direto</option>
       </select>
     </div>
@@ -224,12 +241,67 @@
       <div class="field"><label>Orçamento (R$)</label><input type="number" id="e-orc" step="100"></div>
       <div class="field"><label>Venda (R$)</label><input type="number" id="e-ven" step="100"></div>
     </div>
-    <div class="field"><label>Observações</label><textarea id="e-obs" placeholder="Follow-up, condições, anotações…"></textarea></div>
+    <p class="dr-hint">Preencher a venda conclui o lead e inicia a contagem do ciclo.</p>
+
+    <div class="dr-section-l">Observações <span class="badge-note">linha do tempo</span></div>
+    <div class="note-add">
+      <textarea id="n-txt" placeholder="O que aconteceu com este lead?"></textarea>
+      <button class="btn btn-primary" id="n-add" type="button">Adicionar</button>
+    </div>
+    <div class="notes" id="dr-notes"></div>
   </div>
   <div class="dr-foot">
     <button class="btn btn-ghost" id="dr-cancel">Fechar</button>
     <button class="btn btn-primary" id="dr-save">Salvar</button>
     <span class="save-flash" id="save-flash">✓ Salvo</span>
+  </div>
+</aside>
+
+<!-- ===== DRAWER: NOVO LEAD (cadastro manual) ===== -->
+<aside class="drawer" id="ndrawer">
+  <div class="dr-head">
+    <button class="dr-close" id="nd-close">✕</button>
+    <div class="dr-name">Adicionar lead</div>
+    <div class="dr-comp">Para os contatos que chegam pelo WhatsApp ou pelo Direct</div>
+  </div>
+  <div class="dr-body">
+    <div class="dr-section-l">Como chegou</div>
+    <div class="field-2">
+      <div class="field">
+        <label>Origem</label>
+        <select id="n-orig">
+          <option value="whatsapp">WhatsApp</option>
+          <option value="instagram">Instagram</option>
+          <option value="social">Social</option>
+          <option value="pago">Tráfego pago</option>
+          <option value="organico">Orgânico</option>
+          <option value="direto">Direto</option>
+        </select>
+      </div>
+      <div class="field"><label>Data de entrada</label><input type="datetime-local" id="n-data"></div>
+    </div>
+    <p class="dr-hint">A data conta o ciclo de venda. Ajuste se o contato chegou antes de hoje.</p>
+
+    <div class="dr-section-l">Dados do contato</div>
+    <div class="field"><label>Nome</label><input id="n-nome" placeholder="Maria Silva"></div>
+    <div class="field-2">
+      <div class="field"><label>Telefone / WhatsApp</label><input id="n-tel" placeholder="(48) 99999-0000"></div>
+      <div class="field"><label>E-mail</label><input type="email" id="n-email" placeholder="maria@email.com"></div>
+    </div>
+    <div class="field-2">
+      <div class="field"><label>Cidade</label><input id="n-cidade"></div>
+      <div class="field"><label>Nº de viajantes</label><input id="n-viajantes"></div>
+    </div>
+    <div class="field">
+      <label>Roteiro de interesse</label>
+      <input id="n-roteiro" list="n-roteiros" placeholder="Escolha ou digite">
+      <datalist id="n-roteiros"></datalist>
+    </div>
+    <div class="field"><label>Mensagem / contexto</label><textarea id="n-msg" placeholder="O que a pessoa pediu"></textarea></div>
+  </div>
+  <div class="dr-foot">
+    <button class="btn btn-ghost" id="nd-cancel">Fechar</button>
+    <button class="btn btn-primary" id="nd-save">Cadastrar lead</button>
   </div>
 </aside>
 
