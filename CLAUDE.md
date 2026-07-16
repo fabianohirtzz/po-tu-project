@@ -263,6 +263,11 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   Com o nome `<slug>-<hash>.mp4`, o glob `<slug>-*.mp4` casava com os DOIS vídeos e subir um
   apagava o outro em silêncio. Agora o POST manda `tipo` (`insta|capa`, lista fechada) e nome
   e limpeza são escopados: `<slug>-<tipo>-<hash>.mp4` / glob `<slug>-<tipo>-*.mp4`.
+  **Legado:** quando o `tipo` entrou, **já havia 5 reels em produção** com o nome antigo
+  `<slug>-<hash>.mp4` (a cliente subiu pelo painel em 16/07). Eles não casam com o glob novo,
+  então virariam órfãos eternos na troca. Por isso a limpeza do `insta` também varre o padrão
+  legado, com regex **fechada em 8 dígitos hex** (`^<slug>-[0-9a-f]{8}\.mp4$`) — assim um
+  `<slug>-capa-<hash>.mp4` nunca casa, e a limpeza do reels jamais alcança o vídeo capa.
   **Falta:** rodar as 2 migrations no Supabase e subir por FTP `upload-video.php`,
   `painel/video-encode.js`, `painel/index.html`, `painel/app.js`, `painel/painel.css`,
   `assets/css/roteiro.css`, `assets/js/roteiro.js`, `assets/js/roteiros-shared.js`,

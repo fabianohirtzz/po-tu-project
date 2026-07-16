@@ -130,7 +130,24 @@ function baseUrl() {
 // O $tipo no glob é essencial: com <slug>-*.mp4 o vídeo capa e o do Instagram
 // casariam no mesmo padrão e um apagaria o outro.
 function limpaAntigos($dir, $slug, $tipo, $manter = null) {
-    foreach (glob($dir . '/' . $slug . '-' . $tipo . '-*.mp4') ?: [] as $f) {
+    $alvos = glob($dir . '/' . $slug . '-' . $tipo . '-*.mp4') ?: [];
+
+    // LEGADO: antes do parâmetro "tipo", o reels era gravado como
+    // <slug>-<hash>.mp4. Esses arquivos não casam com o glob acima, então sem
+    // isto ficariam órfãos no disco para sempre quando a cliente trocasse o
+    // vídeo (havia 5 assim em produção quando o tipo foi introduzido).
+    // O padrão é FECHADO em 8 dígitos hex de propósito: um
+    // <slug>-capa-<hash>.mp4 não casa, então a limpeza do reels nunca
+    // alcança o vídeo capa — que é justamente a colisão que o tipo resolveu.
+    if ($tipo === 'insta') {
+        foreach (glob($dir . '/' . $slug . '-*.mp4') ?: [] as $f) {
+            if (preg_match('/^' . preg_quote($slug, '/') . '-[0-9a-f]{8}\.mp4$/', basename($f))) {
+                $alvos[] = $f;
+            }
+        }
+    }
+
+    foreach ($alvos as $f) {
         if ($manter !== null && realpath($f) === realpath($manter)) continue;
         @unlink($f);
     }
