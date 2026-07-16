@@ -32,11 +32,15 @@
     date: document.getElementById('p-date'), desc: document.getElementById('p-desc'), btn: document.getElementById('p-btn')
   };
 
-  /* O painel nasce com a chamada institucional e os roteiros só chegam depois da
-     resposta do banco. Esconder o texto agora evita que a chamada apareça e troque
-     na cara do visitante; o primeiro render revela já com o roteiro certo.
-     Esconder daqui, e não no HTML, é de propósito: sem JS o texto continua visível. */
-  if (panel) panel.classList.add('is-switching');
+  /* O painel nasce escondido pela .po-boot (script inline no <head>, que roda antes
+     do primeiro paint) porque os roteiros só chegam depois da resposta do banco.
+     Aqui só revelamos: preenchido com o roteiro certo, ou de volta na chamada
+     institucional se o banco não responder. Nunca deixar de chamar isto: a .po-boot
+     é opacity 0 e o painel ficaria invisível para sempre. */
+  function revelarPainel() {
+    document.documentElement.classList.remove('po-boot');
+    if (panel) panel.classList.remove('is-switching');
+  }
 
   /* ---------- menu mobile (independe dos dados) ---------- */
   const sheet = document.getElementById('sheet');
@@ -85,7 +89,7 @@
   function initSlider(ROTEIROS) {
     // sem roteiros (banco fora do ar) a home fica só com a chamada institucional:
     // melhor não ter carrossel do que anunciar viagem que não existe mais.
-    if (!track || !ROTEIROS.length) { if (panel) panel.classList.remove('is-switching'); return; }
+    if (!track || !ROTEIROS.length) { revelarPainel(); return; }
     const N = ROTEIROS.length;
     let active = 0, autoTimer = null;
     const AUTOPLAY_MS = 5200;
@@ -134,9 +138,9 @@
       const preencher = () => {
         els.sub.textContent = r.subtitulo; els.title.textContent = r.titulo;
         els.date.textContent = r.data; els.desc.textContent = r.desc; els.btn.href = r.href;
-        panel.classList.remove('is-switching');
+        revelarPainel();
       };
-      // o painel já está escondido desde o boot: preenche e revela, sem fade-out
+      // o painel já está escondido desde o <head>: preenche e revela, sem fade-out
       if (primeiroRender) { primeiroRender = false; preencher(); return; }
       panel.classList.add('is-switching');
       setTimeout(preencher, 200);

@@ -30,6 +30,24 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/style.css?v=9">
+
+  <!-- Esconde o texto do painel ANTES do primeiro paint.
+       Os roteiros vêm do banco e só chegam ~700ms depois, então sem isto o HTML
+       pinta a chamada institucional e ela pisca até o main.js trocar pelo roteiro.
+       Tem que ser aqui no <head> e inline: o main.js carrega no fim do <body> e
+       na rede real já é tarde (no localhost não aparece, o servidor é instantâneo).
+       Ser um <script> é a garantia de progressive enhancement: sem JS a classe
+       nunca entra e o texto aparece normalmente. O main.js tira a .po-boot quando
+       o painel já está preenchido, ou quando desiste (banco fora do ar). -->
+  <style>.po-boot .panel__anim{opacity:0;transform:translateY(14px)}</style>
+  <script>
+    document.documentElement.classList.add('po-boot');
+    // rede de segurança: se o main.js não carregar, ninguém tira a .po-boot e o
+    // painel fica invisível para sempre. 5s perde para qualquer resposta normal do
+    // banco (~700ms), então na prática só dispara quando algo quebrou de verdade.
+    setTimeout(function () { document.documentElement.classList.remove('po-boot'); }, 5000);
+  </script>
+
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"TravelAgency","@id":"https://pereiraoliveiraturismo.com.br/#organization","name":"Pereira Oliveira Turismo","legalName":"Pereira Oliveira Consultoria em Turismo e Viagens LTDA","taxID":"05.622.878/0001-82","slogan":"Realizando sonhos desde 1967","url":"https://pereiraoliveiraturismo.com.br/","logo":"https://pereiraoliveiraturismo.com.br/assets/images/logo.png","image":"https://pereiraoliveiraturismo.com.br/assets/images/roteiro-grecia.jpg","foundingDate":"1967","telephone":"+55-48-99604-8882","priceRange":"$$$","areaServed":"BR","address":{"@type":"PostalAddress","streetAddress":"Rua Almirante Lamego 1090, Sala 801, Centro","addressLocality":"Florianópolis","addressRegion":"SC","addressCountry":"BR"},"sameAs":["https://instagram.com/pereiraoliveiraturismo"]}
   </script>
@@ -135,6 +153,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="assets/js/po-config.js"></script>
   <script src="assets/js/roteiros-shared.js?v=2"></script>
-  <script src="assets/js/main.js?v=4"></script>
+  <script src="assets/js/main.js?v=5"></script>
 </body>
 </html>
