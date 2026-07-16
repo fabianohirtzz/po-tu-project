@@ -239,6 +239,14 @@ tbody tr:last-child td{border-bottom:none}
 .gal-thumb button{position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:5px;background:rgba(20,26,34,.85);color:#fff;font-size:.75rem;line-height:1}
 .uploading{font-size:.72rem;color:var(--azul);font-family:var(--font-mono)}
 
+/* vídeo do Instagram (reels 9:16) */
+.vid-prev{position:relative;width:132px;margin-bottom:10px}
+.vid-prev video{width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:8px;
+  border:1px solid var(--border);background:#000;display:block}
+.vid-rm{position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:5px;
+  background:rgba(20,26,34,.85);color:#fff;font-size:.75rem;line-height:1}
+.vid-hint{font-size:.72rem;color:var(--muted);line-height:1.5;margin:8px 0 0;max-width:52ch}
+
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:12px 22px;border-radius:9px;font-size:.82rem;box-shadow:var(--shadow-pop);opacity:0;pointer-events:none;transition:.25s;z-index:120}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.err{background:#7f1d1d}

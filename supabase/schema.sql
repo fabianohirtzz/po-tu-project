@@ -51,7 +51,8 @@ create table if not exists public.po_roteiros (
   badge          text,              -- card: "11 dias"
   capa_url       text,              -- capa (retrato) usada na home e no "por que viajar"
   video_id       text,              -- id do YouTube (hero)
-  video_list     text,              -- opcional: playlist/mix (ex.: RDxxxx)
+  video_insta_url text,             -- reels do Instagram (upload p/ ereHost). Se preenchido,
+                                    -- substitui a capa na seção "por que viajar".
   roteiro_dias   jsonb default '[]'::jsonb,  -- [{n,data,dia_semana,cidades,descricao,refeicoes}]
   hoteis         jsonb default '[]'::jsonb,  -- [{cidade,hotel}] ou [texto]
   inclui         jsonb default '[]'::jsonb,  -- [texto]

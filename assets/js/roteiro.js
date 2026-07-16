@@ -35,9 +35,8 @@ function initRoteiro() {
   if (heroVideo && !reduce && !heroVideo.querySelector('iframe')) {
     const id = heroVideo.dataset.yt;
     if (id) {
-      const list = heroVideo.dataset.ytList;
-      const loopPart = list ? ('loop=1&list=' + list) : ('loop=1&playlist=' + id);
-      const params = 'autoplay=1&mute=1&controls=0&' + loopPart +
+      // playlist=<id> é o truque padrão do YouTube p/ repetir um vídeo único.
+      const params = 'autoplay=1&mute=1&controls=0&loop=1&playlist=' + id +
         '&modestbranding=1&showinfo=0&rel=0&iv_load_policy=3&playsinline=1&disablekb=1&fs=0&cc_load_policy=0';
       const iframe = document.createElement('iframe');
       iframe.src = 'https://www.youtube-nocookie.com/embed/' + id + '?' + params;
@@ -49,6 +48,64 @@ function initRoteiro() {
       iframe.addEventListener('load', () => heroVideo.classList.add('is-ready'));
       heroVideo.appendChild(iframe);
     }
+  }
+
+  /* ---------- reels do Instagram (seção "por que viajar") ----------
+     Nunca toca sozinho: o poster é a capa e o vídeo só baixa no clique
+     (preload="none"). A tag e o botão de play somem no play e voltam no
+     pause. A tela cheia é própria — ver .intro__media:fullscreen no CSS. */
+  const wireReels = (fig) => {
+    const v = fig.querySelector('video');
+    if (!v || fig.dataset.wired) return;
+    fig.dataset.wired = '1';
+    const btn = fig.querySelector('.intro__play');
+    const fs  = fig.querySelector('.intro__fs');
+
+    if (btn) btn.addEventListener('click', () => { v.paused ? v.play() : v.pause(); });
+
+    v.addEventListener('play', () => {
+      fig.classList.add('is-playing', 'has-played');
+      v.controls = true;  // controles nativos: só depois do play, p/ não sujar o poster
+    });
+    v.addEventListener('pause', () => fig.classList.remove('is-playing'));
+    v.addEventListener('ended', () => { fig.classList.remove('is-playing'); v.currentTime = 0; });
+
+    if (fs) fs.addEventListener('click', () => {
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        return;
+      }
+      const req = fig.requestFullscreen || fig.webkitRequestFullscreen;
+      // iOS não deixa um <div> entrar em tela cheia; lá o próprio vídeo assume.
+      if (req) req.call(fig);
+      else if (v.webkitEnterFullscreen) v.webkitEnterFullscreen();
+    });
+  };
+  document.querySelectorAll('.intro__media').forEach(wireReels);
+
+  /* Páginas estáticas: o HTML nasce com a capa (bom p/ SEO e p/ o LCP) e troca
+     pelo reels se o painel tiver um. A dinâmica já nasce certa, então não entra
+     aqui. Sem rede ou sem vídeo, a capa fica — que é o fallback desejado. */
+  const staticFig = document.querySelector('.intro__photo');
+  const slugEl = document.getElementById('more-track');
+  const slug = slugEl && slugEl.dataset.current;
+  // #rt-main só existe na roteiro.html (dinâmica), que já renderiza a figura certa
+  // a partir do banco. Sem esta guarda ela refaria a consulta à toa.
+  const ehDinamica = !!document.getElementById('rt-main');
+  if (staticFig && slug && !ehDinamica && window.poFetchRoteiro) {
+    window.poFetchRoteiro(slug).then((r) => {
+      if (!r || !r.video_insta_url || !window.poIntroMedia) return;
+      // Preserva a capa e o alt do HTML: o banco pode ter capa_url diferente.
+      const img = staticFig.querySelector('img');
+      const fig = document.createRange().createContextualFragment(window.poIntroMedia({
+        video_insta_url: r.video_insta_url,
+        capa_url: (img && img.getAttribute('src')) || r.capa_url,
+        titulo: r.titulo
+      })).firstElementChild;
+      fig.classList.add('is-in');  // já está na tela; não espera o reveal
+      staticFig.replaceWith(fig);
+      wireReels(fig);
+    });
   }
 
   /* ---------- galeria — lightbox ---------- */

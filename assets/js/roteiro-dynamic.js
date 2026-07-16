@@ -33,6 +33,10 @@
   ];
   const CHECK = '<span class="why__ic"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
 
+  // A figura do "por que viajar" (capa ou reels) vem do roteiros-shared.js —
+  // mesma regra e mesmo markup das páginas estáticas.
+  const introMedia = (r) => window.poIntroMedia(r);
+
   function render(r) {
     const capa = esc(r.capa_url || '');
     const days = arr(r.roteiro_dias);
@@ -43,7 +47,7 @@
     /* HERO */
     h += '<section class="hero" id="topo"><div class="hero__media">' +
       '<div class="hero__poster" style="background-image:url(\'' + capa + '\')"></div>' +
-      (r.video_id ? '<div class="hero__video" id="hero-video" data-yt="' + esc(r.video_id) + '"' + (r.video_list ? ' data-yt-list="' + esc(r.video_list) + '"' : '') + '></div>' : '') +
+      (r.video_id ? '<div class="hero__video" id="hero-video" data-yt="' + esc(r.video_id) + '"></div>' : '') +
       '</div><div class="hero__scrim"></div><div class="hero__inner">' +
       '<p class="hero__crumb"><a href="index.html">Início</a><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg><a href="index.html#inicio">Roteiros</a><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg><span>' + esc(r.titulo) + '</span></p>' +
       '<h1 class="hero__title">' + esc(r.titulo) + '</h1>' +
@@ -59,9 +63,7 @@
       '<h2 class="sec__h">Cada detalhe pensado para você só aproveitar.</h2>' +
       (r.descricao_curta ? '<p class="intro__lead">' + esc(r.descricao_curta) + '</p>' : '') +
       '<ul class="why">' + WHY.map(w => '<li>' + CHECK + '<p>' + w + '</p></li>').join('') + '</ul></div>' +
-      '<figure class="intro__photo reveal" data-delay="1"><img src="' + capa + '" alt="' + esc(r.titulo) + '">' +
-      (r.dias ? '<figcaption class="intro__stamp"><b>' + esc(r.dias) + '</b><span>dias de viagem</span></figcaption>' : '') +
-      '</figure></div></section>';
+      introMedia(r) + '</div></section>';
 
     /* DIA A DIA */
     if (days.length) {

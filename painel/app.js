@@ -283,10 +283,7 @@ function roteiroForm(r){
     <div class="field"><label>Local (card)</label><input id="r-local" value="${esc(r.local_label||'')}"></div>
   </div>
   <div class="field"><label>Período (texto)</label><input id="r-periodo" value="${esc(r.periodo||'')}"></div>
-  <div class="field-2">
-    <div class="field"><label>Vídeo YouTube (ID)</label><input id="r-video" value="${esc(r.video_id||'')}"></div>
-    <div class="field"><label>Playlist/mix (opcional)</label><input id="r-videolist" value="${esc(r.video_list||'')}"></div>
-  </div>
+  <div class="field"><label>Vídeo YouTube (ID) — hero da página</label><input id="r-video" value="${esc(r.video_id||'')}"></div>
   <div class="field"><label>Ativo no site</label><select id="r-ativo"><option value="1" ${r.ativo!==false?'selected':''}>Sim, publicado</option><option value="0" ${r.ativo===false?'selected':''}>Não (oculto)</option></select></div>
 
   <div class="dr-section-l">Capa</div>
@@ -296,6 +293,17 @@ function roteiroForm(r){
     <input type="file" id="r-capa-file" accept="image/*" hidden>
     <button type="button" class="rep-add" id="r-capa-btn">Enviar capa</button>
     <span class="uploading" id="r-capa-up"></span>
+  </div>
+
+  <div class="dr-section-l">Vídeo do Instagram</div>
+  <div class="field">
+    <div id="r-vid-wrap">${r.video_insta_url?vidPreview(r.video_insta_url):''}</div>
+    <input type="hidden" id="r-vid" value="${esc(r.video_insta_url||'')}">
+    <input type="file" id="r-vid-file" accept="video/*" hidden>
+    <button type="button" class="rep-add" id="r-vid-btn">Enviar vídeo</button>
+    <span class="uploading" id="r-vid-up"></span>
+    <p class="vid-hint">O reels aparece na seção "Por que viajar" da página do roteiro. Sem vídeo, mostra a capa.
+      Pode enviar o arquivo original, de qualquer tamanho: o painel comprime antes de enviar.</p>
   </div>
 
   <div class="dr-section-l">Roteiro dia a dia</div>
@@ -334,6 +342,47 @@ function wireRoteiroForm(){
   $('#r-gal-file').onchange=async e=>{const fs=[...e.target.files];if(!fs.length)return;$('#r-gal-up').textContent='Enviando '+fs.length+'…';for(const f of fs){const url=await uploadImg(f,curSlug());if(url)$('#r-gal-wrap').insertAdjacentHTML('beforeend',`<div class="gal-thumb" style="background-image:url('${url}')" data-url="${url}"><button type="button">✕</button></div>`);}$('#r-gal-up').textContent='';};
   // remover thumb (capa/galeria)
   $('#rdr-body').addEventListener('click',e=>{if(e.target.tagName==='BUTTON'&&e.target.closest('.gal-thumb')){const t=e.target.closest('.gal-thumb');if(t.hasAttribute('data-capa'))$('#r-capa').value='';t.remove();}});
+  // vídeo do Instagram
+  $('#r-vid-btn').onclick=()=>$('#r-vid-file').click();
+  $('#r-vid-file').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f)await sendVideo(f);};
+  $('#r-vid-wrap').addEventListener('click',async e=>{
+    if(!e.target.classList.contains('vid-rm'))return;
+    if(!confirm('Remover o vídeo deste roteiro?'))return;
+    const {data:{session}}=await sb.auth.getSession();
+    await POVideo.remove(curSlug(),session&&session.access_token?session.access_token:'');
+    $('#r-vid').value='';$('#r-vid-wrap').innerHTML='';
+    toast('Vídeo removido. Salve o roteiro para confirmar.');
+  });
+}
+function vidPreview(url){return `<div class="vid-prev"><video src="${esc(url)}" controls preload="metadata" playsinline></video><button type="button" class="vid-rm" title="Remover vídeo">✕</button></div>`;}
+// Comprime o reels no navegador e sobe em fatias para o upload-video.php.
+// Fica na ereHost (não no Supabase Storage) porque o projeto Supabase é
+// compartilhado com NOX/hd360 e o egress do free tier é do projeto inteiro.
+async function sendVideo(file){
+  const btn=$('#r-vid-btn'),st=$('#r-vid-up'),slug=curSlug();
+  if(!slug||slug==='roteiro'){toast('Defina o título (ou o slug) do roteiro antes de enviar o vídeo.',true);return;}
+  const {data:{session}}=await sb.auth.getSession();
+  const token=session&&session.access_token?session.access_token:'';
+  if(!token){toast('Sessão expirada. Faça login novamente.',true);return;}
+  btn.disabled=true;
+  try{
+    let blob=file;
+    if(POVideo.supported()){
+      st.textContent='Comprimindo… 0%';
+      const menor=await POVideo.encode(file,p=>{st.textContent='Comprimindo… '+Math.round(p*100)+'%';});
+      // Se o arquivo já era mais leve que o nosso alvo, re-encodar só engordaria
+      // (e perderia qualidade à toa). Nesse caso vale mais mandar o original.
+      blob=menor.size<file.size?menor:file;
+    }else{
+      toast('Este navegador não comprime vídeo; o arquivo vai como está. Use o Chrome para um vídeo mais leve.',true);
+    }
+    st.textContent='Enviando… 0%';
+    const url=await POVideo.upload(blob,slug,token,p=>{st.textContent='Enviando… '+Math.round(p*100)+'%';});
+    $('#r-vid').value=url;$('#r-vid-wrap').innerHTML=vidPreview(url);st.textContent='';
+    toast('Vídeo enviado ('+(blob.size/1048576).toFixed(1)+' MB). Salve o roteiro para publicar.');
+  }catch(err){
+    st.textContent='';toast('Erro no vídeo: '+((err&&err.message)||err),true);
+  }finally{btn.disabled=false;}
 }
 function curSlug(){return slugify($('#r-slug')?.value||$('#r-titulo')?.value||'roteiro');}
 async function uploadImg(file,slug){
@@ -363,7 +412,7 @@ function collectRoteiro(){
     descricao_curta:$('#r-desc').value.trim(),dias:Number($('#r-dias').value)||null,noites:Number($('#r-noites').value)||null,
     ordem:Number($('#r-ordem').value)||0,badge:$('#r-badge').value.trim(),data_label:$('#r-datalabel').value.trim(),
     local_label:$('#r-local').value.trim(),periodo:$('#r-periodo').value.trim(),
-    video_id:$('#r-video').value.trim(),video_list:$('#r-videolist').value.trim()||null,
+    video_id:$('#r-video').value.trim(),video_insta_url:$('#r-vid').value.trim()||null,
     ativo:$('#r-ativo').value==='1',capa_url:$('#r-capa').value.trim()||null,
     roteiro_dias:dias,hoteis:lines('r-hoteis'),inclui:lines('r-inclui'),nao_inclui:lines('r-naoinclui'),
     valores:valores,galeria:galeria

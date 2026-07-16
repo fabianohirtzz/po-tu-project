@@ -220,6 +220,31 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   `GT-TNH4L3BV` confirmada pela cliente como a correta.
   **Falta (cliente):** no Search Console, clicar **Verify** (método HTML tag já está no ar),
   submeter o `sitemap.xml` e rodar o Rich Results Test nas URLs reais.
+- **Vídeo do Instagram no roteiro (16/07/2026):** a seção "por que viajar" mostra o **reels
+  do roteiro** quando existe, e a **capa + selo de dias** quando não (regra única em
+  `poIntroMedia()`, no `roteiros-shared.js`; vale p/ as páginas estáticas e a dinâmica).
+  Nunca toca sozinho: `preload="none"`, poster = capa, botão de play central e a tag
+  "Assista ao vídeo do roteiro" (somem no play, voltam no pause). Controles **nativos**
+  (só depois do play) com `controlslist="nofullscreen"` — a **tela cheia é própria**
+  (`.intro__media:fullscreen`), com o reels em `contain` e o fundo preenchido pela capa
+  borrada, porque o fullscreen nativo deixaria tarjas pretas no desktop. As páginas
+  estáticas nascem com a capa (SEO/LCP) e trocam pelo vídeo via `poFetchRoteiro(slug)`,
+  usando o Supabase que elas **já carregam** para o carrossel.
+  **Painel:** o campo "Playlist/mix" (`video_list`) foi **removido** (nunca usado; o loop do
+  hero já cai no fallback `playlist=<id>`, que é o truque padrão do YouTube). No lugar entrou
+  **"Vídeo do Instagram"**, por upload. Aceita **arquivo de qualquer tamanho**: o
+  `painel/video-encode.js` re-encoda no navegador com **mediabunny/WebCodecs** para 720x1280
+  a ~1,2 Mbps (**áudio copiado sem re-encodar**) e o `upload-video.php` recebe **em fatias de
+  5 MB**, contornando o `upload_max_filesize` do cPanel. Se o re-encode sair maior que o
+  original, manda o original. Medido: 38,7 MB → 1,1 MB.
+  **Vídeo fica na ereHost, em `/videos/<slug>-<hash>.mp4`, NÃO no Supabase Storage** — o
+  projeto Supabase é compartilhado com NOX/hd360 e o free tier dá 1 GB de storage e 5 GB de
+  egress/mês pro projeto inteiro; um reels de 10 MB visto 500× já come 5 GB. Coluna nova:
+  `po_roteiros.video_insta_url` (migration em `supabase/migrations/`).
+  **Falta:** rodar a migration no Supabase e subir por FTP `upload-video.php`,
+  `painel/video-encode.js`, `painel/index.html`, `painel/app.js`, `painel/painel.css`,
+  `assets/css/roteiro.css`, `assets/js/roteiro.js`, `assets/js/roteiros-shared.js`,
+  `assets/js/roteiro-dynamic.js`. A pasta `/videos` precisa ter permissão de escrita.
 - **Próximo:** página/seção de Contato geral (formulário de lead na home) · backend
   `enviar.php` + Supabase · painel de leads.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
