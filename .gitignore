@@ -12,6 +12,9 @@ _*.css
 .playwright-mcp/
 po-*.jpeg
 
+# cache do render server-side (gerado em runtime)
+cache/
+
 # sistema
 .DS_Store
 Thumbs.db
