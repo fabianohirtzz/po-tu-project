@@ -84,7 +84,11 @@ ul{margin:0;padding:0;list-style:none}
 }
 .lk__nums li{flex:1;display:flex;flex-direction:column;gap:2px}
 .lk__nums b{font-family:var(--font-mono);font-size:1.35rem;font-weight:500;line-height:1}
-.lk__nums span{font-size:.72rem;color:var(--his-ink-soft)}
+/* li > span, e não .lk__nums span: o contador dos anos vive num <span> DENTRO do
+   <b> (li > b > span), então a regra solta do rótulo o acertava também e o "59"
+   saía a .72rem em cinza claro, enquanto "3" e "+35" ficavam grandes em tinta.
+   O filho direto pega só o rótulo, que é o que esta regra sempre quis. */
+.lk__nums li > span{font-size:.72rem;color:var(--his-ink-soft)}
 
 /* ---------- linhas de botão ---------- */
 .lk__links{display:flex;flex-direction:column;gap:10px;margin-top:26px}
@@ -185,20 +189,33 @@ ul{margin:0;padding:0;list-style:none}
 /* ---------- fundo: mapa-múndi + rotas ----------
    TEXTURA, NÃO ILUSTRAÇÃO. A opacidade baixa é o ponto do design: acima disso
    o mapa briga com as capas dos roteiros e a página vira poluição. */
+/* A opacidade é POR CAMADA, não no container, porque as camadas não têm o mesmo
+   papel: a terra é textura (fica nos 7% da spec, e acima disso briga com as capas
+   dos roteiros), enquanto rota e avião são o acento que conta a história e
+   precisam de um respiro a mais para existir. Opacidade no container achatava as
+   três no mesmo 7% e sumia com o avião. */
 .lk-map{
   position:fixed;inset:0;z-index:0;pointer-events:none;
-  opacity:.07;
 }
 .lk-map svg{width:100%;height:100%}
-.lk-map__land{fill:none;stroke:var(--his-ink);stroke-width:1.2;stroke-linejoin:round}
+/* Traço fino: são costas reais do Natural Earth, com detalhe de verdade. Grosso
+   demais, o litoral empasta e volta a virar mancha — que era o problema antigo. */
+.lk-map__land{
+  fill:none;stroke:var(--his-ink);stroke-width:.9;opacity:.07;
+  stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke;
+}
+.lk-map__routes{opacity:.16}
 .lk-map__route{
   fill:none;stroke:var(--brand-azul);stroke-width:1.6;
-  stroke-dasharray:5 7;stroke-linecap:round;
+  stroke-dasharray:5 7;stroke-linecap:round;vector-effect:non-scaling-stroke;
   animation:lk-dash 2.4s linear infinite;
 }
 @keyframes lk-dash{to{stroke-dashoffset:-24}}
-.lk-map__home{fill:var(--brand-azul)}
-.lk-map__plane{fill:var(--his-ink)}
+.lk-map__home{fill:var(--brand-azul);opacity:.22}
+/* Avião no azul da marca, o mesmo da rota que ele percorre: ele é o que voa na
+   linha, não um corpo estranho pousado sobre o mapa. A terra fica na tinta. */
+.lk-map__planes{opacity:.22}
+.lk-map__plane{fill:var(--brand-azul)}
 
 /* Quem pediu menos animação recebe o mapa parado: rotas e aviões congelam,
    mas o desenho continua lá. Mesma regra do resto do site. */
