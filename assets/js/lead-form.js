@@ -1,5 +1,5 @@
 /* ============================================================
-   Pereira Oliveira Turismo — Formulário de lead (compartilhado)
+   Pereira Oliveira Turismo: Formulário de lead (compartilhado)
    Usado nas páginas de roteiro e em contato.html.
    Grava o lead no Supabase (po_leads, anon insert) e dispara
    enviar.php para a notificação por e-mail (best-effort).
@@ -56,7 +56,7 @@ function initLeadForm() {
   const setMsg = (kind, text) => { if (msg) { msg.setAttribute('data-show', kind); msg.textContent = text; } };
   const emailOk = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
-  // cliente Supabase (gravação primária — funciona no preview e na produção)
+  // cliente Supabase (gravação primária: funciona no preview e na produção)
   let sb = null;
   try {
     if (window.supabase && window.PO_CONFIG) {
@@ -107,7 +107,10 @@ function initLeadForm() {
     //  2) preview/Pages (sem PHP): enviar.php não roda → fallback insert anon aqui.
     let done = false;
     try {
-      const r = await fetch('enviar.php', { method: 'POST', body: data });
+      // Absoluto de raiz: as páginas de roteiro agora vivem em /roteiros/<slug>
+      // (um nível a mais de path). 'enviar.php' relativo virava /roteiros/enviar.php
+      // (404) e o lead se perdia com um erro genérico.
+      const r = await fetch('/enviar.php', { method: 'POST', body: data });
       if (r.ok) { const j = await r.json().catch(() => null); if (j && j.ok === true) done = true; }
     } catch (e) { /* sem backend PHP: usa fallback abaixo */ }
 

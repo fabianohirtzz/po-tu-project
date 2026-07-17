@@ -12,6 +12,13 @@ require_once __DIR__ . '/lib/po-view.php';
 
 function po_arr($a) { return is_array($a) ? $a : []; }
 
+/* Converte para string so quando o valor JA E escalar. Existe pro mesmo
+   motivo do is_array em po_e(): campos vindos do painel/importador com IA
+   as vezes chegam aninhados (array) onde a pagina espera texto, e uma
+   concatenacao direta (ex.: $h['cidade'] . ': ') dispara "Array to string
+   conversion" antes mesmo de o valor passar por po_e(). */
+function po_str($v) { return is_scalar($v) ? (string) $v : ''; }
+
 const PO_WHY = [
     'Cada aspecto da viagem é meticulosamente planejado por uma equipe dedicada, com profundo conhecimento dos destinos.',
     'Nossa experiência em viagens de grupo cria uma dinâmica harmoniosa e uma convivência agradável entre os viajantes.',
@@ -65,7 +72,7 @@ function po_abs_url($u) {
    tem video_insta_url -> video; nao tem -> capa parada com o selo de dias. */
 function po_intro_media($r) {
     $capa    = po_e($r['capa_url'] ?? '');
-    $capaAbs = po_e(po_abs_url($r['capa_url'] ?? ''));
+    $capaAbsCss = po_css_url(po_abs_url($r['capa_url'] ?? ''));
     if (empty($r['video_insta_url'])) {
         $out = '<figure class="intro__photo reveal" data-delay="1"><img src="' . $capa . '" alt="' . po_e($r['titulo'] ?? '') . '">';
         if (!empty($r['dias'])) {
@@ -73,7 +80,7 @@ function po_intro_media($r) {
         }
         return $out . '</figure>';
     }
-    return '<figure class="intro__media reveal" data-delay="1" style="--reels-bg:url(\'' . $capaAbs . '\')">'
+    return '<figure class="intro__media reveal" data-delay="1" style="--reels-bg:url(\'' . $capaAbsCss . '\')">'
         . '<video src="' . po_e($r['video_insta_url']) . '" poster="' . $capa . '" preload="none" playsinline '
         . 'controlslist="nofullscreen nodownload" disablepictureinpicture disableremoteplayback '
         . 'aria-label="Vídeo do roteiro ' . po_e($r['titulo'] ?? '') . '"></video>'
@@ -102,14 +109,15 @@ function po_hero_video($r) {
 
 /* Corpo inteiro da pagina de roteiro. Porte 1:1 de roteiro-dynamic.js:40-132
    (render), na mesma ordem de secoes. */
-function po_roteiro_html($r) {
+function po_roteiro_html($r, ?array $outros = null) {
     $capa    = po_e($r['capa_url'] ?? '');
+    $capaCss = po_css_url($r['capa_url'] ?? '');
     $days    = po_arr($r['roteiro_dias'] ?? null);
     $inclui  = po_arr($r['inclui'] ?? null);
     $naoInc  = po_arr($r['nao_inclui'] ?? null);
     $hoteis  = array_map(function ($h) {
         if (is_string($h)) return $h;
-        if (is_array($h) && !empty($h['cidade'])) return $h['cidade'] . ': ' . ($h['hotel'] ?? '');
+        if (is_array($h) && !empty($h['cidade'])) return po_str($h['cidade']) . ': ' . po_str($h['hotel'] ?? '');
         return '';
     }, po_arr($r['hoteis'] ?? null));
     $valores = po_arr($r['valores'] ?? null);
@@ -121,7 +129,7 @@ function po_roteiro_html($r) {
     /* HERO. Breadcrumb trocado de relativo (index.html) para absoluto de
        raiz: esta pagina vive em /roteiros/<slug>, um nivel a mais de path. */
     $h .= '<section class="hero" id="topo"><div class="hero__media">'
-        . '<div class="hero__poster" style="background-image:url(\'' . $capa . '\')"></div>'
+        . '<div class="hero__poster" style="background-image:url(\'' . $capaCss . '\')"></div>'
         . po_hero_video($r)
         . '</div><div class="hero__scrim"></div><div class="hero__inner">'
         . '<p class="hero__crumb"><a href="/">Início</a><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg><a href="/roteiros">Roteiros</a><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg><span>' . po_e($titulo) . '</span></p>'
@@ -150,7 +158,7 @@ function po_roteiro_html($r) {
             . '<p class="tag sec__eyebrow"><span></span>Roteiro dia a dia</p><h2 class="sec__h">O passo a passo da sua viagem.</h2></div><div class="tl">';
         foreach ($days as $d) {
             $d = is_array($d) ? $d : [];
-            $dateline = implode(' · ', array_filter([$d['data'] ?? '', $d['dia_semana'] ?? '']));
+            $dateline = implode(' · ', array_filter([po_str($d['data'] ?? ''), po_str($d['dia_semana'] ?? '')]));
             $n = $d['n'] ?? null;
             $h .= '<div class="day reveal"><div class="day__rail"><div class="day__n">' . ($n ? po_e($n) . 'º dia' : '') . '</div>'
                 . ($dateline !== '' ? '<span class="day__date">' . po_e($dateline) . '</span>' : '') . '</div>'
@@ -224,7 +232,7 @@ function po_roteiro_html($r) {
         . '<div class="more__nav reveal" data-delay="1"><button id="more-prev" aria-label="Anteriores"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>'
         . '<button id="more-next" aria-label="Próximos"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div></div>'
         . '<div class="rot-viewport"><div class="rot-track" id="more-track" data-current="' . po_e($slug) . '">'
-        . po_outros_roteiros($slug) . '</div></div>'
+        . po_outros_roteiros($slug, $outros) . '</div></div>'
         . '<p class="more__count" id="more-count" aria-hidden="true"></p></div></section>';
 
     /* MODAL do lead. No JS original ele vivia num mount point separado
@@ -242,9 +250,14 @@ function po_roteiro_html($r) {
    (pula o roteiro atual). Mesmo markup que assets/js/roteiro.js:168-176
    gerava no navegador (article.rot-card com o link de verdade no
    .rot-card__cta), so que aqui ja sai pronto no HTML: link interno e
-   sinal de SEO e nao pode depender de JavaScript para existir. */
-function po_outros_roteiros($slugAtual) {
-    $lista = po_fetch_roteiros();
+   sinal de SEO e nao pode depender de JavaScript para existir.
+
+   $lista aceita injecao (null = busca no banco como em producao; um array,
+   mesmo vazio, pula a rede). E o que permite tests/test-roteiro-page.php
+   testar po_roteiro_html() sem bater no Supabase de verdade - o mesmo
+   padrao de tests/test-po-data.php via po_set_fetcher(). */
+function po_outros_roteiros($slugAtual, ?array $lista = null) {
+    if ($lista === null) $lista = po_fetch_roteiros();
     $out = '';
     foreach ($lista as $r) {
         if (($r['slug'] ?? '') === $slugAtual) continue;
@@ -255,7 +268,7 @@ function po_outros_roteiros($slugAtual) {
         $img    = (string) ($r['capa_url'] ?? '');
         $href   = po_roteiro_href($r);
         $out .= '<article class="rot-card">'
-            . '<div class="rot-card__img" style="background-image:url(\'' . po_e($img) . '\')"></div>'
+            . '<div class="rot-card__img" style="background-image:url(\'' . po_css_url($img) . '\')"></div>'
             . '<div class="rot-card__body">'
             . '<div class="rot-card__title"><h3>' . po_e($titulo) . '</h3><span class="rot-card__badge">' . po_e($badge) . '</span></div>'
             . '<div class="rot-card__sub"><b></b>' . po_e($local) . ' · ' . po_e($data) . '</div>'
@@ -289,6 +302,20 @@ function po_roteiro_modal($r) {
         . '<button type="submit" class="btn form__submit">Enviar roteiro<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'
         . '<p class="form__legal">Seus dados são usados apenas para este atendimento. Retornamos pelo WhatsApp ou e-mail informado.</p>'
         . '<div class="form__msg" id="form-msg"></div></form></div></div>';
+}
+
+/* Lightbox da galeria, porte 1:1 de grecia-terra-mar.html:502-508 (roteiro.html
+   tem o mesmo bloco). assets/js/roteiro.js:124 procura id="lb" e falha em
+   silencio se nao encontrar (if (grid && lb ...)) - sem este bloco a galeria
+   fica sem clique, sem erro nenhum no console. Copiado agora porque a Task 7
+   apaga o roteiro.html estatico que servia de fonte. */
+function po_lightbox_html() {
+    return '<div class="lb" id="lb" data-open="false" aria-hidden="true">'
+        . '<button class="lb__close" id="lb-close" aria-label="Fechar">×</button>'
+        . '<button class="lb__btn lb__prev" id="lb-prev" aria-label="Anterior"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>'
+        . '<img id="lb-img" src="" alt="">'
+        . '<button class="lb__btn lb__next" id="lb-next" aria-label="Próxima"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>'
+        . '<span class="lb__count" id="lb-count"></span></div>';
 }
 
 /* JSON-LD TouristTrip. offers so sai com preco de verdade: preco inventado
@@ -356,7 +383,10 @@ if (!defined('PO_TEST')) {
     echo '<main id="rt-main">' . po_roteiro_html($r) . '</main>';
     echo po_footer();
     echo po_wa_float();
-    echo '<script src="/assets/js/roteiro.js?v=3"></script>' . "\n";
-    echo '<script src="/assets/js/lead-form.js?v=2"></script>' . "\n";
+    // #lb (lightbox da galeria): assets/js/roteiro.js procura este id; sem ele
+    // a galeria fica sem clique, em silencio (ver comentario em po_lightbox_html()).
+    echo po_lightbox_html();
+    echo '<script src="/assets/js/roteiro.js?v=4"></script>' . "\n";
+    echo '<script src="/assets/js/lead-form.js?v=3"></script>' . "\n";
     echo '</body></html>';
 }

@@ -13,9 +13,33 @@
 
 define('PO_BASE', 'https://pereiraoliveiraturismo.com.br');
 
-function po_e($s) { return htmlspecialchars((string) ($s ?? ''), ENT_QUOTES, 'UTF-8'); }
+/* is_array a mais evita "Array to string conversion": campos do banco vem do
+   painel e do importador com IA (Gemini lendo PDF/DOCX), que as vezes devolve
+   um item aninhado (array) onde o formulario esperava texto. Sem a guarda,
+   um so campo torto derruba a pagina inteira com um Warning ecoado no meio
+   do HTML. */
+function po_e($s) {
+    if (is_array($s)) $s = '';
+    return htmlspecialchars((string) ($s ?? ''), ENT_QUOTES, 'UTF-8');
+}
 function po_url($path) { return PO_BASE . '/' . ltrim((string) $path, '/'); }
 function po_roteiro_href($r) { return '/roteiros/' . rawurlencode($r['slug']); }
+
+/* Sanitiza uma URL antes dela entrar num atributo style="...url('...')".
+   po_e() escapa aspas para a entidade &#039;, mas o parser de HTML DECODIFICA
+   a entidade antes do CSS ler o atributo style - ou seja, a entidade nao
+   protege contra fuga do url(). Confirmado com sonda: capa_url =
+   "a.jpg'); background:red; x:url('b" produz style="...url('a.jpg&#039;);
+   background:red; x:url(&#039;b')" no HTML, que o navegador decodifica de
+   volta para url('a.jpg'); background:red; x:url('b') - declaracoes do
+   atacante aplicadas. capa_url vem do painel/importador, dado nao confiavel.
+   Remove os caracteres que permitem escapar de url(...) ou encerrar a
+   declaracao (aspas, parenteses, barra invertida); o restante passa por
+   po_e() como sempre. */
+function po_css_url($u) {
+    $u = str_replace(["'", '(', ')', '\\'], '', (string) $u);
+    return po_e($u);
+}
 
 /* O <title> mira como o publico de 60+ escreve: "excursao" (nao "roteiro",
    que e jargao de blogueiro), o ano (data fixa e o produto) e a saida de
