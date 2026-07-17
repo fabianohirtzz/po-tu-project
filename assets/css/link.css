@@ -40,17 +40,11 @@ ul{margin:0;padding:0;list-style:none}
 
 /* ---------- cabeçalho ---------- */
 .lk__head{text-align:center}
-/* O logo da marca é o wordmark BRANCO: existe um arquivo só, e todo o resto do
-   site o usa sobre superfície escura (header de vidro, rodapé preto). Solto no
-   papel ele some — sobra o pin. Por isso ele ganha aqui a mesma superfície
-   escura do header do site, virando um selo de papel timbrado. Se um dia a
-   cliente mandar uma versão escura do logo, este chip pode cair. */
-.lk__logo{
-  display:inline-flex;padding:12px 22px;border-radius:16px;
-  background:rgba(13,18,25,.95);
-  box-shadow:0 8px 26px rgba(34,36,43,.16);
-}
-.lk__logo img{height:40px;width:auto}
+/* Usa a versão AZUL do logo (assets/images/logo-azul.png), não o logo.png padrão:
+   aquele é o wordmark branco, feito para as superfícies escuras do resto do site,
+   e no papel claro daqui ele sumiria, sobrando só o pin. */
+.lk__logo{display:inline-block}
+.lk__logo img{height:54px;width:auto;margin:0 auto}
 .lk__tag{
   margin:10px 0 0;font-family:var(--font-mono);font-size:.72rem;letter-spacing:.14em;
   text-transform:uppercase;color:var(--his-ink-soft);
