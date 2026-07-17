@@ -33,8 +33,20 @@ function po_head($o) {
     foreach (($o['css'] ?? []) as $c) $css .= '  <link rel="stylesheet" href="' . po_e($c) . '">' . "\n";
     $jsonld = '';
     if (!empty($o['jsonld'])) {
+        /* JSON_HEX_TAG e obrigatorio aqui. O parser de HTML encerra um
+           bloco <script> na sequencia literal "</script" (sem diferenciar
+           maiuscula/minuscula), e o titulo/descricao do roteiro vem de
+           texto livre - digitado ou lido pelo importador com IA de um PDF/
+           DOCX que a cliente anexa. Um "</script>" nesse texto sai intacto
+           no JSON e fecha a tag antes da hora, injetando o que vier depois.
+           JSON_UNESCAPED_SLASHES (usada abaixo pelas URLs legiveis no
+           JSON-LD) e justamente o que permite a barra de "</script>"
+           sobreviver sem virar "\/" - sem HEX_TAG, essa flag e o buraco.
+           HEX_TAG troca "<" e ">" por "<"/">", o que neutraliza
+           o vetor independente da flag de barras, produz JSON-LD valido e
+           nao custa SEO (o Google decodifica < normalmente). */
         $jsonld = '  <script type="application/ld+json">'
-            . json_encode($o['jsonld'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+            . json_encode($o['jsonld'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG)
             . '</script>' . "\n";
     }
     $robots = $noindex ? 'noindex, nofollow' : 'index, follow, max-image-preview:large';
