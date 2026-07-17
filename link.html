@@ -22,28 +22,42 @@
 <body>
 
   <!-- Fundo: mapa-múndi + rotas. Textura, não ilustração — ver .lk-map no CSS.
-       Decorativo: fora do foco e do leitor de tela. -->
+       Decorativo: fora do foco e do leitor de tela.
+
+       Projeção equiretangular no viewBox 1000x500, então todo ponto sai de
+       coordenada real: x=(lon+180)/360*1000, y=(90-lat)/180*500. É o que faz o
+       desenho ler como mapa-múndi em vez de mancha. Florianópolis (48,5°O
+       27,6°S) cai em x=365 y=327, e é de lá que sai toda rota.
+
+       As rotas são decoração FIXA: o banco não tem coordenadas, então roteiro
+       novo não ganha rota. Elas apontam para os destinos que a empresa vende
+       hoje (Turquia, Índia, Japão, Escandinávia, Chile). -->
   <div class="lk-map" aria-hidden="true">
     <svg viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid slice">
       <g class="lk-map__land">
-        <!-- América do Sul -->
-        <path d="M300 300 l14-24 22-8 16 10 12-6 10 12-6 20-14 26-8 30-12 34-14 22-10-4-4-24 6-26-8-30-4-32Z"/>
-        <!-- América do Norte -->
-        <path d="M170 130 l40-24 60-6 54 8 30 18-10 22-34 10-20 26-26 16-18 30-16-6-8-28-24-18-28-16Z"/>
-        <!-- África -->
-        <path d="M470 250 l30-30 40-8 44 6 20 18-8 26-18 30-12 36-20 30-18 10-16-14-10-30-16-28-16-24Z"/>
-        <!-- Europa -->
-        <path d="M480 170 l30-16 40-4 34 8 12 14-16 12-30 6-24 14-26-4-20-14Z"/>
-        <!-- Ásia -->
-        <path d="M600 150 l50-24 70-6 80 12 50 26-16 26-44 12-36 26-44 10-40-16-30-24-24-24Z"/>
+        <!-- América do Norte: Alasca, costa oeste, México, Flórida, Labrador -->
+        <path d="M33 69 69 89 139 100 156 139 175 161 208 189 236 208 269 228 275 181 292 153 306 128 333 119 322 83 278 56 236 61 153 56 108 56Z"/>
+        <!-- Groenlândia -->
+        <path d="M375 83 444 56 439 22 375 19 339 39 361 61Z"/>
+        <!-- América do Sul: Equador, Chile, Cabo Horn, bulge de Natal, Amazônia -->
+        <path d="M275 250 292 289 306 306 303 342 292 394 311 403 328 361 342 347 367 319 392 286 403 267 378 250 356 236 328 219 292 222 281 228Z"/>
+        <!-- África: Senegal, Golfo da Guiné, Cabo, Chifre da África, Mediterrâneo -->
+        <path d="M453 208 483 239 525 239 536 264 533 300 542 331 550 344 572 344 589 328 611 294 614 256 642 217 619 217 597 183 589 164 556 161 528 147 483 150 456 189Z"/>
+        <!-- Madagascar -->
+        <path d="M619 283 639 294 633 319 622 306Z"/>
+        <!-- Eurásia: Ibéria, Escandinávia, Sibéria, Japão, Sudeste asiático, Índia -->
+        <path d="M472 131 494 114 508 103 522 97 514 78 533 61 578 56 667 56 778 36 889 47 972 56 1000 67 944 83 889 106 894 125 875 153 853 142 836 164 803 217 789 247 764 203 747 189 722 214 703 228 689 183 667 181 639 139 611 125 578 136 542 144 508 133Z"/>
         <!-- Oceania -->
-        <path d="M790 340 l40-16 44 4 26 18-10 24-38 14-40-6-26-18Z"/>
+        <path d="M817 311 817 347 858 339 883 347 908 361 925 328 897 281 864 283 839 300Z"/>
       </g>
+      <!-- Rotas: de Florianópolis (365,327) para destinos reais.
+           Chile/Atacama (304,343) · Turquia/Istambul (581,136) ·
+           Índia/Délhi (769,172) · Japão/Tóquio (886,153) -->
       <g class="lk-map__routes">
-        <path class="lk-map__route" id="lk-r1" d="M365 327 Q 460 200 640 190"/>
-        <path class="lk-map__route" id="lk-r2" d="M365 327 Q 470 260 560 175"/>
-        <path class="lk-map__route" id="lk-r3" d="M365 327 Q 400 260 520 140"/>
-        <path class="lk-map__route" id="lk-r4" d="M365 327 Q 330 340 300 300"/>
+        <path class="lk-map__route" id="lk-r1" d="M365 327 Q 560 200 769 172"/>
+        <path class="lk-map__route" id="lk-r2" d="M365 327 Q 450 190 581 136"/>
+        <path class="lk-map__route" id="lk-r3" d="M365 327 Q 620 120 886 153"/>
+        <path class="lk-map__route" id="lk-r4" d="M365 327 Q 320 300 304 343"/>
       </g>
       <circle class="lk-map__home" cx="365" cy="327" r="4"/>
       <g class="lk-map__planes">
@@ -61,7 +75,7 @@
 
     <header class="lk__head">
       <a href="index.html" class="lk__logo">
-        <img src="assets/images/logo.png" alt="Pereira Oliveira Turismo" width="180" height="44">
+        <img src="assets/images/logo.png" alt="Pereira Oliveira Turismo" width="201" height="60">
       </a>
       <p class="lk__tag">Realizando sonhos desde 1967</p>
 
