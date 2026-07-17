@@ -354,6 +354,34 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   se queira ali tem que vencer aquela regra.
   **Descrição dos dias (`.day__p`) agora é justificada** (`text-align:justify` +
   `hyphens:auto`, que depende do `lang="pt-BR"` que todas as páginas já têm).
+- **Página de links da bio `/link` (16/07/2026):** destino do link único da bio do
+  Instagram. Standalone (`link.html` + `assets/css/link.css` + `assets/js/link.js`),
+  coluna de 420px no **papel morno da Nossa História** (contraste com a home). Fundo de
+  **mapa-múndi em SVG inline** com rotas pontilhadas e aviões — **opacidade 7%, é textura,
+  não ilustração**; as rotas são decoração fixa (o banco não tem coordenadas, então roteiro
+  novo não ganha rota). Os vértices do mapa e as pontas das rotas saem de **coordenada
+  geográfica real** pela projeção equiretangular do viewBox 1000x500
+  (`x=(lon+180)/360*1000`, `y=(90-lat)/180*500`) — num mapa que se diz geográfico, ponto
+  errado é pior que mapa tosco. Tem: selo do Google 5,0 → `https://www.google.com/maps?cid=10478700579601202326`
+  · números da História (anos calculados ao vivo desde 1967 (59 em 2026), 3 gerações, +35
+  países) · CTA "Reservar passeio" → `contato.html` · WhatsApp · **cards de roteiro do
+  banco** (capa quadrada, dias, período, "Ver roteiro" via `poRoteiroHref`) · redes ·
+  rodapé. **`noindex` e fora do `sitemap.xml`** — conteúdo fino e duplicado; indexar só
+  criaria concorrência com a home e as páginas de roteiro. `.htaccess` faz o rewrite
+  `/link`. UTM (`utm_source=instagram&utm_medium=bio&utm_campaign=link`, + `utm_content=<slug>`
+  no card) vai **escrito na URL**, não injetado por JS, para rastrear mesmo sem JS; o
+  `lead-form.js` já captura. **Sem banco = sem card**, e o resto da página segue de pé — a
+  mesma regra da home, e nunca escrever roteiro à mão no HTML. O logo é o **wordmark
+  branco** e existe um arquivo só (todo o resto do site o usa sobre superfície escura):
+  solto no papel ele some, sobra o pin. Por isso ele fica num **chip escuro**
+  (`rgba(13,18,25,.95)`), que lê como selo de papel timbrado. Se a cliente enviar uma
+  versão escura do logo, o chip pode cair.
+  **Selo do Google:** as 5 estrelas são **visuais**; nada de `AggregateRating` no JSON-LD
+  (avaliação que a própria empresa hospeda sobre si é violação de política e não gera
+  estrela na busca). **Link do Google:** usar o formato `?cid=`; o botão "Compartilhar" da
+  página de resultados gera `share.google/...`, que compartilha a **pesquisa**, não a
+  ficha.
+  Spec: `docs/superpowers/specs/2026-07-16-pagina-link-bio-design.md`.
 - **Próximo:** página/seção de Contato geral (formulário de lead na home) · backend
   `enviar.php` + Supabase · painel de leads.
 - **Dívida relacionada (não tratada):** o `mercados-de-natal.html` continua existindo e

@@ -14,6 +14,10 @@ RewriteCond %{HTTPS} off
 RewriteCond %{HTTP:X-Forwarded-Proto} !https
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
+# URL limpa da pagina de links da bio do Instagram: /link -> /link.html
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^link/?$ /link.html [L]
+
 # Cache dos assets estáticos
 <IfModule mod_expires.c>
   ExpiresActive On
