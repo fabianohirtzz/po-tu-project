@@ -10,7 +10,6 @@ chk() { # chk <descricao> <esperado> <obtido>
   else FAIL=$((FAIL+1)); printf '  FAIL %s\n       esperado: %s\n       obtido:   %s\n' "$1" "$2" "$3"; fi
 }
 code() { curl -s -o /dev/null -w '%{http_code}' --max-redirs 0 "$1"; }
-loc()  { curl -s -o /dev/null -w '%{redirect_url}' --max-redirs 0 "$1"; }
 body() { curl -s "$1"; }
 
 echo "== $BASE"

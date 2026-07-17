@@ -1,6 +1,6 @@
 <?php
 /* Runner mínimo: roda todo tests/test-*.php num processo separado.
-   Sem PHPUnit de propósito — a hospedagem não tem Composer e o projeto
+   Sem PHPUnit de propósito - a hospedagem não tem Composer e o projeto
    não tem build. */
 $dir  = __DIR__;
 $fail = 0;
