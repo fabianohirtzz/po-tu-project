@@ -64,8 +64,9 @@ Coluna única, `max-width: 420px`, centralizada, mobile-first. De cima para baix
    sumiria, sobrando só o pin. Regra: **fundo claro pede o logo azul, fundo escuro pede o
    branco.**
 2. **Selo do Google** — ícone do Google + 5 estrelas + "5,0". Sem contagem de avaliações.
-3. **Headline** curta + linha de **números**: `58 anos · 3 gerações · +35 países`
-   (os mesmos da História; os anos calculados ao vivo a partir de 1967, não escritos à mão)
+3. **Headline** curta + linha de **números**: `<anos> anos · 3 gerações · +35 países`
+   (os mesmos da História; os anos calculados ao vivo a partir de 1967 — 59 em 2026 —
+   e nunca escritos à mão)
 4. **Reservar passeio** — botão destacado, gradiente da marca → `contato.html`
 5. **Falar no WhatsApp** — botão verde (`--wa:#25D366`) → `https://wa.me/5548996048882`
 6. **Cards de roteiro** — do banco, empilhados
