@@ -358,11 +358,18 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   Instagram. Standalone (`link.html` + `assets/css/link.css` + `assets/js/link.js`),
   coluna de 420px no **papel morno da Nossa História** (contraste com a home). Fundo de
   **mapa-múndi em SVG inline** com rotas pontilhadas e aviões — **opacidade 7%, é textura,
-  não ilustração**; as rotas são decoração fixa (o banco não tem coordenadas, então roteiro
-  novo não ganha rota). Os vértices do mapa e as pontas das rotas saem de **coordenada
-  geográfica real** pela projeção equiretangular do viewBox 1000x500
-  (`x=(lon+180)/360*1000`, `y=(90-lat)/180*500`) — num mapa que se diz geográfico, ponto
-  errado é pior que mapa tosco. Tem: selo do Google 5,0 → `https://www.google.com/maps?cid=10478700579601202326`
+  não ilustração**. O mapa é **dado cartográfico real** (Natural Earth 110m, domínio
+  público), convertido de TopoJSON pelo `tools/mapa-mundi.py` e projetado na
+  equiretangular do viewBox 1000x500 (`x=(lon+180)/360*1000`, `y=(90-lat)/180*500`) — a
+  **mesma** das rotas, senão o avião pousa fora do continente. Desenhar continente à mão
+  virava mancha; refazer o mapa = rodar o script (Antártida fora, e anel que cruza o
+  antimeridiano vira polilinha aberta, senão o traço risca o mapa). As rotas são decoração
+  fixa (o banco não tem coordenadas, então roteiro novo não ganha rota) e apontam para os
+  destinos que a empresa vende. Os **aviões** são o `images/plane.svg` (num `<defs>` com 3
+  `<use>`; nascem apontando para cima-e-direita, daí o `rotate(45)` que os alinha ao +x que
+  o `rotate="auto"` prende na rota). **Opacidade é por camada, não no container**: a terra
+  fica em 7% (é textura), rota e avião sobem para ~0,2 (são o acento) — no container tudo
+  achatava em 7% e o avião sumia. Tem: selo do Google 5,0 → `https://www.google.com/maps?cid=10478700579601202326`
   · números da História (anos calculados ao vivo desde 1967 (59 em 2026), 3 gerações, +35
   países) · CTA "Reservar passeio" → `contato.html` · WhatsApp · **cards de roteiro do
   banco** (capa quadrada, dias, período, "Ver roteiro" via `poRoteiroHref`) · redes ·
@@ -382,6 +389,14 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   estrela na busca). **Link do Google:** usar o formato `?cid=`; o botão "Compartilhar" da
   página de resultados gera `share.google/...`, que compartilha a **pesquisa**, não a
   ficha.
+  **Logo:** esta página usa **`assets/images/logo-azul.png`** (362x108, ~23 KB), a versão
+  de tinta para fundo claro; o `logo.png` padrão é o wordmark branco das superfícies
+  escuras. Regra: fundo claro pede o azul, fundo escuro pede o branco.
+  **Números iguais:** o contador dos anos vive num `<span>` dentro do `<b>`, então a regra
+  do rótulo (`.lk__nums span`) o acertava e o número saía menor e cinza; a regra é
+  `li > span`, que pega só o rótulo. **Verificação:** o Chrome `--headless` desta máquina
+  **não desce abaixo de ~500px** (janela mínima do Windows), então screenshot a 390 sai
+  cortado como falso positivo — validar mobile a 500px ou pelo Playwright MCP.
   Spec: `docs/superpowers/specs/2026-07-16-pagina-link-bio-design.md`.
 - **Próximo:** página/seção de Contato geral (formulário de lead na home) · backend
   `enviar.php` + Supabase · painel de leads.
