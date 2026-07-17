@@ -51,6 +51,8 @@ implementação, puxar a lista definitiva do **Search Console → Páginas**.
 | 4 | Renderização **server-side em PHP** a partir do banco (abordagem A). | recomendação aceita |
 | 5 | Sem ferramenta paga de volume de busca. Estratégia por Search Console + autocomplete + concorrentes. | cliente |
 | 6 | Avaliações do Google no site → **fase 2**. | recomendação aceita |
+| 7 | **Uma edição por destino de cada vez** — quando abre a próxima, a anterior já saiu. Logo slug = destino estável, sem ano. | cliente |
+| 8 | `tesouros-asiaticos2` é **nova edição da mesma viagem** do `tesouros-asiaticos.html` antigo (mesmo título, outro roteiro). | cliente |
 
 ---
 
@@ -112,12 +114,12 @@ por roteiro `ativo`. `lastmod` = `updated_at`.
 | De | Para |
 |---|---|
 | `www.*` | não-www (mesma URI) |
-| `/turquia` | `/roteiros/turquia-com-antalia` |
+| `/turquia` | `/roteiros/turquia` |
 | `/india-nepal` | `/roteiros/caminhos-da-india` |
 | `/japao-dubai-cingapura` | `/roteiros/coreia-do-sul-japao-dubai` |
 | `/nossos-roteiros`, `/europa`, `/africa`, `/asia-oriente-medio`, `/america-do-sul`, `/oceania`, `/america-do-norte-caribe`, `/outros-destinos` | `/roteiros` |
 | `/marrocos`, `/capitais-imperiais`, `/cruzeiro-pelo-danubio`, `/viagem-transiberiana`, `/terra_santa-jordania`, `/rota-romantica-alemanha`, `/expresso-luzes-do-norte` | `/roteiros` |
-| `tesouros-asiaticos.html` (estática aposentada) | `/roteiros/tesouros-asiaticos` — **se** for a mesma viagem em nova edição (confirmar) |
+| `tesouros-asiaticos.html` (estática aposentada) | `/roteiros/tesouros-asiaticos` — confirmado pelo cliente: mesma viagem, nova edição |
 | as demais estáticas (`grecia-terra-mar.html`, `mercados-de-natal.html`, `floracao-das-cerejeiras.html`, `encantos-do-mediterraneo.html`) | `/roteiros` |
 | `/nossa-historia/`, `/sobre-nos` | `/nossa-historia.html` |
 | `/contato` | `/contato.html` |
@@ -162,18 +164,56 @@ com o Search Console em ~60 dias, quando houver impressões reais.
 
 ---
 
-## 6. Higiene de slug (decisão pendente)
+## 6. Slug: identidade estável, não palavra-chave
 
-A partir desta fase **o slug vira URL pública permanente**. Dois slugs atuais são ruins:
+### O mito, desfeito
 
-| Hoje | Problema | Proposta |
+Palavra-chave em URL **não é fator de ranking relevante**. A documentação do Google diz
+apenas: *"Use descriptive URLs. When possible, use readable words rather than long ID
+numbers in your URLs"* — justificada por **legibilidade humana**, não por SEO. Não há
+recomendação de URL com palavra-chave.
+
+Logo `/roteiros/viagem-em-grupo-para-escandinavia` **não** rankeia melhor que
+`/roteiros/escandinavia`. As palavras do público ("excursão", "viagem em grupo",
+"saindo de Florianópolis") rendem no `<title>`, `<h1>` e no texto — ver §5.
+
+### O critério real: os roteiros se repetem
+
+`tesouros-asiaticos2` não foi escolha de ninguém: o painel bateu em slug duplicado e
+grudou um número. **Confirmado pelo cliente: é nova edição da mesma viagem.** Sem
+regra, 2028 gera `tesouros-asiaticos3`.
+
+Isso importa porque **autoridade se acumula por URL**. Edição nova em URL nova =
+recomeçar do zero todo ano, com links e histórico presos numa viagem que já aconteteu.
+URL estável = engorda a cada edição.
+
+**Decisão do cliente: uma edição por destino de cada vez** (quando abre a próxima, a
+anterior já saiu). Portanto:
+
+> **Regra: slug = a identidade estável da viagem, sem os detalhes variáveis da edição.**
+> Fora datas, temas, paradas específicas ("com Antália") e sufixo numérico.
+> `/roteiros/tesouros-asiaticos` sempre aponta para a edição vigente. A URL nunca morre.
+
+### Renomeações (grátis agora — nada indexado; depois custa `301`)
+
+| Hoje | Novo | Por quê |
 |---|---|---|
-| `um-roteiro-exclusivo-pelo-melhor-da-escandinavia-com-acompan` | truncado no meio da palavra | `escandinavia-semana-medieval-visby` |
-| `tesouros-asiaticos2` | o `2` é resíduo da página estática | `tesouros-asiaticos` (sem colisão: o `.html` velho será aposentado) |
+| `turquia-com-antalia` | `turquia` | Antália é parada desta edição |
+| `chile-santiago-e-deserto-do-atacama` | `chile-e-deserto-do-atacama` | Santiago é escala |
+| `tesouros-asiaticos2` | `tesouros-asiaticos` | `2` = colisão do painel |
+| `um-roteiro-exclusivo-pelo-melhor-da-escandinavia-com-acompan` | `escandinavia` | truncado no meio da palavra; resto é edição |
+| `caminhos-da-india` | mantém | estável e legível |
+| `coreia-do-sul-japao-dubai` | mantém | descreve melhor que o título "Tesouros do Oriente" |
 
-Renomear **agora é grátis** (nada indexado). Depois exige `301`. **Confirmar com o cliente.**
+### Consequências no painel e no banco
 
-Adicional: o importador do painel deve **truncar slug em limite de palavra**, não no meio.
+- **Remover a lógica de sufixo numérico.** Com uma edição por vez, slug repetido não é
+  colisão — é a mesma viagem voltando, e é o comportamento desejado.
+- **Índice único parcial:** só um roteiro `ativo` por slug
+  (`CREATE UNIQUE INDEX ... ON po_roteiros (slug) WHERE ativo`). Edições arquivadas
+  mantêm o slug na linha, mas não são servidas (`roteiro.php` filtra `ativo = true`).
+- Edição nova **herda a URL e a autoridade** da anterior.
+- Importador: truncar slug em **limite de palavra**, nunca no meio.
 
 ---
 
@@ -214,8 +254,8 @@ sabotar e recuperar o que já era nosso; conteúdo novo quando houver base para 
 
 ## 9. Critérios de sucesso
 
-1. `curl https://pereiraoliveiraturismo.com.br/roteiros/turquia-com-antalia` devolve
-   HTML com título, dia a dia e JSON-LD **sem executar JavaScript**
+1. `curl https://pereiraoliveiraturismo.com.br/roteiros/turquia` devolve HTML com
+   título, dia a dia e JSON-LD **sem executar JavaScript**
 2. Nenhuma URL de roteiro à venda contém `noindex`
 3. `/sitemap.xml` lista os 6 roteiros ativos e **nenhum** roteiro extinto
 4. Roteiro novo cadastrado no painel aparece em `/roteiros` e no sitemap **sem deploy**
