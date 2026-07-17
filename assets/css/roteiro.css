@@ -549,6 +549,12 @@ a.cta__contact:hover b{color:var(--wa)}
   .rot-card{transform:none!important}
   .hero__scroll svg{animation:none}
   .gal__item:hover img{transform:none}
+  /* roteiro.php (renderizado no servidor) sempre emite o <video> do hero,
+     porque o servidor nao sabe a preferencia de quem pediu a pagina (o
+     antigo poHeroVideo() consultava matchMedia no navegador e omitia o
+     video). Aqui o CSS resolve: quem pede menos animacao baixa o video
+     e nao o ve, em vez de nao baixar. */
+  .hero__vid{display:none}
 }
 
 /* ============================================================ MODAL de lead */

@@ -354,6 +354,23 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   se queira ali tem que vencer aquela regra.
   **Descrição dos dias (`.day__p`) agora é justificada** (`text-align:justify` +
   `hyphens:auto`, que depende do `lang="pt-BR"` que todas as páginas já têm).
+- **`roteiro.php` (SEO fase 1, 16/07/2026):** a página de roteiro passou a existir também
+  renderizada no servidor, em `/roteiros/<slug>` (`roteiro.php?slug=`), porte 1:1 de
+  `assets/js/roteiro-dynamic.js` (que só montava a página no navegador e ficava
+  `noindex`, então os 6 roteiros à venda não existiam na busca). `lib/po-data.php` lê o
+  Supabase com cache em disco; `lib/po-view.php` monta o `<head>`/header/footer/chrome;
+  `roteiro.php` monta o corpo (`po_roteiro_html`) e o JSON-LD `TouristTrip`
+  (`po_roteiro_jsonld`, só emite `offers` com preço real, nunca inventado). Slug
+  inexistente ou inativo devolve **404 de verdade** (`http_response_code(404)` + o
+  `404.html`), não 200 com "não encontrado" (isso vira soft-404 indexado pelo Google).
+  "Outros roteiros" saem prontos no HTML (`po_outros_roteiros`, busca no banco e pula o
+  slug atual) em vez de esperar JavaScript, porque link interno é sinal de SEO.
+  **Decisão registrada:** o `<video class="hero__vid">` do hero, que o JS só emitia
+  depois de checar `matchMedia('prefers-reduced-motion: reduce')` no navegador, agora
+  **sempre** sai no HTML (o servidor não sabe a preferência de quem pediu a página); quem
+  pede menos animação passa a **baixar o vídeo capa (~1,3 MB) e não vê-lo**, escondido via
+  CSS (`assets/css/roteiro.css`, regra `@media (prefers-reduced-motion: reduce)` em
+  `.hero__vid`). Custo aceito em troca de a página existir para o Google.
 - **Próximo:** página/seção de Contato geral (formulário de lead na home) · backend
   `enviar.php` + Supabase · painel de leads.
 - **Dívida relacionada (não tratada):** o `mercados-de-natal.html` continua existindo e
