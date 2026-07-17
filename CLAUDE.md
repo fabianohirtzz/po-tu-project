@@ -371,11 +371,12 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   `/link`. UTM (`utm_source=instagram&utm_medium=bio&utm_campaign=link`, + `utm_content=<slug>`
   no card) vai **escrito na URL**, não injetado por JS, para rastrear mesmo sem JS; o
   `lead-form.js` já captura. **Sem banco = sem card**, e o resto da página segue de pé — a
-  mesma regra da home, e nunca escrever roteiro à mão no HTML. O logo é o **wordmark
-  branco** e existe um arquivo só (todo o resto do site o usa sobre superfície escura):
-  solto no papel ele some, sobra o pin. Por isso ele fica num **chip escuro**
-  (`rgba(13,18,25,.95)`), que lê como selo de papel timbrado. Se a cliente enviar uma
-  versão escura do logo, o chip pode cair.
+  mesma regra da home, e nunca escrever roteiro à mão no HTML.
+  **Logo:** esta página usa **`assets/images/logo-azul.png`**, e é a única que usa. O
+  `logo.png` padrão é o **wordmark branco**, feito para as superfícies escuras do resto do
+  site (header de vidro, rodapé preto); no papel claro daqui ele sumiria, sobrando só o
+  pin. A versão azul veio de `images/logo pereira oliveira turismo azul.png`, que estava
+  no repo fora do Git. **Regra: fundo claro pede o logo azul, fundo escuro pede o branco.**
   **Selo do Google:** as 5 estrelas são **visuais**; nada de `AggregateRating` no JSON-LD
   (avaliação que a própria empresa hospeda sobre si é violação de política e não gera
   estrela na busca). **Link do Google:** usar o formato `?cid=`; o botão "Compartilhar" da

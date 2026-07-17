@@ -58,12 +58,11 @@ Ordem de carga no fim do `<body>`, igual à `index.html`:
 
 Coluna única, `max-width: 420px`, centralizada, mobile-first. De cima para baixo:
 
-1. **Cabeçalho** — logo (`assets/images/logo.png`) + "Realizando sonhos desde 1967".
-   O logo é o **wordmark branco**, e existe um arquivo só: todo o resto do site o usa
-   sobre superfície escura. Solto no papel ele some (sobra o pin), então ele fica dentro
-   de um **chip escuro** (`rgba(13,18,25,.95)`, raio 16px), ecoando o header do site e
-   lendo como selo de papel timbrado. Se a cliente enviar uma versão escura do logo, o
-   chip pode cair.
+1. **Cabeçalho** — logo (**`assets/images/logo-azul.png`**) + "Realizando sonhos desde 1967".
+   Esta é a única página do site que usa a versão azul: o `logo.png` padrão é o **wordmark
+   branco**, feito para as superfícies escuras do resto do site, e no papel claro daqui ele
+   sumiria, sobrando só o pin. Regra: **fundo claro pede o logo azul, fundo escuro pede o
+   branco.**
 2. **Selo do Google** — ícone do Google + 5 estrelas + "5,0". Sem contagem de avaliações.
 3. **Headline** curta + linha de **números**: `58 anos · 3 gerações · +35 países`
    (os mesmos da História; os anos calculados ao vivo a partir de 1967, não escritos à mão)
