@@ -177,3 +177,28 @@ ul{margin:0;padding:0;list-style:none}
   .lk-card:hover,.lk__btn:hover,.lk__social a:hover,.lk__google:hover{transform:none}
   .lk-card:hover .lk-card__img img{transform:none}
 }
+
+/* ---------- fundo: mapa-múndi + rotas ----------
+   TEXTURA, NÃO ILUSTRAÇÃO. A opacidade baixa é o ponto do design: acima disso
+   o mapa briga com as capas dos roteiros e a página vira poluição. */
+.lk-map{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  opacity:.07;
+}
+.lk-map svg{width:100%;height:100%}
+.lk-map__land{fill:none;stroke:var(--his-ink);stroke-width:1.2;stroke-linejoin:round}
+.lk-map__route{
+  fill:none;stroke:var(--brand-azul);stroke-width:1.6;
+  stroke-dasharray:5 7;stroke-linecap:round;
+  animation:lk-dash 2.4s linear infinite;
+}
+@keyframes lk-dash{to{stroke-dashoffset:-24}}
+.lk-map__home{fill:var(--brand-azul)}
+.lk-map__plane{fill:var(--his-ink)}
+
+/* Quem pediu menos animação recebe o mapa parado: rotas e aviões congelam,
+   mas o desenho continua lá. Mesma regra do resto do site. */
+@media(prefers-reduced-motion:reduce){
+  .lk-map__route{animation:none}
+  .lk-map__planes{display:none}
+}
