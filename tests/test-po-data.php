@@ -36,5 +36,28 @@ ok(po_fetch_roteiros() === [], 'fetcher nulo devolve [], nao excecao');
 po_set_fetcher(function ($url) { return 'isto nao e json'; });
 ok(po_fetch_roteiro('turquia') === null, 'json invalido devolve null');
 
+// --- escrita atomica do cache em disco (temporario + rename): round-trip
+// e nenhum temporario sobrando. Usa a rede de verdade (po_set_fetcher(null))
+// porque o bug so existe no caminho real de cache em disco, nao no fetcher
+// injetado dos testes acima.
+po_set_fetcher(null);
+$cache_dir = po_cache_dir();
+$cfg = po_config();
+$url = rtrim($cfg['SUPABASE_URL'], '/') . '/rest/v1/po_roteiros?select=slug&limit=1';
+$cache_file = $cache_dir . '/' . sha1($url) . '.json';
+@unlink($cache_file);
+
+$corpo1 = po_http_get($url, 600);
+ok($corpo1 !== null, 'cache real: busca na rede devolve corpo');
+ok(is_file($cache_file), 'cache real: escreve o arquivo de cache no disco');
+$do_disco = @file_get_contents($cache_file);
+ok($do_disco === $corpo1, 'cache real: conteudo gravado no disco e identico ao devolvido (round-trip)');
+
+$corpo2 = po_http_get($url, 600);
+ok($corpo2 === $corpo1, 'cache real: segunda chamada dentro do TTL le do cache e devolve o mesmo conteudo');
+
+$sobras = glob($cache_dir . '/*.tmp*');
+ok($sobras === [], 'cache real: nenhum arquivo temporario sobra no diretorio de cache apos a escrita');
+
 po_set_fetcher(null);
 echo "po-data ok\n";

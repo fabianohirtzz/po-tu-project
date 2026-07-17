@@ -1,6 +1,6 @@
 <?php
 /* ============================================================
-   Pereira Oliveira — camada de dados dos roteiros (server-side).
+   Pereira Oliveira: camada de dados dos roteiros (server-side).
 
    POR QUE NO SERVIDOR: a pagina de roteiro precisa existir em HTML
    para o Google. Ate 16/07/2026 ela era montada no navegador e
@@ -69,8 +69,19 @@ function po_http_get($url, $ttl = 600) {
         if (is_file($file)) { $c = @file_get_contents($file); if ($c !== false) return $c; }
         return null;
     }
-    @file_put_contents($file, $body, LOCK_EX);
+    po_cache_write($file, $body);
     return $body;
+}
+
+/* Escrita atomica: grava num temporario no MESMO diretorio e faz rename().
+   rename() e atomico no mesmo filesystem, entao um leitor concorrente sempre
+   ve o arquivo antigo inteiro ou o novo inteiro, nunca JSON truncado. Sem
+   isso, json_decode() de um arquivo pela metade devolve null, o que faz
+   po_fetch_roteiro() devolver null, o que vira 404 pra um roteiro que existe. */
+function po_cache_write($file, $body) {
+    $tmp = $file . '.' . getmypid() . '.' . uniqid('', true) . '.tmp';
+    if (@file_put_contents($tmp, $body, LOCK_EX) === false) return;
+    if (!@rename($tmp, $file)) { @unlink($tmp); }
 }
 
 function po_rest($query, $ttl = 600) {
