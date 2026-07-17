@@ -15,8 +15,16 @@ RewriteCond %{HTTP:X-Forwarded-Proto} !https
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 # URL limpa da pagina de links da bio do Instagram: /link -> /link.html
+#
+# /link/ COM barra tem que virar redirect de verdade, nao rewrite interno: o
+# rewrite mantem a URL do documento como /link/, e ai todo caminho relativo da
+# pagina (assets/css, assets/js, o logo) passa a resolver contra /link/ e da 404
+# — a pagina abriria 200 e completamente pelada. O RewriteCond so vale para a
+# regra imediatamente seguinte, por isso ele aparece duas vezes.
 RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^link/?$ /link.html [L]
+RewriteRule ^link/$ /link [R=301,L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^link$ /link.html [L]
 
 # Cache dos assets estáticos
 <IfModule mod_expires.c>
