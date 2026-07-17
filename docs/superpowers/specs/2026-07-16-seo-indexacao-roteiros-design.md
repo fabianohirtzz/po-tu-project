@@ -179,9 +179,17 @@ Logo `/roteiros/viagem-em-grupo-para-escandinavia` **não** rankeia melhor que
 
 ### O critério real: os roteiros se repetem
 
-`tesouros-asiaticos2` não foi escolha de ninguém: o painel bateu em slug duplicado e
-grudou um número. **Confirmado pelo cliente: é nova edição da mesma viagem.** Sem
-regra, 2028 gera `tesouros-asiaticos3`.
+**Confirmado pelo cliente: `tesouros-asiaticos2` é nova edição da mesma viagem.**
+
+> **Correção (verificada no código).** Uma versão anterior desta spec afirmava que o `2`
+> veio do painel resolvendo colisão com sufixo numérico. **Isso é falso — não existe
+> lógica de sufixo no painel.** O mecanismo real:
+> `slugify('Tesouros Asiáticos')` → `tesouros-asiaticos`, que **colide com o mapa
+> `STATIC_ROTEIRO`** (`painel/app.js:359`, `PO_STATIC_ROTEIRO` em `roteiros-shared.js:11`).
+> Esse mapa mandaria o roteiro do banco para a **página estática velha** em vez de para
+> ele mesmo. O `2` foi contorno manual.
+> **Consequência boa:** ao remover o mapa nesta fase, o nome `tesouros-asiaticos` fica
+> livre e a renomeação é trivial. Não há lógica de sufixo a remover do painel.
 
 Isso importa porque **autoridade se acumula por URL**. Edição nova em URL nova =
 recomeçar do zero todo ano, com links e histórico presos numa viagem que já aconteteu.
@@ -200,20 +208,21 @@ anterior já saiu). Portanto:
 |---|---|---|
 | `turquia-com-antalia` | `turquia` | Antália é parada desta edição |
 | `chile-santiago-e-deserto-do-atacama` | `chile-e-deserto-do-atacama` | Santiago é escala |
-| `tesouros-asiaticos2` | `tesouros-asiaticos` | `2` = colisão do painel |
+| `tesouros-asiaticos2` | `tesouros-asiaticos` | contorno do mapa `STATIC_ROTEIRO`, que morre nesta fase |
 | `um-roteiro-exclusivo-pelo-melhor-da-escandinavia-com-acompan` | `escandinavia` | truncado no meio da palavra; resto é edição |
 | `caminhos-da-india` | mantém | estável e legível |
 | `coreia-do-sul-japao-dubai` | mantém | descreve melhor que o título "Tesouros do Oriente" |
 
 ### Consequências no painel e no banco
 
-- **Remover a lógica de sufixo numérico.** Com uma edição por vez, slug repetido não é
-  colisão — é a mesma viagem voltando, e é o comportamento desejado.
+- **Truncagem de slug (bug real, reproduzido):** `painel/app.js:48` faz `.slice(0, 60)`,
+  cortando no meio da palavra — é a origem de
+  `um-roteiro-exclusivo-pelo-melhor-da-escandinavia-com-acompan` (exatamente 60 chars).
+  Truncar em **limite de palavra**.
 - **Índice único parcial:** só um roteiro `ativo` por slug
   (`CREATE UNIQUE INDEX ... ON po_roteiros (slug) WHERE ativo`). Edições arquivadas
   mantêm o slug na linha, mas não são servidas (`roteiro.php` filtra `ativo = true`).
 - Edição nova **herda a URL e a autoridade** da anterior.
-- Importador: truncar slug em **limite de palavra**, nunca no meio.
 
 ---
 
