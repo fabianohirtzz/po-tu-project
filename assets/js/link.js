@@ -63,6 +63,12 @@
     window.poFetchRoteiros().then(function (rs) {
       if (!rs || !rs.length) return;              // sem banco = sem card
       alvo.innerHTML = rs.map(cardHtml).join('');
-    }).catch(function () {});                     // idem: silêncio, sem card
+    }).catch(function (err) {
+      // Sem banco a página segue sem card, isso é esperado e deliberado.
+      // Erro inesperado precisa deixar rastro no console, senão um bug
+      // (campo renomeado no banco, por exemplo) se disfarça de ausência de
+      // roteiro. Página continua em pé: nenhum card, como sem banco.
+      console.error('link.js: erro ao buscar roteiros', err);
+    });
   }
 })();
