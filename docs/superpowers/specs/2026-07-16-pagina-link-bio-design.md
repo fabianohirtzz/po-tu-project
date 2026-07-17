@@ -58,7 +58,12 @@ Ordem de carga no fim do `<body>`, igual à `index.html`:
 
 Coluna única, `max-width: 420px`, centralizada, mobile-first. De cima para baixo:
 
-1. **Cabeçalho** — logo (`assets/images/logo.png`) + "Realizando sonhos desde 1967"
+1. **Cabeçalho** — logo (`assets/images/logo.png`) + "Realizando sonhos desde 1967".
+   O logo é o **wordmark branco**, e existe um arquivo só: todo o resto do site o usa
+   sobre superfície escura. Solto no papel ele some (sobra o pin), então ele fica dentro
+   de um **chip escuro** (`rgba(13,18,25,.95)`, raio 16px), ecoando o header do site e
+   lendo como selo de papel timbrado. Se a cliente enviar uma versão escura do logo, o
+   chip pode cair.
 2. **Selo do Google** — ícone do Google + 5 estrelas + "5,0". Sem contagem de avaliações.
 3. **Headline** curta + linha de **números**: `58 anos · 3 gerações · +35 países`
    (os mesmos da História; os anos calculados ao vivo a partir de 1967, não escritos à mão)
@@ -78,7 +83,7 @@ tradição sem exagero vazio.
 |---|---|
 | Headline | **Viaje em grupo. Desde 1967.** |
 | Sub-headline | Roteiros internacionais com data marcada e grupo acompanhado. |
-| Números | `58 anos` · `3 gerações` · `+35 países` |
+| Números | `<anos> anos` · `3 gerações` · `+35 países` — os anos são **calculados ao vivo** (`ano atual - 1967`), então em 2026 saem 59, e o número nunca envelhece. O `58` escrito no HTML é só o fallback de quem está sem JS, mantido em paridade com a `nossa-historia.html`. |
 | Botão 1 (título / subtítulo) | **Reservar passeio** / Conte seu destino e retornamos com o roteiro |
 | Botão 2 | **Falar no WhatsApp** / Atendimento direto com a equipe |
 | Botão do card | **Ver roteiro** |
@@ -160,10 +165,11 @@ JSON-LD. Avaliação que a própria empresa hospeda sobre si mesma é violação
 Google, não gera estrela no resultado de busca, e a spec de SEO do projeto
 (`2026-07-16-seo-indexacao-roteiros-design.md`) já registra isso.
 
-**Bug pré-existente, não tratado aqui:** os títulos no `po_roteiros` estão com acento
-corrompido — "Caminhos da ÃÍndia", "Turquia com AntÃ¡lia", "VietnÃ£, TailÃ¢ndia". É UTF-8
-gravado em dobra pelo importador. **Já aparece hoje** na home e nas páginas de roteiro; a
-página de links apenas herda. Abrir em separado.
+**Falso alarme corrigido (16/07/2026):** uma versão anterior desta spec registrava um bug
+de mojibake nos títulos do `po_roteiros` ("Caminhos da ÃÍndia" etc.). **Não existe.** Era
+o pipeline `curl | python -m json.tool` do terminal corrompendo a exibição. Verificado no
+navegador: os títulos vêm corretos do banco ("Caminhos da Índia", "Turquia com Antália",
+"Escandinávia, semana Medieval de Visby"). Não abrir chamado.
 
 ## Verificação
 
