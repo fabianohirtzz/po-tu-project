@@ -183,9 +183,16 @@ página de links apenas herda. Abrir em separado.
       O perfil do Chrome já teve mock interceptando o Supabase e fez teste passar com dado
       falso. Se divergir do `curl`, `context.unrouteAll()`.
 
-## Pendente de confirmação
+## Link do Google
 
-- **Link do Google.** `https://www.google.com/maps?cid=10478700579601202326` foi derivado
-  do identificador `0x916bd2a89acf3c96`, extraído da URL da ficha no Maps que o cliente
-  enviou. A conversão hex→decimal está conferida, mas **o link não foi aberto** (Maps não
-  renderiza em `curl`; o Chrome do Playwright estava ocupado). Confirmar antes do deploy.
+`https://www.google.com/maps?cid=10478700579601202326` — **confirmado pelo cliente em
+16/07/2026**, abre a ficha da Pereira Oliveira.
+
+Derivado do identificador `0x916bd2a89acf3c96`, extraído da URL da ficha no Maps
+(CID decimal = `0x916bd2a89acf3c96`). É o formato canônico: aponta para a ficha por ID,
+sem risco de homônimo e sem depender de busca.
+
+**Não usar links `share.google/...`**: o botão "Compartilhar" da *página de resultados* do
+Google gera um share da **pesquisa**, não da ficha. Foram testados dois
+(`4VFSfPZyvSzeGzsr3` e `cv5K5MPSGM9tWbJBw`) e ambos expandiam para
+`google.com/search?q=Pereira+Oliveira+Turismo`.
