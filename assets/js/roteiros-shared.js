@@ -1,22 +1,18 @@
 /* ============================================================
-   Pereira Oliveira — dados de roteiros (compartilhado)
+   Pereira Oliveira: dados de roteiros (compartilhado)
    Lê os roteiros do Supabase (po_roteiros) e resolve o link de
-   cada um. Os 5 roteiros originais têm página própria (.html);
-   os novos usam a página dinâmica roteiro.html?slug=.
+   cada um. Toda página de roteiro é renderizada no servidor
+   (roteiro.php), servida em /roteiros/<slug>.
    Requer @supabase/supabase-js + po-config.js carregados antes.
 ============================================================ */
 (function () {
   'use strict';
-  // roteiros originais com página estática dedicada
-  window.PO_STATIC_ROTEIRO = {
-    'mercados-de-natal': 'mercados-de-natal.html',
-    'tesouros-asiaticos': 'tesouros-asiaticos.html',
-    'floracao-das-cerejeiras': 'floracao-das-cerejeiras.html',
-    'grecia-terra-mar': 'grecia-terra-mar.html',
-    'encantos-do-mediterraneo': 'encantos-do-mediterraneo.html'
-  };
+  // Todo roteiro vive no banco e e servido por /roteiros/<slug> (roteiro.php).
+  // O mapa PO_STATIC_ROTEIRO morreu com as 5 paginas estaticas: ele mandava um
+  // roteiro do banco para a pagina estatica de mesmo slug, que e a origem do
+  // slug 'tesouros-asiaticos2'.
   window.poRoteiroHref = function (slug) {
-    return window.PO_STATIC_ROTEIRO[slug] || ('roteiro.html?slug=' + encodeURIComponent(slug));
+    return '/roteiros/' + encodeURIComponent(slug);
   };
 
   var _client = null;

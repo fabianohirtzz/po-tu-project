@@ -1,11 +1,11 @@
 <?php
 /* Pereira Oliveira: pagina do roteiro, renderizada no servidor.
 
-   Porte 1:1 de assets/js/roteiro-dynamic.js (que montava a mesma pagina
-   no navegador, via fetch no Supabase, e ficava noindex). As classes CSS
-   sao copiadas ao pe da letra: assets/css/roteiro.css ja existe e nao
-   muda nesta task, entao uma classe diferente do original quebra o
-   layout em producao sem erro nenhum no console. */
+   Porte 1:1 do antigo renderizador client-side (que montava a mesma pagina
+   no navegador, via fetch no Supabase, e ficava noindex; apagado na Task 7).
+   As classes CSS sao copiadas ao pe da letra: assets/css/roteiro.css ja
+   existe e nao muda nesta task, entao uma classe diferente do original
+   quebra o layout em producao sem erro nenhum no console. */
 
 require_once __DIR__ . '/lib/po-data.php';
 require_once __DIR__ . '/lib/po-view.php';
@@ -39,7 +39,7 @@ function po_btn_ir($href, $label) {
         . '<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>';
 }
 
-/* chips do hero (dias, data, local). Porte de roteiro-dynamic.js:20-27. */
+/* chips do hero (dias, data, local). Porte do antigo renderizador client-side. */
 function po_hero_chips($r) {
     $chips = '';
     if (!empty($r['dias'])) {
@@ -107,8 +107,8 @@ function po_hero_video($r) {
         . 'disablepictureinpicture disableremoteplayback tabindex="-1" aria-hidden="true"></video>';
 }
 
-/* Corpo inteiro da pagina de roteiro. Porte 1:1 de roteiro-dynamic.js:40-132
-   (render), na mesma ordem de secoes. */
+/* Corpo inteiro da pagina de roteiro. Porte 1:1 do antigo renderizador
+   client-side (funcao render), na mesma ordem de secoes. */
 function po_roteiro_html($r, ?array $outros = null) {
     $capa    = po_e($r['capa_url'] ?? '');
     $capaCss = po_css_url($r['capa_url'] ?? '');
@@ -278,7 +278,7 @@ function po_outros_roteiros($slugAtual, ?array $lista = null) {
     return $out;
 }
 
-/* Modal do formulario de lead. Porte 1:1 de roteiro-dynamic.js:134-155. */
+/* Modal do formulario de lead. Porte 1:1 do antigo renderizador client-side. */
 function po_roteiro_modal($r) {
     $titulo = (string) ($r['titulo'] ?? '');
     $slug   = (string) ($r['slug'] ?? '');
@@ -304,11 +304,10 @@ function po_roteiro_modal($r) {
         . '<div class="form__msg" id="form-msg"></div></form></div></div>';
 }
 
-/* Lightbox da galeria, porte 1:1 de grecia-terra-mar.html:502-508 (roteiro.html
-   tem o mesmo bloco). assets/js/roteiro.js:124 procura id="lb" e falha em
-   silencio se nao encontrar (if (grid && lb ...)) - sem este bloco a galeria
-   fica sem clique, sem erro nenhum no console. Copiado agora porque a Task 7
-   apaga o roteiro.html estatico que servia de fonte. */
+/* Lightbox da galeria, porte 1:1 das antigas paginas de roteiro (a Task 7
+   apagou todas elas, estaticas e a dinamica em JS). assets/js/roteiro.js
+   procura id="lb" e falha em silencio se nao encontrar (if (grid && lb ...))
+   - sem este bloco a galeria fica sem clique, sem erro nenhum no console. */
 function po_lightbox_html() {
     return '<div class="lb" id="lb" data-open="false" aria-hidden="true">'
         . '<button class="lb__close" id="lb-close" aria-label="Fechar">×</button>'
@@ -386,7 +385,7 @@ if (!defined('PO_TEST')) {
     // #lb (lightbox da galeria): assets/js/roteiro.js procura este id; sem ele
     // a galeria fica sem clique, em silencio (ver comentario em po_lightbox_html()).
     echo po_lightbox_html();
-    echo '<script src="/assets/js/roteiro.js?v=4"></script>' . "\n";
+    echo '<script src="/assets/js/roteiro.js?v=5"></script>' . "\n";
     echo '<script src="/assets/js/lead-form.js?v=3"></script>' . "\n";
     echo '</body></html>';
 }

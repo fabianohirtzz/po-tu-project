@@ -1,9 +1,9 @@
 <?php
-/* Chrome compartilhado das paginas PHP. O markup e porte 1:1 do
-   roteiro.html (header e menu mobile) e das paginas estaticas
-   (head/footer/botao flutuante, ex. grecia-terra-mar.html), para o
-   CSS existente (assets/css/roteiro.css) continuar valendo sem uma
-   linha nova.
+/* Chrome compartilhado das paginas PHP. O markup e porte 1:1 do antigo
+   template client-side de roteiro (header e menu mobile) e das antigas
+   paginas estaticas de roteiro (head/footer/botao flutuante), ja apagados
+   na Task 7, para o CSS existente (assets/css/roteiro.css) continuar
+   valendo sem uma linha nova.
 
    Os href e src internos foram trocados de relativos (index.html,
    assets/images/logo.png) para absolutos de raiz (/, /assets/...):
@@ -108,9 +108,9 @@ function po_head($o) {
     return $h;
 }
 
-/* Header glass fixo + menu mobile (sheet), porte 1:1 de roteiro.html
-   linhas 20-66. O sheet vem junto porque o burger so funciona com ele
-   no DOM (assets/js/roteiro.js liga #burger a #sheet). */
+/* Header glass fixo + menu mobile (sheet), porte 1:1 do antigo template
+   client-side de roteiro. O sheet vem junto porque o burger so funciona
+   com ele no DOM (assets/js/roteiro.js liga #burger a #sheet). */
 function po_header() {
     return <<<HTML
   <header class="hd">
@@ -164,7 +164,7 @@ function po_header() {
 HTML;
 }
 
-/* Footer institucional, porte 1:1 do fim de grecia-terra-mar.html. */
+/* Footer institucional, porte 1:1 do fim das antigas paginas estaticas de roteiro. */
 function po_footer() {
     return <<<HTML
   <footer class="ft">
@@ -212,7 +212,7 @@ function po_footer() {
 HTML;
 }
 
-/* Botao flutuante de WhatsApp, porte 1:1 do fim de grecia-terra-mar.html. */
+/* Botao flutuante de WhatsApp, porte 1:1 do fim das antigas paginas estaticas de roteiro. */
 function po_wa_float() {
     return <<<HTML
   <a class="wa-float" href="https://wa.me/5548996048882" target="_blank" rel="noopener" aria-label="Falar no WhatsApp">

@@ -59,7 +59,7 @@
       data: (r.dias ? r.dias + ' dias · ' : '') + (r.data_label || r.periodo || ''),
       desc: r.descricao_curta || '',
       img: r.capa_url || '',
-      href: window.poRoteiroHref ? window.poRoteiroHref(r.slug) : ('roteiro.html?slug=' + r.slug)
+      href: window.poRoteiroHref ? window.poRoteiroHref(r.slug) : ('/roteiros/' + encodeURIComponent(r.slug))
     };
   }
 

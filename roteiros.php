@@ -112,6 +112,6 @@ if (!defined('PO_TEST')) {
     // arquivo (video do hero, lightbox da galeria, carrossel "outros
     // roteiros") e no-op aqui: initRoteiro() checa a existencia de cada
     // elemento antes de ligar qualquer coisa.
-    echo '<script src="/assets/js/roteiro.js?v=4"></script>' . "\n";
+    echo '<script src="/assets/js/roteiro.js?v=5"></script>' . "\n";
     echo '</body></html>';
 }

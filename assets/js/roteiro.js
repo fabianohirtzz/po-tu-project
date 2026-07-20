@@ -2,9 +2,8 @@
    Pereira Oliveira Turismo: Página de Roteiro
    Menu mobile · reveal · vídeo capa (hero) · lightbox da galeria ·
    carrossel "outros roteiros" (lê os cards que o servidor já pintou no
-   DOM, não inventa nenhum). O formulário fica no lead-form.js. Pode
-   rodar sozinho (páginas estáticas) ou ser chamado por
-   roteiro-dynamic.js (window.initRoteiro()).
+   DOM, não inventa nenhum). O formulário fica no lead-form.js. Fica
+   disponível em window.initRoteiro() para quem precisar chamar de novo.
 ============================================================ */
 function initRoteiro() {
   'use strict';
@@ -80,46 +79,6 @@ function initRoteiro() {
   };
   document.querySelectorAll('.intro__media').forEach(wireReels);
 
-  /* Páginas estáticas: o HTML nasce com a capa parada (bom p/ SEO e p/ o LCP) e
-     recebe os vídeos que o painel tiver: o do topo e o reels. A dinâmica já
-     nasce certa, então não entra aqui. Sem rede ou sem vídeo, a capa fica, que
-     é exatamente o fallback desejado. Uma consulta só alimenta os dois. */
-  const staticFig = document.querySelector('.intro__photo');
-  const heroMedia = document.querySelector('.hero__media');
-  const slugEl = document.getElementById('more-track');
-  const slug = slugEl && slugEl.dataset.current;
-  // #rt-main só existe na roteiro.html (dinâmica), que já renderiza tudo a
-  // partir do banco. Sem esta guarda ela refaria a consulta à toa.
-  const ehDinamica = !!document.getElementById('rt-main');
-  if (slug && !ehDinamica && window.poFetchRoteiro) {
-    window.poFetchRoteiro(slug).then((r) => {
-      if (!r) return;
-
-      // topo: o vídeo capa entra por cima da capa parada, se houver um
-      if (heroMedia && !heroMedia.querySelector('.hero__vid') && window.poHeroVideo) {
-        const html = window.poHeroVideo(r);
-        if (html) {
-          heroMedia.insertAdjacentHTML('beforeend', html);
-          wireHero(heroMedia.querySelector('.hero__vid'));
-        }
-      }
-
-      // "por que viajar": a capa vira o reels, se houver um
-      if (staticFig && r.video_insta_url && window.poIntroMedia) {
-        // Preserva a capa e o alt do HTML: o banco pode ter capa_url diferente.
-        const img = staticFig.querySelector('img');
-        const fig = document.createRange().createContextualFragment(window.poIntroMedia({
-          video_insta_url: r.video_insta_url,
-          capa_url: (img && img.getAttribute('src')) || r.capa_url,
-          titulo: r.titulo
-        })).firstElementChild;
-        fig.classList.add('is-in');  // já está na tela; não espera o reveal
-        staticFig.replaceWith(fig);
-        wireReels(fig);
-      }
-    });
-  }
-
   /* ---------- galeria: lightbox ---------- */
   const grid = document.getElementById('gal-grid');
   const lb = document.getElementById('lb');
@@ -146,14 +105,13 @@ function initRoteiro() {
   }
 
   /* ---------- outros roteiros: carrossel ----------
-     Server-side agora (roteiro.php / cada página estática já pinta os
-     <article class="rot-card"> reais dentro de #more-track, link interno é
-     sinal de SEO e não pode depender de JavaScript). Este bloco não cria
-     mais nenhum card: só lê os que o HTML já tem e liga setas/swipe/tilt/
-     contador. Sem PHP/banco na página (ex.: preview estático sem os cards),
-     o track fica vazio e o carrossel simplesmente não aparece, nunca mais
-     inventa roteiro (um deles já foi excluído do catálogo e ficava
-     reaparecendo escrito à mão aqui). */
+     Server-side agora (roteiro.php já pinta os <article class="rot-card">
+     reais dentro de #more-track: link interno é sinal de SEO e não pode
+     depender de JavaScript). Este bloco não cria mais nenhum card: só lê
+     os que o HTML já tem e liga setas/swipe/tilt/contador. Sem PHP/banco
+     na página, o track fica vazio e o carrossel simplesmente não aparece,
+     nunca mais inventa roteiro (um deles já foi excluído do catálogo e
+     ficava reaparecendo escrito à mão aqui). */
   const track = document.getElementById('more-track');
   if (track && !track.dataset.wired) {
     track.dataset.wired = '1';
