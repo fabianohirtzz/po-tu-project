@@ -26,4 +26,21 @@ ok(strpos($vazio, 'WhatsApp') !== false || strpos($vazio, 'wa.me') !== false, 's
 $j = po_roteiros_jsonld($lista);
 ok($j['@type'] === 'ItemList', 'json-ld e ItemList');
 ok(count($j['itemListElement']) === 2, 'ItemList com os 2 roteiros');
+
+// Teste do badge: roteiro com badge vazio ('') e dias preenchido
+// deve renderizar o fallback "X dias" em vez de tag vazia.
+$com_badge_vazio = [
+    ['slug' => 'teste-badge', 'titulo' => 'Teste Badge', 'badge' => '', 'dias' => 17, 'capa_url' => 'https://x/c.jpg', 'descricao_curta' => 'C.'],
+];
+$h_badge = po_roteiros_html($com_badge_vazio);
+ok(strpos($h_badge, '17 dias') !== false, 'badge vazio cai no fallback dias (17 dias)');
+ok(strpos($h_badge, '<span class="rts__badge"></span>') === false, 'nenhuma tag badge vazia quando tem fallback');
+
+// Teste: roteiro sem badge e sem dias não deve emitir tag de badge
+$sem_badge = [
+    ['slug' => 'teste-sem-badge', 'titulo' => 'Sem Badge', 'badge' => '', 'dias' => '', 'capa_url' => 'https://x/d.jpg', 'descricao_curta' => 'D.'],
+];
+$h_sem = po_roteiros_html($sem_badge);
+ok(strpos($h_sem, '<span class="rts__badge">') === false, 'nenhuma tag badge quando badge e dias vazios');
+
 echo "roteiros-page ok\n";

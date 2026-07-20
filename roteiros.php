@@ -63,7 +63,11 @@ function po_roteiros_html($lista) {
         $h .= '<div class="rts__grid">';
         foreach ($lista as $r) {
             $href  = po_e(po_roteiro_href($r));
-            $badge = $r['badge'] ?? (!empty($r['dias']) ? $r['dias'] . ' dias' : '');
+            // !empty(), nao ??: no banco badge chega como string vazia
+            // (nao null) quando nao preenchido, e '' ?? $x devolve ''
+            // (o operador so cai no fallback com null/unset).
+            // Mesmo problema que a data, corrigido com !empty().
+            $badge = !empty($r['badge']) ? $r['badge'] : (!empty($r['dias']) ? $r['dias'] . ' dias' : '');
             // !empty(), nao ??: no banco data_label chega como string vazia
             // (nao null) quando so periodo esta preenchido, e '' ?? $x
             // devolve '' (o operador so cai no fallback com null/unset).
