@@ -1,0 +1,74 @@
+/* ============================================================
+   Pereira Oliveira Turismo · /roteiros (pagina mae dos roteiros)
+   Reaproveita os tokens de assets/css/roteiro.css (--ink, --brand-azul,
+   --brand-verde, --bg, --surface, --line, fontes Rubik/DM Sans/DM Mono).
+   Sem framework. Standalone: nao interfere na home nem na Nossa Historia.
+============================================================ */
+
+/* HERO. padding-top segue o mesmo numero usado em contato.html
+   (clamp(96px,12vh,140px)) para abrir espaco pro header glass fixo,
+   que aqui nao tem video de fundo escuro por baixo pra disfarcar. */
+.rts-hero{
+  padding:clamp(96px,12vh,140px) 0 clamp(40px,6vw,64px);
+  background:var(--bg);
+}
+.rts-hero__h{
+  font-family:var(--font-display);font-weight:700;letter-spacing:-.02em;
+  font-size:clamp(2.1rem,4.4vw,3.4rem);line-height:1.06;margin:18px 0 0;
+  max-width:16ch;color:var(--ink);
+}
+.rts-hero__lead{
+  font-size:clamp(1.02rem,1.4vw,1.16rem);line-height:1.74;color:#3c3e45;
+  margin:22px 0 0;max-width:62ch;
+}
+.rts-hero__actions{margin-top:28px}
+
+/* GRID de cards */
+.rts{padding:0 0 clamp(72px,9vw,120px);background:var(--bg)}
+.rts__grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+  gap:28px;
+}
+.rts__card{border-radius:18px}
+.rts__link{
+  display:flex;flex-direction:column;height:100%;background:var(--surface);
+  border:1px solid var(--line);border-radius:18px;overflow:hidden;
+  box-shadow:0 10px 26px rgba(34,36,43,.06);
+  transition:transform .28s var(--ease),box-shadow .28s var(--ease);
+}
+.rts__link:hover{transform:translateY(-4px);box-shadow:0 20px 40px rgba(34,36,43,.12)}
+.rts__img{aspect-ratio:16/10;overflow:hidden;background:var(--line)}
+.rts__img img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .5s var(--ease)}
+.rts__link:hover .rts__img img{transform:scale(1.045)}
+.rts__body{padding:20px 22px 24px;display:flex;flex-direction:column;gap:8px;flex:1}
+.rts__badge{
+  align-self:flex-start;font-family:var(--font-mono);font-size:.68rem;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);
+  border:1px solid var(--line-strong);border-radius:999px;padding:4px 10px;
+}
+.rts__h{font-family:var(--font-display);font-weight:700;font-size:1.28rem;letter-spacing:-.01em;margin-top:6px;color:var(--ink)}
+.rts__date{font-family:var(--font-mono);font-size:.78rem;letter-spacing:.03em;color:var(--ink-soft)}
+.rts__desc{font-size:.94rem;line-height:1.6;color:#3c3e45;margin:2px 0 0}
+.rts__cta{
+  margin-top:auto;padding-top:14px;font-family:var(--font-display);font-weight:600;
+  font-size:.92rem;color:var(--brand-azul);display:inline-flex;align-items:center;gap:6px;
+}
+.rts__cta::after{content:"\2192";transition:transform .2s var(--ease)}
+.rts__link:hover .rts__cta::after{transform:translateX(4px)}
+
+/* ESTADO VAZIO. Acontece quando o banco nao tem nenhum roteiro ativo
+   (RLS caiu, ou a cliente apagou tudo pra recadastrar) - nunca deve
+   deixar titulo e grade mortos na tela, so o convite pra falar direto. */
+.rts__empty{
+  text-align:center;max-width:520px;margin:0 auto;padding:clamp(48px,7vw,72px) 24px;
+  border:1px dashed var(--line-strong);border-radius:18px;
+}
+.rts__empty p{font-size:1.02rem;line-height:1.7;color:#3c3e45;margin:0 0 22px}
+
+@media(max-width:640px){
+  .rts__grid{grid-template-columns:1fr}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .rts__link,.rts__img img,.rts__cta::after{transition:none}
+}

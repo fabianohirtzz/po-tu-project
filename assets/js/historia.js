@@ -48,16 +48,12 @@
   }
 
   /* ============================================================
-     Roteiros — carrossel de cards destino
+     Roteiros: carrossel de cards destino
+     Le do banco (poFetchRoteiros, definido em roteiros-shared.js).
+     Sem catalogo escrito a mao: dado duplicado envelhece e pisca,
+     a mesma decisao ja tomada para o FALLBACK do main.js (ver
+     CLAUDE.md). Sem banco, o carrossel simplesmente nao aparece.
   ============================================================ */
-  const ROTEIROS = [
-    { titulo: 'Mercados de Natal', badge: '11 dias', local: 'Suíça, França, Alemanha e Holanda', data: '10 a 21/12/2025', img: 'assets/images/roteiro-mercados-natal.jpg', href: 'mercados-de-natal.html' },
-    { titulo: 'Tesouros Asiáticos', badge: '21 dias', local: 'Vietnã, Tailândia e Doha', data: '03 a 23/03/2026', img: 'assets/images/roteiro-tesouros-asiaticos.jpg', href: 'tesouros-asiaticos.html' },
-    { titulo: 'Floração das Cerejeiras', badge: '16 dias', local: 'Japão e Doha', data: '11 a 27/04/2026', img: 'assets/images/roteiro-cerejeiras.jpg', href: 'floracao-das-cerejeiras.html' },
-    { titulo: 'Grécia Terra e Mar', badge: '16 dias', local: 'Grécia com Cruzeiro', data: '02 a 18/05/2026', img: 'assets/images/roteiro-grecia.jpg', href: 'grecia-terra-mar.html' },
-    { titulo: 'Encantos do Mediterrâneo', badge: '14 dias', local: 'Tunísia e Malta', data: '04 a 17/06/2026', img: 'assets/images/roteiro-mediterraneo.jpg', href: 'encantos-do-mediterraneo.html' }
-  ];
-
   const track = document.getElementById('rot-track');
   if (!track) return;
   const viewport = track.parentElement;
@@ -68,70 +64,79 @@
   const arrow =
     '<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
 
-  const cards = ROTEIROS.map((r) => {
-    const a = document.createElement('article');
-    a.className = 'rot-card';
-    a.innerHTML =
-      '<div class="rot-card__img" style="background-image:url(\'' + r.img + '\')"></div>' +
-      '<div class="rot-card__body">' +
-        '<div class="rot-card__title"><h3>' + r.titulo + '</h3><span class="rot-card__badge">' + r.badge + '</span></div>' +
-        '<div class="rot-card__sub"><b></b>' + r.local + ' · ' + r.data + '</div>' +
-        '<a class="rot-card__cta" href="' + r.href + '">Ver roteiro' + arrow + '</a>' +
-      '</div>';
-    track.appendChild(a);
-    return a;
-  });
+  (async function montarRoteiros() {
+    const lista = window.poFetchRoteiros ? await window.poFetchRoteiros() : null;
+    if (!lista || !lista.length) return;
 
-  let index = 0;
-
-  function metrics() {
-    const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
-    const step = cards[0].getBoundingClientRect().width + gap;
-    const maxScroll = Math.max(0, track.scrollWidth - viewport.clientWidth);
-    const maxIndex = step ? Math.ceil((maxScroll - 1) / step) : 0;
-    return { step, maxScroll, maxIndex };
-  }
-
-  function update() {
-    const { step, maxScroll, maxIndex } = metrics();
-    index = Math.max(0, Math.min(index, maxIndex));
-    const x = Math.min(index * step, maxScroll);
-    track.style.transform = 'translateX(' + (-x) + 'px)';
-    if (prevBtn) prevBtn.disabled = x <= 0;
-    if (nextBtn) nextBtn.disabled = x >= maxScroll - 1;
-    if (counter) counter.textContent = (Math.min(index + 1, maxIndex + 1)) + ' / ' + (maxIndex + 1);
-  }
-
-  nextBtn && nextBtn.addEventListener('click', () => { index++; update(); });
-  prevBtn && prevBtn.addEventListener('click', () => { index--; update(); });
-
-  // arraste / swipe
-  let dragX = null;
-  viewport.addEventListener('pointerdown', (e) => { dragX = e.clientX; });
-  window.addEventListener('pointerup', (e) => {
-    if (dragX === null) return;
-    const dx = e.clientX - dragX; dragX = null;
-    if (Math.abs(dx) > 55) { dx < 0 ? index++ : index--; update(); }
-  });
-
-  // tilt 3D no hover (porte do efeito do card-21)
-  if (!reduce && window.matchMedia('(hover: hover)').matches) {
-    cards.forEach((card) => {
-      card.addEventListener('pointermove', (e) => {
-        const r = card.getBoundingClientRect();
-        const px = (e.clientX - r.left) / r.width - 0.5;
-        const py = (e.clientY - r.top) / r.height - 0.5;
-        card.style.setProperty('--ry', (px * 9).toFixed(2) + 'deg');
-        card.style.setProperty('--rx', (-py * 9).toFixed(2) + 'deg');
-      });
-      card.addEventListener('pointerleave', () => {
-        card.style.setProperty('--ry', '0deg');
-        card.style.setProperty('--rx', '0deg');
-      });
+    const cards = lista.map((r) => {
+      const local = r.local_label || r.subtitulo || '';
+      const data = r.data_label || r.periodo || '';
+      const badge = r.badge || (r.dias ? r.dias + ' dias' : '');
+      const href = window.poRoteiroHref ? window.poRoteiroHref(r.slug) : ('/roteiros/' + encodeURIComponent(r.slug));
+      const a = document.createElement('article');
+      a.className = 'rot-card';
+      a.innerHTML =
+        '<div class="rot-card__img" style="background-image:url(\'' + (r.capa_url || '') + '\')"></div>' +
+        '<div class="rot-card__body">' +
+          '<div class="rot-card__title"><h3>' + (r.titulo || '') + '</h3><span class="rot-card__badge">' + badge + '</span></div>' +
+          '<div class="rot-card__sub"><b></b>' + local + ' · ' + data + '</div>' +
+          '<a class="rot-card__cta" href="' + href + '">Ver roteiro' + arrow + '</a>' +
+        '</div>';
+      track.appendChild(a);
+      return a;
     });
-  }
 
-  let rt;
-  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(update, 150); });
-  update();
+    let index = 0;
+
+    function metrics() {
+      const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
+      const step = cards[0].getBoundingClientRect().width + gap;
+      const maxScroll = Math.max(0, track.scrollWidth - viewport.clientWidth);
+      const maxIndex = step ? Math.ceil((maxScroll - 1) / step) : 0;
+      return { step, maxScroll, maxIndex };
+    }
+
+    function update() {
+      const { step, maxScroll, maxIndex } = metrics();
+      index = Math.max(0, Math.min(index, maxIndex));
+      const x = Math.min(index * step, maxScroll);
+      track.style.transform = 'translateX(' + (-x) + 'px)';
+      if (prevBtn) prevBtn.disabled = x <= 0;
+      if (nextBtn) nextBtn.disabled = x >= maxScroll - 1;
+      if (counter) counter.textContent = (Math.min(index + 1, maxIndex + 1)) + ' / ' + (maxIndex + 1);
+    }
+
+    nextBtn && nextBtn.addEventListener('click', () => { index++; update(); });
+    prevBtn && prevBtn.addEventListener('click', () => { index--; update(); });
+
+    // arraste / swipe
+    let dragX = null;
+    viewport.addEventListener('pointerdown', (e) => { dragX = e.clientX; });
+    window.addEventListener('pointerup', (e) => {
+      if (dragX === null) return;
+      const dx = e.clientX - dragX; dragX = null;
+      if (Math.abs(dx) > 55) { dx < 0 ? index++ : index--; update(); }
+    });
+
+    // tilt 3D no hover (porte do efeito do card-21)
+    if (!reduce && window.matchMedia('(hover: hover)').matches) {
+      cards.forEach((card) => {
+        card.addEventListener('pointermove', (e) => {
+          const r = card.getBoundingClientRect();
+          const px = (e.clientX - r.left) / r.width - 0.5;
+          const py = (e.clientY - r.top) / r.height - 0.5;
+          card.style.setProperty('--ry', (px * 9).toFixed(2) + 'deg');
+          card.style.setProperty('--rx', (-py * 9).toFixed(2) + 'deg');
+        });
+        card.addEventListener('pointerleave', () => {
+          card.style.setProperty('--ry', '0deg');
+          card.style.setProperty('--rx', '0deg');
+        });
+      });
+    }
+
+    let rt;
+    window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(update, 150); });
+    update();
+  })();
 })();

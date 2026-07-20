@@ -398,13 +398,68 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   **não desce abaixo de ~500px** (janela mínima do Windows), então screenshot a 390 sai
   cortado como falso positivo — validar mobile a 500px ou pelo Playwright MCP.
   Spec: `docs/superpowers/specs/2026-07-16-pagina-link-bio-design.md`.
+- **`roteiro.php` (SEO fase 1, 16/07/2026):** a página de roteiro passou a existir também
+  renderizada no servidor, em `/roteiros/<slug>` (`roteiro.php?slug=`), porte 1:1 de
+  `assets/js/roteiro-dynamic.js` (que só montava a página no navegador e ficava
+  `noindex`, então os 6 roteiros à venda não existiam na busca). `lib/po-data.php` lê o
+  Supabase com cache em disco; `lib/po-view.php` monta o `<head>`/header/footer/chrome;
+  `roteiro.php` monta o corpo (`po_roteiro_html`) e o JSON-LD `TouristTrip`
+  (`po_roteiro_jsonld`, só emite `offers` com preço real, nunca inventado). Slug
+  inexistente ou inativo devolve **404 de verdade** (`http_response_code(404)` + o
+  `404.html`), não 200 com "não encontrado" (isso vira soft-404 indexado pelo Google).
+  "Outros roteiros" saem prontos no HTML (`po_outros_roteiros`, busca no banco e pula o
+  slug atual) em vez de esperar JavaScript, porque link interno é sinal de SEO.
+  **Decisão registrada:** o `<video class="hero__vid">` do hero, que o JS só emitia
+  depois de checar `matchMedia('prefers-reduced-motion: reduce')` no navegador, agora
+  **sempre** sai no HTML (o servidor não sabe a preferência de quem pediu a página); quem
+  pede menos animação passa a **baixar o vídeo capa (~1,3 MB) e não vê-lo**, escondido via
+  CSS (`assets/css/roteiro.css`, regra `@media (prefers-reduced-motion: reduce)` em
+  `.hero__vid`). Custo aceito em troca de a página existir para o Google.
 - **Próximo:** página/seção de Contato geral (formulário de lead na home) · backend
   `enviar.php` + Supabase · painel de leads.
-- **Dívida relacionada (não tratada):** o `mercados-de-natal.html` continua existindo e
-  **no `sitemap.xml`**, e os catálogos do `historia.js` e do `roteiro.js` ainda listam os 5
-  roteiros antigos — a página do roteiro excluído segue no ar e indexável. Mesma raiz (dado
-  do banco duplicado à mão), mas mexe em SEO; decidir junto com "as 5 estáticas entram no
-  banco ou são aposentadas".
+- **SEO fase 1 — DEPLOY COMPLETO E VERIFICADO NO AR (20/07/2026).** As 5 páginas
+  estáticas de roteiro foram **aposentadas** (decisão da cliente: são passado) e o site
+  passou a servir os roteiros **do banco, por PHP**. Publicado por FTP na ereHost e
+  conferido em produção:
+  - `/roteiros/<slug>` (via `roteiro.php`) e `/roteiros` (página mãe, `roteiros.php`)
+    renderizam **no servidor**, indexáveis, com `robots index,follow`, canonical, OG,
+    JSON-LD (`TouristTrip`+`Offer` no roteiro, `ItemList` na mãe). `sitemap.php` gera o
+    sitemap **do banco** (roteiro novo no painel entra sozinho, sem deploy) e é servido
+    em `/sitemap.xml` via rewrite. O `roteiro.html?slug=` `noindex` **não existe mais**.
+  - **Slugs renomeados** (migration `2026-07-16-slug-estavel.sql`, rodada no Supabase):
+    `turquia`, `chile-e-deserto-do-atacama`, `tesouros-asiaticos`, `escandinavia`
+    (os 2 bons mantidos). **Regra permanente:** slug = identidade estável da viagem
+    (sem data/tema/parada da edição); uma edição ativa por slug (índice único parcial
+    `po_roteiros_slug_ativo_uniq`); edição nova **herda a URL e a autoridade** da
+    anterior. O painel truncava slug no meio da palavra (`.slice(0,60)`); corrigido para
+    limite de palavra. `PO_STATIC_ROTEIRO`/`STATIC_ROTEIRO` **removidos** (front + painel).
+  - **301 do WordPress antigo:** ~20 URLs que eram **404 sem redirect** (a `/turquia`
+    rankeava e jogava fora a autoridade) agora redirecionam para o roteiro/página certa;
+    `www`→não-www; conferido 1 salto, sem laço. O `.htaccess` foi **fundido** com o
+    bloco `/link` da outra sessão (nunca sobrescrever: FTP não faz merge).
+  - **Copy de SEO:** títulos no padrão "Excursão <destino> <ano> · Viagem em grupo saindo
+    de Florianópolis" (o público 60+ busca **"excursão"**, não "roteiro"); o diferencial
+    que rankeia sem concorrência é **grupo + acompanhante brasileiro + saída de Floripa**,
+    não o destino. `<h1>` da mãe = "Viagens em grupo com saída de Florianópolis".
+  - **Cache:** `po-data.php` tem cache em disco de 10 min (`/tmp/po-cache`). Depois de
+    editar roteiro/rodar migration, ele mascara a mudança por até 10 min. Para forçar,
+    apagar os `*.json` de lá (script de uso único; não deixar no servidor).
+  - **`prefers-reduced-motion` do hero virou CSS** (`.hero__vid{display:none}`), porque o
+    servidor não sabe a preferência: quem pede menos animação baixa o vídeo e não o vê.
+  - **Injeções corrigidas na branch:** JSON-LD fechava `<script>` (resolvido com
+    `JSON_HEX_TAG`; a flag `JSON_UNESCAPED_SLASHES` era a causa) e `capa_url` escapava do
+    atributo `style` (`po_e` vira `&#039;` mas o parser decodifica antes do CSS ler;
+    resolvido com `po_css_url()`). Dado de roteiro vem do painel/importador IA: **sempre
+    escapar** com `po_e`/`po_css_url`.
+  - **Ainda pendente da cliente:** resubmeter o `sitemap.xml` no Search Console e pedir
+    indexação de `/roteiros`; **reivindicar o Google Business Profile** (5,0 · 22
+    avaliações, provavelmente **não reivindicado** — link "É proprietário desta empresa?";
+    é possivelmente o maior retorno de tudo e decide "agência de viagem Florianópolis").
+- **Fase 2 (planejada):** avaliações do Google no site (mãe, roteiro, História), cadastro
+  manual pelo painel (permite filtrar negativa). **Sem `AggregateRating`** — a diretriz do
+  Google proíbe estrela de review que a própria empresa controla; é violação com risco de
+  ação manual. Avaliação no site é **conversão, não SEO**. Nota real **5,0** pode ser
+  publicada; usar `<blockquote>` semântico.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro

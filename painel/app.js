@@ -45,7 +45,17 @@ function cicloDias(l){
 function fmtCiclo(n){return n==null?'—':(n===0?'menos de 1 dia':n+(n===1?' dia':' dias'));}
 function monthKey(iso){return (iso||'').slice(0,7);}
 function monthLabel(key){if(key==='all')return 'Todos os meses';const[y,m]=key.split('-').map(Number);const s=new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});return s.charAt(0).toUpperCase()+s.slice(1).replace(' de ',' / ');}
-function slugify(s){return (s||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'').slice(0,60);}
+/* Trunca em limite de PALAVRA. O .slice(0,60) cru cortava no meio e gerou
+   'um-roteiro-exclusivo-pelo-melhor-da-escandinavia-com-acompan' no banco.
+   O slug e URL publica permanente: cortar palavra ao meio fica pra sempre. */
+function slugify(s){
+  const base=(s||'').toString().toLowerCase().normalize('NFD')
+    .replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+  if(base.length<=60)return base;
+  const corte=base.slice(0,60);
+  const ult=corte.lastIndexOf('-');
+  return (ult>0?corte.slice(0,ult):corte).replace(/-$/,'');
+}
 let toastT;function toast(msg,err){const t=$('#toast');t.textContent=msg;t.className='toast on'+(err?' err':'');clearTimeout(toastT);toastT=setTimeout(()=>t.className='toast',2800);}
 
 /* ---------- estado ---------- */
@@ -356,8 +366,7 @@ function renderTimeline(rows){
 }
 
 /* ============================================================ ROTEIROS — grid */
-const STATIC_ROTEIRO={'mercados-de-natal':'mercados-de-natal.html','tesouros-asiaticos':'tesouros-asiaticos.html','floracao-das-cerejeiras':'floracao-das-cerejeiras.html','grecia-terra-mar':'grecia-terra-mar.html','encantos-do-mediterraneo':'encantos-do-mediterraneo.html'};
-function pubHref(slug){return '../'+(STATIC_ROTEIRO[slug]||('roteiro.html?slug='+encodeURIComponent(slug)));}
+function pubHref(slug){return '../roteiros/'+encodeURIComponent(slug);}
 $('#rot-refresh').onclick=async()=>{await reloadRoteiros();toast('Lista de roteiros atualizada. O site já reflete os ativos.');};
 $('#rdr-view').onclick=()=>{if(!editRot||!editRot.id){toast('Salve o roteiro primeiro para visualizar.',true);return;}window.open(pubHref(editRot.slug),'_blank');};
 function renderRoteiros(){
@@ -398,7 +407,7 @@ function roteiroForm(r){
   return `
   <div class="dr-section-l">Identificação</div>
   <div class="field"><label>Título</label><input id="r-titulo" value="${esc(r.titulo||'')}"></div>
-  <div class="field"><label>Slug (URL) — ex: chile-atacama</label><input id="r-slug" value="${esc(r.slug||'')}" placeholder="gerado do título se vazio"></div>
+  <div class="field"><label>Slug (URL), vira o endereço da página, ex: /roteiros/chile-atacama</label><input id="r-slug" value="${esc(r.slug||'')}" placeholder="gerado do título se vazio"><small class="hint">Use o destino, sem data nem tema da edição. Repetir o slug de uma edição anterior é o certo: a página herda o histórico no Google.</small></div>
   <div class="field"><label>Subtítulo</label><input id="r-subtitulo" value="${esc(r.subtitulo||'')}"></div>
   <div class="field"><label>Descrição curta</label><textarea id="r-desc">${esc(r.descricao_curta||'')}</textarea></div>
   <div class="field-3">

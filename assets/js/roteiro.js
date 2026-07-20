@@ -1,9 +1,9 @@
 /* ============================================================
-   Pereira Oliveira Turismo — Página de Roteiro
+   Pereira Oliveira Turismo: Página de Roteiro
    Menu mobile · reveal · vídeo capa (hero) · lightbox da galeria ·
-   carrossel "outros roteiros" (lê do banco). O formulário fica no
-   lead-form.js. Pode rodar sozinho (páginas estáticas) ou ser
-   chamado por roteiro-dynamic.js (window.initRoteiro()).
+   carrossel "outros roteiros" (lê os cards que o servidor já pintou no
+   DOM, não inventa nenhum). O formulário fica no lead-form.js. Fica
+   disponível em window.initRoteiro() para quem precisar chamar de novo.
 ============================================================ */
 function initRoteiro() {
   'use strict';
@@ -33,7 +33,7 @@ function initRoteiro() {
   /* ---------- hero: vídeo capa (autoplay, mudo, loop, sem controles) ----------
      Só fica visível quando já dá para tocar: até lá quem segura a tela é o
      .hero__poster (a capa), então o LCP nunca espera o vídeo.
-     O <video> já nasce com autoplay — o play() abaixo é só a rede de segurança
+     O <video> já nasce com autoplay: o play() abaixo é só a rede de segurança
      para o caso de o atributo ser ignorado. */
   function wireHero(v) {
     const mostra = () => v.classList.add('is-ready');
@@ -49,7 +49,7 @@ function initRoteiro() {
   /* ---------- reels do Instagram (seção "por que viajar") ----------
      Nunca toca sozinho: o poster é a capa e o vídeo só baixa no clique
      (preload="none"). A tag e o botão de play somem no play e voltam no
-     pause. A tela cheia é própria — ver .intro__media:fullscreen no CSS. */
+     pause. A tela cheia é própria: ver .intro__media:fullscreen no CSS. */
   const wireReels = (fig) => {
     const v = fig.querySelector('video');
     if (!v || fig.dataset.wired) return;
@@ -79,47 +79,7 @@ function initRoteiro() {
   };
   document.querySelectorAll('.intro__media').forEach(wireReels);
 
-  /* Páginas estáticas: o HTML nasce com a capa parada (bom p/ SEO e p/ o LCP) e
-     recebe os vídeos que o painel tiver — o do topo e o reels. A dinâmica já
-     nasce certa, então não entra aqui. Sem rede ou sem vídeo, a capa fica, que
-     é exatamente o fallback desejado. Uma consulta só alimenta os dois. */
-  const staticFig = document.querySelector('.intro__photo');
-  const heroMedia = document.querySelector('.hero__media');
-  const slugEl = document.getElementById('more-track');
-  const slug = slugEl && slugEl.dataset.current;
-  // #rt-main só existe na roteiro.html (dinâmica), que já renderiza tudo a
-  // partir do banco. Sem esta guarda ela refaria a consulta à toa.
-  const ehDinamica = !!document.getElementById('rt-main');
-  if (slug && !ehDinamica && window.poFetchRoteiro) {
-    window.poFetchRoteiro(slug).then((r) => {
-      if (!r) return;
-
-      // topo: o vídeo capa entra por cima da capa parada, se houver um
-      if (heroMedia && !heroMedia.querySelector('.hero__vid') && window.poHeroVideo) {
-        const html = window.poHeroVideo(r);
-        if (html) {
-          heroMedia.insertAdjacentHTML('beforeend', html);
-          wireHero(heroMedia.querySelector('.hero__vid'));
-        }
-      }
-
-      // "por que viajar": a capa vira o reels, se houver um
-      if (staticFig && r.video_insta_url && window.poIntroMedia) {
-        // Preserva a capa e o alt do HTML: o banco pode ter capa_url diferente.
-        const img = staticFig.querySelector('img');
-        const fig = document.createRange().createContextualFragment(window.poIntroMedia({
-          video_insta_url: r.video_insta_url,
-          capa_url: (img && img.getAttribute('src')) || r.capa_url,
-          titulo: r.titulo
-        })).firstElementChild;
-        fig.classList.add('is-in');  // já está na tela; não espera o reveal
-        staticFig.replaceWith(fig);
-        wireReels(fig);
-      }
-    });
-  }
-
-  /* ---------- galeria — lightbox ---------- */
+  /* ---------- galeria: lightbox ---------- */
   const grid = document.getElementById('gal-grid');
   const lb = document.getElementById('lb');
   if (grid && lb && !grid.dataset.lbWired) {
@@ -144,40 +104,23 @@ function initRoteiro() {
     });
   }
 
-  /* ---------- outros roteiros — carrossel (do banco) ---------- */
-  const ROTEIROS_ALL = [
-    { slug: 'mercados-de-natal', titulo: 'Mercados de Natal', badge: '11 dias', local: 'Suíça, França, Alemanha e Holanda', data: '10 a 21/12/2025', img: 'assets/images/roteiro-mercados-natal.jpg', href: 'mercados-de-natal.html' },
-    { slug: 'tesouros-asiaticos', titulo: 'Tesouros Asiáticos', badge: '21 dias', local: 'Vietnã, Tailândia e Doha', data: '03 a 23/03/2026', img: 'assets/images/roteiro-tesouros-asiaticos.jpg', href: 'tesouros-asiaticos.html' },
-    { slug: 'floracao-das-cerejeiras', titulo: 'Floração das Cerejeiras', badge: '16 dias', local: 'Japão e Doha', data: '11 a 27/04/2026', img: 'assets/images/roteiro-cerejeiras.jpg', href: 'floracao-das-cerejeiras.html' },
-    { slug: 'grecia-terra-mar', titulo: 'Grécia Terra e Mar', badge: '16 dias', local: 'Grécia com Cruzeiro', data: '02 a 18/05/2026', img: 'assets/images/roteiro-grecia.jpg', href: 'grecia-terra-mar.html' },
-    { slug: 'encantos-do-mediterraneo', titulo: 'Encantos do Mediterrâneo', badge: '14 dias', local: 'Tunísia e Malta', data: '04 a 17/06/2026', img: 'assets/images/roteiro-mediterraneo.jpg', href: 'encantos-do-mediterraneo.html' }
-  ];
-
+  /* ---------- outros roteiros: carrossel ----------
+     Server-side agora (roteiro.php já pinta os <article class="rot-card">
+     reais dentro de #more-track: link interno é sinal de SEO e não pode
+     depender de JavaScript). Este bloco não cria mais nenhum card: só lê
+     os que o HTML já tem e liga setas/swipe/tilt/contador. Sem PHP/banco
+     na página, o track fica vazio e o carrossel simplesmente não aparece,
+     nunca mais inventa roteiro (um deles já foi excluído do catálogo e
+     ficava reaparecendo escrito à mão aqui). */
   const track = document.getElementById('more-track');
   if (track && !track.dataset.wired) {
     track.dataset.wired = '1';
-    const buildCarousel = (SRC) => {
-      const current = track.dataset.current || '';
-      const OUTROS = SRC.filter((r) => r.slug !== current);
+    const cards = Array.from(track.children);
+    if (cards.length) {
       const viewport = track.parentElement;
       const prevBtn = document.getElementById('more-prev');
       const nextBtn = document.getElementById('more-next');
       const counter = document.getElementById('more-count');
-      const arrow = '<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
-      const cards = OUTROS.map((r) => {
-        const a = document.createElement('article');
-        a.className = 'rot-card';
-        a.innerHTML =
-          '<div class="rot-card__img" style="background-image:url(\'' + r.img + '\')"></div>' +
-          '<div class="rot-card__body">' +
-            '<div class="rot-card__title"><h3>' + r.titulo + '</h3><span class="rot-card__badge">' + r.badge + '</span></div>' +
-            '<div class="rot-card__sub"><b></b>' + r.local + ' · ' + r.data + '</div>' +
-            '<a class="rot-card__cta" href="' + r.href + '">Ver roteiro' + arrow + '</a>' +
-          '</div>';
-        track.appendChild(a);
-        return a;
-      });
-      if (!cards.length) return;
 
       let index = 0;
       const metrics = () => {
@@ -218,11 +161,7 @@ function initRoteiro() {
       let rt;
       window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(update, 150); });
       update();
-    };
-
-    if (window.PO_ROTEIROS_CARDS && window.PO_ROTEIROS_CARDS.length) buildCarousel(window.PO_ROTEIROS_CARDS);
-    else if (window.poFetchRoteiros) window.poFetchRoteiros().then((db) => buildCarousel(db && db.length ? db.map(window.poCard) : ROTEIROS_ALL));
-    else buildCarousel(ROTEIROS_ALL);
+    }
   }
 }
 

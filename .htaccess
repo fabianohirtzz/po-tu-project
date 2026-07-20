@@ -10,6 +10,11 @@ ErrorDocument 404 /404.html
 
 # Força HTTPS
 RewriteEngine On
+
+# --- SEO fase 1: www -> nao-www (o site existia em 2 versoes pro Google) ---
+RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+RewriteRule ^ https://%1%{REQUEST_URI} [L,R=301]
+
 RewriteCond %{HTTPS} off
 RewriteCond %{HTTP:X-Forwarded-Proto} !https
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
@@ -25,6 +30,27 @@ RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^link/$ /link [R=301,L]
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^link$ /link.html [L]
+
+
+# --- SEO fase 1: URLs limpas dos roteiros (servidas por PHP) ---
+RewriteRule ^roteiros/?$              /roteiros.php [L]
+RewriteRule ^roteiros/([a-z0-9-]+)/?$ /roteiro.php?slug=$1 [L,QSA]
+RewriteRule ^sitemap\.xml$           /sitemap.php [L]
+
+# --- SEO fase 1: 301 do site WordPress antigo (eram 404 sem redirect) ---
+# destino proximo quando o roteiro existe; /roteiros quando o roteiro morreu
+RedirectMatch 301 ^/turquia/?$               /roteiros/turquia
+RedirectMatch 301 ^/india-nepal/?$           /roteiros/caminhos-da-india
+RedirectMatch 301 ^/japao-dubai-cingapura/?$ /roteiros/coreia-do-sul-japao-dubai
+RedirectMatch 301 ^/tesouros-asiaticos\.html$ /roteiros/tesouros-asiaticos
+RedirectMatch 301 ^/(nossos-roteiros|europa|africa|asia-oriente-medio|america-do-sul|oceania|america-do-norte-caribe|outros-destinos)/?$ /roteiros
+RedirectMatch 301 ^/(marrocos|capitais-imperiais|cruzeiro-pelo-danubio|viagem-transiberiana|terra_santa-jordania|rota-romantica-alemanha|expresso-luzes-do-norte)/?$ /roteiros
+RedirectMatch 301 ^/(grecia-terra-mar|mercados-de-natal|floracao-das-cerejeiras|encantos-do-mediterraneo)\.html$ /roteiros
+RedirectMatch 301 ^/roteiro\.html$ /roteiros
+RedirectMatch 301 ^/(nossa-historia|sobre-nos)/?$ /nossa-historia.html
+RedirectMatch 301 ^/contato/?$                    /contato.html
+RedirectMatch 301 ^/(blog|dicas-de-viagem|6-dicas-para-uma-viagem-mais-proveitosa|meu-primeiro-post-do-blog)/?$ /
+RedirectMatch 301 ^/(en|es)(/.*)?$ /
 
 # Cache dos assets estáticos
 <IfModule mod_expires.c>
