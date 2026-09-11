@@ -218,6 +218,46 @@ site sem passar pelo WhatsApp. Nenhum registro histórico é reescrito.
 
 ---
 
+## 7.1 O painel: abas e a ficha do cliente
+
+> Decidido em 11/09/2026, depois do plano 1. Amplia a seção 7.
+
+O painel passa a ter quatro abas: **Clientes** (a aba Leads de hoje, evoluída),
+**Funil** (o kanban, nova), Relatórios e Roteiros.
+
+**A pessoa e o interesse são coisas diferentes.** Hoje `po_leads` tem uma linha por
+contato: a mesma pessoa pedindo a Grécia em 2026 e a Turquia em 2027 vira duas linhas sem
+ligação nenhuma, e a ficha dela não existe. Para uma operadora de viagem em grupo isso não
+é detalhe, porque **quem já viajou é o melhor lead do próximo roteiro**, e é exatamente esse
+recorte que a transmissão (seção 8) vai querer.
+
+**A ficha é uma agregação, não uma tabela nova.** A aba Clientes lista pessoas únicas
+agrupadas por telefone em E.164, e a ficha junta o que já existe: os dados de
+`po_wa_contatos`, todos os leads daquela pessoa em `po_leads`, a conversa em
+`po_wa_mensagens` e as anotações de `notas`. Sem migration, sem backfill, sem regra de
+deduplicação para manter.
+
+Por que não uma tabela `po_clientes`: ela é o modelo mais correto e aguenta crescer sem
+limite, mas custa migration, backfill e uma regra de quando dois telefones são a mesma
+pessoa. No volume desta agência (seis roteiros por ano, leads na casa das centenas) a
+agregação sustenta por anos, e a tabela pode nascer depois sem jogar fora o que for feito
+agora — o agrupamento por E.164 já é a chave que ela usaria.
+
+**Consequência para o telefone:** o agrupamento só funciona se o telefone estiver sempre no
+mesmo formato. `wa_e164()` garante isso do lado do WhatsApp, mas o `enviar.php` ainda grava
+o que o visitante digitou no formulário do site (pendência registrada). Enquanto isso não
+for corrigido, a mesma pessoa vinda dos dois caminhos aparece como duas fichas.
+
+**Mover card no celular:** arrastar no desktop com os eventos nativos de arrastar do HTML,
+e no celular um menu de etapas ao tocar no card. Sem biblioteca de terceiro: o projeto não
+tem build nem dependência de front além do cliente do Supabase, e arrastar por toque não
+existe em HTML puro.
+
+**A conversa** fica numa aba dentro da gaveta de edição que já existe (Dados · Conversa),
+para tudo sobre o lead viver num lugar só.
+
+---
+
 ## 8. Transmissão
 
 Substitui a lista de transmissão que a coexistência desativa. Não é uma funcionalidade extra:
