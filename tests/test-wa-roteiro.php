@@ -19,8 +19,10 @@ ok(wa_match_roteiros('bom dia, me fala do atacama',           $cat) === ['chile-
 ok(wa_match_roteiros('ESCANDINÁVIA',   $cat) === ['escandinavia'], 'caixa alta e acento');
 ok(wa_match_roteiros('india',          $cat) === ['caminhos-da-india'], 'sem acento casa com titulo acentuado');
 
-// --- apelidos que o cliente usa e nao estao no titulo
-ok(wa_match_roteiros('a viagem das cerejeiras', array_merge($cat, [['slug'=>'floracao-das-cerejeiras','titulo'=>'Floracao das Cerejeiras']])) === ['floracao-das-cerejeiras'], 'apelido cerejeira');
+// --- casamento direto pelo plural que ja esta no titulo (nao precisa de
+// apelido: "cerejeiras" do cliente e "Cerejeiras" do titulo sao a mesma
+// palavra, casam por igualdade exata)
+ok(wa_match_roteiros('a viagem das cerejeiras', array_merge($cat, [['slug'=>'floracao-das-cerejeiras','titulo'=>'Floracao das Cerejeiras']])) === ['floracao-das-cerejeiras'], 'plural do titulo casa direto');
 
 // --- nada reconhecivel devolve vazio, e o motor cai no menu
 ok(wa_match_roteiros('oi boa tarde',        $cat) === [], 'saudacao sem destino');
@@ -45,6 +47,20 @@ ok(wa_match_roteiros('tenho um parente que mora na asia',    $catAsia) === [], '
 // inteiro do roteiro (o token "caminhos" virou palavra vazia, mas "india"
 // continua identificando o destino sozinho)
 ok(wa_match_roteiros('quero saber dos caminhos da india', $cat) === ['caminhos-da-india'], 'caminhos da india ainda casa pelo nome inteiro');
+
+// --- tolerancia de plural precisa de caso proprio: sem ele, se alguem
+// remover o ramo do rtrim de wa_mesma_palavra, nenhum teste acusa (o caso
+// de cerejeiras acima usa o plural verbatim, que ja casa por igualdade
+// exata e nunca exercita o ramo). O par real do catalogo de producao e
+// tesouros-asiaticos / "Tesouros Asiaticos": o cliente escreve no singular
+// e o token do catalogo esta no plural.
+ok(wa_match_roteiros('queria saber do passeio asiatico', $catAsia) === ['tesouros-asiaticos'], 'singular do cliente casa com plural do catalogo');
+// O caminho inverso (token do catalogo no singular, cliente escreve no
+// plural) nao tem par real hoje: os unicos tokens plurais do catalogo de
+// producao sao "caminhos" e "tesouros", e os dois sao palavras vazias
+// (genericas demais pra identificar destino); todo token singular do
+// catalogo e nome proprio (India, Turquia, Atacama, Dubai, Japao...), que
+// ninguem pluraliza numa frase real.
 
 // --- marcador do link do site tem prioridade e nunca vaza para o cliente
 ok(wa_slug_do_marcador('Quero saber do roteiro [r:turquia]') === 'turquia', 'le o marcador');
