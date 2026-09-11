@@ -59,13 +59,38 @@ function wa_envia($mensagem) {
     if (!$r) return ['ok' => false, 'wamid' => null, 'erro' => 'sem resposta da Graph API'];
 
     $j = json_decode($r['body'], true);
-    if ($r['status'] >= 300) {
-        // Mensagem de erro da Meta, nao dado de cliente: pode logar o corpo.
-        $msg = $j['error']['message'] ?? ('HTTP ' . $r['status']);
-        error_log('wa_envia erro: ' . $r['body']);
-        return ['ok' => false, 'wamid' => null, 'erro' => $msg];
+
+    // Corpo que nao decodifica para array: nao da pra confiar que a
+    // mensagem saiu so porque o status HTTP veio < 300. Sem esta checagem
+    // um 200 com corpo quebrado virava sucesso silencioso.
+    if (!is_array($j)) {
+        error_log('wa_envia resposta malformada (status ' . $r['status'] . '): ' . $r['body']);
+        return ['ok' => false, 'wamid' => null, 'erro' => 'resposta malformada da Graph API'];
     }
-    return ['ok' => true, 'wamid' => $j['messages'][0]['id'] ?? null, 'erro' => null];
+
+    // Mensagem de erro da Meta, nao dado de cliente: pode logar o corpo.
+    // A Meta pode devolver erro no corpo com status 200 (ex: token
+    // expirado); por isso isto e checado independente do status HTTP.
+    if (isset($j['error']['message'])) {
+        error_log('wa_envia erro: ' . $r['body']);
+        return ['ok' => false, 'wamid' => null, 'erro' => $j['error']['message']];
+    }
+
+    if ($r['status'] >= 300) {
+        error_log('wa_envia erro: ' . $r['body']);
+        return ['ok' => false, 'wamid' => null, 'erro' => 'HTTP ' . $r['status']];
+    }
+
+    // Sucesso exige wamid: sem identificador de mensagem o envio nao pode
+    // ser dado como feito, senao o motor avanca o estado da conversa como
+    // se o cliente tivesse recebido algo que nao saiu.
+    $wamid = $j['messages'][0]['id'] ?? null;
+    if (!$wamid) {
+        error_log('wa_envia resposta sem wamid: ' . $r['body']);
+        return ['ok' => false, 'wamid' => null, 'erro' => 'resposta sem wamid'];
+    }
+
+    return ['ok' => true, 'wamid' => $wamid, 'erro' => null];
 }
 
 /* A Graph API quer o numero so em digitos, sem o "+". Passar com o mais

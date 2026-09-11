@@ -62,6 +62,25 @@ $r = wa_send_text('+5548996048882', 'x');
 ok($r['ok'] === false, 'erro 400 devolve ok=false');
 ok(strpos($r['erro'], 'Invalid parameter') !== false, 'erro traz a mensagem da Meta');
 
+// --- sucesso silencioso: status 200 mas o corpo diz erro (ex: token expirado)
+wa_set_transport(function () { return ['status' => 200, 'body' => '{"error":{"message":"Token expirado"}}']; });
+$r = wa_send_text('+5548996048882', 'x');
+ok($r['ok'] === false, 'status 200 com erro no corpo nao pode virar sucesso');
+ok($r['wamid'] === null, 'erro no corpo nao tem wamid');
+ok(strpos($r['erro'], 'Token expirado') !== false, 'erro do corpo com status 200 e propagado');
+
+// --- status 200 com corpo que nao decodifica para JSON
+wa_set_transport(function () { return ['status' => 200, 'body' => 'isto nao e json']; });
+$r = wa_send_text('+5548996048882', 'x');
+ok($r['ok'] === false, 'corpo invalido nao pode virar sucesso');
+ok($r['wamid'] === null, 'corpo invalido nao tem wamid');
+
+// --- status 200 mas a resposta nao trouxe o wamid
+wa_set_transport(function () { return ['status' => 200, 'body' => '{"messages":[{}]}']; });
+$r = wa_send_text('+5548996048882', 'x');
+ok($r['ok'] === false, 'sucesso exige wamid, mesmo com status 200');
+ok($r['wamid'] === null, 'sem wamid na resposta, wamid fica null');
+
 // --- rede fora do ar idem
 wa_set_transport(function () { return null; });
 $r = wa_send_text('+5548996048882', 'x');
