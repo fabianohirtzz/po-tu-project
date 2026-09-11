@@ -22,3 +22,12 @@ $SUPABASE_SERVICE_KEY = 'COLOQUE_AQUI_A_SERVICE_ROLE_KEY';
 // Crie GRÁTIS em https://aistudio.google.com/apikey (NÃO é a assinatura
 // "Gemini Advanced"; é a API do Google AI Studio, tier gratuito).
 $GEMINI_API_KEY = 'COLOQUE_AQUI_A_CHAVE_DO_GEMINI';
+
+// --- WhatsApp Cloud API -------------------------------------------
+// Painel do app em developers.facebook.com. Todos sao SEGREDO: este
+// arquivo tem uma copia real (config.local.php) que nunca vai pro Git.
+$WA_TOKEN        = '';  // token permanente do System User
+$WA_PHONE_ID     = '';  // Phone Number ID (nao e o telefone)
+$WA_APP_SECRET   = '';  // App Secret, usado para validar a assinatura
+$WA_VERIFY_TOKEN = '';  // string inventada por nos, repetida no cadastro do webhook
+$WA_CRON_KEY     = '';  // string inventada por nos, protege wa-cron.php pela web
