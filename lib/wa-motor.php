@@ -329,20 +329,12 @@ function wa_envia_roteiro($wa_id, $r, $nome) {
         return 'falha_envio';
     }
 
-    // As duas perguntas vao na sequencia, sem pedir licenca: e exatamente
-    // como a cliente faz na mao. Mesma regra: sem as perguntas saindo, a
-    // proxima mensagem do cliente nao pode ser lida como resposta a uma
-    // pergunta que ele nunca recebeu.
-    $perguntas = wa_envia_texto($wa_id, wa_texto('perguntas', [
-        'nome'    => $nome,
-        'roteiro' => $r['titulo'] ?? '',
-        'data'    => $r['data_label'] ?? 'na data prevista',
-    ]));
-    if (empty($perguntas['ok'])) {
-        error_log('wa_envia_roteiro: roteiro saiu mas as perguntas falharam para ' . $wa_id);
-        return 'falha_envio';
-    }
-
+    // O documento saiu, entao o estado avanca AGORA, antes das perguntas.
+    // Se a gravacao esperasse as perguntas e elas falhassem, a conversa
+    // ficaria em 'novo' e a proxima mensagem do cliente reenviaria o PDF
+    // inteiro: com a Graph API instavel, isso vira PDF duplicado em serie.
+    // Cliente com o roteiro na mao e sem as perguntas e melhor do que
+    // cliente recebendo o mesmo roteiro duas vezes.
     wa_conversa_set($wa_id, [
         'estado'           => 'enviado_roteiro',
         'roteiro_slug'     => $r['slug'] ?? null,
@@ -350,6 +342,19 @@ function wa_envia_roteiro($wa_id, $r, $nome) {
         'lembrete_at'      => null,
     ]);
     wa_lead_set($wa_id, ['roteiro' => $r['titulo'] ?? '']);
+
+    // As duas perguntas vao na sequencia, sem pedir licenca: e exatamente
+    // como a cliente faz na mao.
+    $perguntas = wa_envia_texto($wa_id, wa_texto('perguntas', [
+        'nome'    => $nome,
+        'roteiro' => $r['titulo'] ?? '',
+        'data'    => $r['data_label'] ?? 'na data prevista',
+    ]));
+    if (empty($perguntas['ok'])) {
+        error_log('wa_envia_roteiro: roteiro saiu e as perguntas falharam, estado avancado assim mesmo para nao reenviar o PDF | ' . $wa_id);
+        return 'falha_perguntas';
+    }
+
     return 'enviou_roteiro';
 }
 

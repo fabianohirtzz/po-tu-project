@@ -234,6 +234,29 @@ wa_motor_set_deps([
     },
 ]);
 
+/* --- 21. PDF que sai com as perguntas falhando nao pode ser reenviado
+   (conhecido 7). O estado avanca assim mesmo: o cliente com o roteiro na
+   mao e sem as perguntas e melhor do que o mesmo PDF chegando duas vezes. */
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $DB['po_wa_mensagens'] = []; $ENVIADAS = [];
+$TEXTO_OK = false;
+wa_motor_set_deps(['send_text' => function ($para, $texto) use (&$ENVIADAS, &$TEXTO_OK) {
+    if (!$TEXTO_OK) return ['ok' => false, 'wamid' => null, 'erro' => 'timeout'];
+    $ENVIADAS[] = ['text', $para, $texto];
+    return ['ok' => true, 'wamid' => 'w' . count($ENVIADAS), 'erro' => null];
+}]);
+$acao = wa_processar(ev('mensagem', 'quero saber da turquia'));
+ok($acao === 'falha_perguntas', "a falha das perguntas e registrada como tal (deu: $acao)");
+ok($DB['po_wa_conversas'][0]['estado'] === 'enviado_roteiro', 'o estado avanca porque o PDF saiu de verdade');
+ok($DB['po_wa_conversas'][0]['roteiro_slug'] === 'turquia', 'e o roteiro enviado fica registrado');
+$ENVIADAS = []; $TEXTO_OK = true;
+$acao = wa_processar(ev('mensagem', 'oi'));
+ok($acao !== 'enviou_roteiro', "a proxima mensagem NAO reenvia o PDF (deu: $acao)");
+foreach ($ENVIADAS as $e) ok($e[0] !== 'doc', 'nenhum documento sai de novo');
+wa_motor_set_deps(['send_text' => function ($para, $texto) use (&$ENVIADAS) {
+    $ENVIADAS[] = ['text', $para, $texto];
+    return ['ok' => true, 'wamid' => 'w' . count($ENVIADAS), 'erro' => null];
+}]);
+
 // --- interpretacao da resposta sobre a data (a unica que desqualifica)
 ok(wa_resposta_data('sim')                    === true,  'sim');
 ok(wa_resposta_data('Tenho sim!')             === true,  'tenho sim');
