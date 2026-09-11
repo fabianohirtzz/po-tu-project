@@ -9,7 +9,12 @@ const sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
 const BUCKET=CFG.STORAGE_BUCKET||'po-imagens';
 
 /* ---------- dicionários ---------- */
+/* 'novo' e o status que o robo do WhatsApp grava no primeiro contato. Sem
+   ele aqui a badge caia no fallback e mostrava "Sem resposta", o lead sumia
+   do funil de barras e, pior, o <select> da gaveta ficava sem selecao e o
+   salvar gravava status:'' por cima do lead. */
 const STATUS={
+  novo:{label:'Contato feito',cls:'s-novo'},
   venda:{label:'Venda feita',cls:'s-venda'},
   negociacao:{label:'Em negociação',cls:'s-nego'},
   atendimento:{label:'Atendimento iniciado',cls:'s-aberto'},
@@ -326,10 +331,10 @@ function renderReports(){
   $('#donut').style.background=`conic-gradient(${segs.join(',')||'#e4e7eb 0 100%'})`;
   $('#donut').innerHTML=`<div class="donut-c"><b>${total}</b><span>leads</span></div>`;
   $('#donut-legend').innerHTML=Object.entries(byOrig).filter(([,v])=>v).map(([k,v])=>`<div class="legend-row"><span class="legend-dot" style="background:${corOrig(k)}"></span>${(ORIG[k]||ORIG.direto).label}<span class="pct">${total?(v/total*100).toFixed(0):0}%</span><span class="n">${v}</span></div>`).join('')||'<div class="card-sub">Sem dados no período.</div>';
-  const order=['atendimento','negociacao','venda','semresposta','perdido'];
+  const order=['novo','atendimento','negociacao','venda','semresposta','perdido'];
   const byStatus={};order.forEach(s=>byStatus[s]=rows.filter(l=>l.status===s).length);
   const maxS=Math.max(1,...Object.values(byStatus));
-  const scolor={atendimento:'var(--st-aberto)',negociacao:'var(--st-nego)',venda:'var(--st-venda)',semresposta:'var(--st-sem)',perdido:'var(--st-perdido)'};
+  const scolor={novo:'var(--st-novo)',atendimento:'var(--st-aberto)',negociacao:'var(--st-nego)',venda:'var(--st-venda)',semresposta:'var(--st-sem)',perdido:'var(--st-perdido)'};
   $('#status-bars').innerHTML=order.map(s=>`<div class="bar-row"><div class="bar-lbl">${STATUS[s].label}</div><div class="bar-track"><div class="bar-fill" style="width:${byStatus[s]/maxS*100}%;background:${scolor[s]}"></div></div><div class="bar-n">${byStatus[s]}</div></div>`).join('');
   $('#vs-orc').textContent=brl2(valOrc);$('#vs-ven').textContent=brl2(valVen);
   const close=valOrc>0?valVen/valOrc*100:0;$('#close-bar').style.width=Math.min(100,close)+'%';$('#close-n').textContent=close.toFixed(0)+'%';
