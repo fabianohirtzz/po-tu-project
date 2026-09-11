@@ -68,6 +68,28 @@ assert.deepEqual(poAgrupaPessoas([]), [], 'lista vazia');
 assert.equal(poAgrupaPessoas([{id:9, tel:'—', nome:'(sem nome)', status:'novo', orc:0, ven:0, data:null}]).length,
   1, 'lead sem telefone e sem data ainda vira uma pessoa');
 
+// Registro que nao e objeto (null, undefined, string ou numero soltos) nao
+// pode estourar o painel: sao leads reais em producao e um dado estranho
+// no meio da lista nao pode tirar a tela do ar.
+assert.deepEqual(poAgrupaPessoas([null]), [], 'null sozinho e ignorado, sem estourar');
+assert.deepEqual(poAgrupaPessoas([undefined]), [], 'undefined sozinho e ignorado, sem estourar');
+const comLixo = poAgrupaPessoas([
+  {id:1, tel:'(48) 99604-8882', nome:'Maria', status:'novo', orc:0, ven:0, data:'2026-01-01T00:00:00Z'},
+  null, undefined, 'string solta', 42,
+]);
+assert.equal(comLixo.length, 1, 'lixo misturado nao impede o lead valido de ser agrupado');
+assert.equal(comLixo[0].nome, 'Maria', 'o lead valido continua com seus dados certos');
+
+// Dois leads sem telefone E sem id nao podem colapsar na mesma pessoa: o
+// fallback ficaria 'sem-tel:' pros dois, fundindo gente diferente numa
+// ficha so. A posicao na lista garante que cada um vira sua propria pessoa
+// quando nao ha mais nada para diferencia-los.
+const semTelSemId = poAgrupaPessoas([
+  {tel:'—', nome:'Fulana', status:'novo', orc:0, ven:0, data:'2026-01-01T00:00:00Z'},
+  {tel:'', nome:'Sicrana', status:'novo', orc:0, ven:0, data:'2026-01-02T00:00:00Z'},
+]);
+assert.equal(semTelSemId.length, 2, 'dois leads sem telefone e sem id viram duas pessoas, nao uma');
+
 // --- a ficha monta HTML seguro: nome e roteiro vem do WhatsApp, que e
 // dado de terceiro. Sem escapar, um nome com "<img onerror>" executa
 // script dentro do painel da cliente.

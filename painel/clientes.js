@@ -18,22 +18,32 @@ function poDigitos(s) {
    do site ainda grava o que o visitante digitou, entao a chave normaliza
    os dois para digitos com DDI.
 
-   Lead sem telefone recebe uma chave propria baseada no id: sem isso,
-   TODOS os leads sem telefone colapsariam numa ficha unica e errada. */
-function poChavePessoa(lead) {
+   Lead sem telefone recebe uma chave propria: pelo id quando ha um, ou
+   pela posicao na lista (idx) quando nao ha nem telefone nem id. So usar
+   o id nao bastava: dois leads sem telefone e sem id caiam os dois em
+   'sem-tel:' e colapsavam na mesma pessoa, misturando gente diferente
+   numa ficha so. */
+function poChavePessoa(lead, idx) {
   let d = poDigitos(lead && lead.tel);
   if (d.length >= 10) {
     if (d.length <= 11) d = '55' + d;
     return d;
   }
-  return 'sem-tel:' + String((lead && lead.id) || '');
+  const id = lead && lead.id;
+  if (id != null && id !== '') return 'sem-tel:' + String(id);
+  return 'sem-tel:pos:' + String(idx);
 }
 
 function poAgrupaPessoas(leads) {
   const mapa = new Map();
 
-  (leads || []).forEach(l => {
-    const chave = poChavePessoa(l);
+  (leads || []).forEach((l, idx) => {
+    // Registro que nao e objeto (null, undefined, string ou numero soltos)
+    // nao pode derrubar o painel inteiro por causa de um dado estranho no
+    // meio dos leads reais: ignora e segue agrupando o resto.
+    if (!l || typeof l !== 'object') return;
+
+    const chave = poChavePessoa(l, idx);
     if (!mapa.has(chave)) {
       mapa.set(chave, {
         chave, nome: '', tel: '', email: '', cidade: '',
