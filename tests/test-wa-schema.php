@@ -1,11 +1,40 @@
 <?php
+/* ============================================================
+   A excecao da suite: este arquivo confere o AMBIENTE, nao logica.
+
+   A restricao do projeto e "rede nunca e tocada em teste", e ela vale para
+   todos os outros arquivos. Aqui ela nao tem como valer: a unica maneira
+   de saber se a migration rodou e perguntar ao Supabase de verdade.
+
+   A saida e pular explicitamente. Sem config.local.php (que e gitignored),
+   sem chave ou sem rede, o arquivo imprime SKIP e sai com 0. Antes ele
+   falhava nessas condicoes, e os "13 PASS" da suite so reproduziam na
+   maquina de quem tem o config.local.php na mao.
+============================================================ */
+
 require __DIR__ . '/../lib/po-data.php';
 require __DIR__ . '/../lib/wa-config.php';
 
 function ok($cond, $msg) { if (!$cond) { fwrite(STDERR, "ASSERT: $msg\n"); exit(1); } }
+function pula($motivo) { echo "test-wa-schema SKIP: $motivo\n"; exit(0); }
+
+if (!is_file(__DIR__ . '/../config.local.php')) pula('sem config.local.php (os segredos nao vao para o Git)');
+if (!function_exists('curl_init')) pula('sem curl neste PHP');
 
 $cfg = po_config();
+if (empty($cfg['SUPABASE_URL']) || empty($cfg['SUPABASE_ANON_KEY'])) pula('sem URL ou anon key do Supabase');
+
 $base = rtrim($cfg['SUPABASE_URL'], '/') . '/rest/v1/';
+
+/* Sonda de ambiente. po_roteiros existe desde o inicio do site, entao ela
+   responder significa "ha rede e a chave presta". Sem a sonda nao daria
+   para separar as duas coisas: para uma tabela do WhatsApp, "a migration
+   nao rodou" e "o Supabase nao respondeu" chegam aqui do mesmo jeito
+   (null), e o teste acusaria migration faltando quando o problema e o
+   wi-fi. */
+if (po_http_get($base . 'po_roteiros?select=id&limit=1', 0) === null) {
+    pula('o Supabase nao respondeu (sem rede, ou chave invalida)');
+}
 
 /* Pergunta ao PostgREST se a tabela responde. 200 = existe e tem RLS
    coerente; 404 = a migration nao rodou. Usa limit=0 para nao trafegar
@@ -33,7 +62,6 @@ foreach (['wa_id','ctwa_clid','ad_id','qualif_data','qualif_grupo','qualif_at','
    curl direto, so para este trecho. */
 function wa_http_get_service($url) {
     $wcfg = wa_config();
-    if (!function_exists('curl_init') || strlen($wcfg['SUPABASE_SERVICE_KEY']) < 20) return null;
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
@@ -49,6 +77,12 @@ function wa_http_get_service($url) {
     curl_close($ch);
     if ($body === false || $code < 200 || $code >= 300) return null;
     return $body;
+}
+
+$wcfg = wa_config();
+if (strlen($wcfg['SUPABASE_SERVICE_KEY']) < 20) {
+    echo "test-wa-schema OK (sem SUPABASE_SERVICE_KEY: os textos iniciais nao foram conferidos)\n";
+    exit(0);
 }
 
 $txt = json_decode(wa_http_get_service($base . 'po_wa_textos?select=chave') ?: '[]', true);
