@@ -115,6 +115,14 @@ ok($acao === 'menu', "sem destino manda o menu (deu: $acao)");
 ok($ENVIADAS[0][0] === 'list', 'mandou lista');
 ok($ENVIADAS[0][2] === 2, 'com os dois roteiros ativos');
 
+// --- 7b. o menu nao se repete a cada mensagem nao reconhecida (revisao: Important 2)
+$ENVIADAS = [];
+foreach (['quanto custa?', 'e voces tem parcelamento?', 'obrigada'] as $frase) {
+    $acao = wa_processar(ev('mensagem', $frase));
+    ok($acao === 'aguardando_menu', "menu ja mandado nao vira segundo menu em \"$frase\" (deu: $acao)");
+}
+ok($ENVIADAS === [], 'nenhuma lista repetida: o menu sai uma vez so');
+
 // --- 8. escolha no menu retoma o fluxo
 $ENVIADAS = [];
 $acao = wa_processar(ev('mensagem', 'turquia', ['tipo_msg' => 'list_reply']));
@@ -209,6 +217,22 @@ wa_processar(ev('mensagem', 'quero saber da turquia'));
 $DB['po_wa_conversas'][0]['lembrete_at'] = gmdate('c', time() - 86400);
 wa_processar(ev('mensagem', 'oi, ainda estou pensando'));
 ok($DB['po_wa_conversas'][0]['lembrete_at'] === null, 'mensagem do cliente zera o lembrete_at');
+
+/* --- 20. catalogo vazio manda texto, nunca uma lista impossivel
+   (revisao: Important 10). A Graph API recusa lista com zero linhas: a
+   mensagem inteira nao sai e o cliente escreve sem receber resposta. */
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $DB['po_wa_mensagens'] = []; $ENVIADAS = [];
+wa_motor_set_deps(['roteiros' => function () { return []; }]);
+$acao = wa_processar(ev('mensagem', 'oi, boa tarde'));
+ok($acao === 'menu_texto', "sem roteiro ativo o robo pergunta o destino por texto (deu: $acao)");
+ok(count($ENVIADAS) === 1 && $ENVIADAS[0][0] === 'text', 'mandou texto, nao lista');
+ok($DB['po_wa_conversas'][0]['estado'] === 'aguardando_roteiro', 'e fica esperando o destino');
+wa_motor_set_deps([
+    'roteiros' => function () {
+        return [['slug'=>'turquia','titulo'=>'Turquia com Antalia','pdf_url'=>'https://x/t.pdf','data_label'=>'10/05/27'],
+                ['slug'=>'escandinavia','titulo'=>'O melhor da Escandinavia','pdf_url'=>'https://x/e.pdf','data_label'=>'02/06/27']];
+    },
+]);
 
 // --- interpretacao da resposta sobre a data (a unica que desqualifica)
 ok(wa_resposta_data('sim')                    === true,  'sim');

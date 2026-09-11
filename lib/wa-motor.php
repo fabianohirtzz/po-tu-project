@@ -526,7 +526,14 @@ function wa_processar($ev) {
         if ($r) return wa_envia_roteiro($wa_id, $r, $nome);
     }
 
-    // Nada identificado (ou ambiguo): o menu resolve sem chutar.
+    // Nada identificado (ou ambiguo): o menu resolve sem chutar. Mas sai UMA
+    // vez: estando em aguardando_roteiro o menu ja foi mandado, e repetir a
+    // lista a cada mensagem que o robo nao entende (quatro listas seguidas,
+    // medido na revisao) le como robo travado para o publico da agencia. O
+    // estado existe justamente para distinguir os dois momentos. Quem
+    // continua sem escolher cai no lembrete do cron, que tem texto proprio.
+    if (($conv['estado'] ?? '') === 'aguardando_roteiro') return 'aguardando_menu';
+
     $itens = [];
     foreach ($roteiros as $r) {
         $itens[] = ['id' => $r['slug'], 'titulo' => $r['titulo'], 'descricao' => $r['data_label'] ?? ''];
@@ -535,6 +542,20 @@ function wa_processar($ev) {
     if ($corpo_menu === '') {
         error_log('wa_processar: texto do menu vazio, nada enviado para ' . $wa_id);
         return 'falha_envio';
+    }
+
+    // Catalogo vazio (Supabase fora, cache frio, nenhum roteiro ativo): a
+    // Graph API recusa lista com zero linhas, entao a mensagem inteira nao
+    // sai e o cliente fica sem resposta nenhuma. O proprio texto do menu
+    // ja pergunta qual viagem interessa, e como texto puro ele sempre sai.
+    if (!$itens) {
+        $envio = wa_envia_texto($wa_id, $corpo_menu);
+        if (empty($envio['ok'])) {
+            error_log('wa_processar: catalogo vazio e falha ao pedir o destino para ' . $wa_id);
+            return 'falha_envio';
+        }
+        wa_conversa_set($wa_id, ['estado' => 'aguardando_roteiro', 'aguardando_desde' => gmdate('c')]);
+        return 'menu_texto';
     }
     $envio = wa_call('send_list', $wa_id, $corpo_menu, 'Ver roteiros', $itens);
     wa_registra_saida($wa_id, $envio, 'list', $corpo_menu);
