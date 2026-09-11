@@ -299,6 +299,41 @@ function wa_lead_set($wa_id, $campos) {
     }
 }
 
+/* Escreve na linha do tempo de observacoes do lead, que e o que a dona le
+   no painel. Sem isto, "entregue para atendimento humano" seria uma
+   mudanca de estado invisivel: ela abriria a ficha sem saber por que o
+   robo parou nem o que o cliente mandou. */
+function wa_nota_lead($wa_id, $txt) {
+    $lead  = wa_lead($wa_id);
+    $notas = (is_array($lead) && isset($lead['notas']) && is_array($lead['notas'])) ? $lead['notas'] : [];
+    $notas[] = ['ts' => gmdate('c'), 'txt' => $txt];
+    wa_lead_set($wa_id, ['notas' => $notas]);
+}
+
+/* Quantas mensagens o cliente mandou depois de o roteiro sair. O webhook
+   grava a mensagem em po_wa_mensagens ANTES de chamar o motor, entao a que
+   esta sendo processada agora ja esta contada: duas ou mais significa que
+   ele voltou a escrever sem ter respondido as perguntas.
+
+   A comparacao e estritamente maior que aguardando_desde de proposito: a
+   mensagem que pediu o roteiro pode cair no mesmo segundo do envio, e
+   conta-la faria o primeiro "quanto custa?" ja virar handoff. Errar para o
+   lado de esperar mais uma mensagem e melhor do que tirar o robo da
+   conversa cedo demais. */
+function wa_msgs_do_cliente_depois($wa_id, $desde) {
+    $corte = strtotime((string) $desde);
+    if (!$corte) return 0;
+    $linhas = wa_call('select', 'po_wa_mensagens',
+        'wa_id=eq.' . rawurlencode($wa_id) . '&direcao=eq.in&order=ts.desc&limit=20');
+    $n = 0;
+    foreach ($linhas as $l) {
+        if (($l['direcao'] ?? '') !== 'in') continue;
+        $ts = strtotime((string) ($l['ts'] ?? ''));
+        if ($ts && $ts > $corte) $n++;
+    }
+    return $n;
+}
+
 function wa_acha_roteiro($slug, $roteiros) {
     foreach ($roteiros as $r) if (($r['slug'] ?? '') === $slug) return $r;
     return null;
@@ -502,8 +537,25 @@ function wa_processar($ev) {
             wa_lead_set($wa_id, $campos);
             return 'qualificou';
         }
-        // Nem sim nem nao (uma pergunta, por exemplo): nao classifica
-        // errado e nao responde bobagem. Deixa para a humana.
+        /* Nem sim nem nao. Nao classifica errado e nao responde bobagem,
+           mas tambem nao pode virar silencio: antes o estado nao mudava,
+           ninguem era avisado, e 48h depois o cron encerrava como PERDIDO
+           um cliente que tinha respondido.
+
+           Audio, imagem e figurinha chegam sem texto nenhum, e o publico
+           60+ desta agencia responde por audio com frequencia alta: esses
+           vao direto para gente. Quem escreve uma pergunta em vez de
+           responder ganha uma chance (pode responder na proxima); na
+           segunda mensagem sem resposta, tambem vai para gente. */
+        $sem_texto = (trim($texto) === '');
+        $insistiu  = wa_msgs_do_cliente_depois($wa_id, $conv['aguardando_desde'] ?? '') >= 2;
+        if ($sem_texto || $insistiu) {
+            wa_conversa_set($wa_id, ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
+            wa_nota_lead($wa_id, $sem_texto
+                ? 'Cliente respondeu por audio, imagem ou figurinha, que o robo nao le. Conversa entregue para atendimento humano.'
+                : 'Cliente escreveu mais de uma vez sem responder as perguntas do roteiro. Conversa entregue para atendimento humano.');
+            return 'precisa_humano';
+        }
         return 'aguardando';
     }
 

@@ -257,6 +257,35 @@ wa_motor_set_deps(['send_text' => function ($para, $texto) use (&$ENVIADAS) {
     return ['ok' => true, 'wamid' => 'w' . count($ENVIADAS), 'erro' => null];
 }]);
 
+/* --- 22. audio nunca pode virar silencio e depois "perdido"
+   (revisao: Important 4). wa_texto_msg devolve '' para audio, imagem e
+   figurinha; antes o motor devolvia 'aguardando', nada acontecia e o cron
+   encerrava o lead 48h depois. O publico 60+ responde por audio. */
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $DB['po_wa_mensagens'] = []; $ENVIADAS = [];
+wa_processar(ev('mensagem', 'quero saber da turquia'));
+$ENVIADAS = [];
+$acao = wa_processar(ev('mensagem', '', ['tipo_msg' => 'audio']));
+ok($acao === 'precisa_humano', "audio vai para atendimento humano (deu: $acao)");
+ok($DB['po_wa_conversas'][0]['estado'] === 'humano', 'a conversa sai da trilha automatica');
+$notas = $DB['po_leads'][0]['notas'] ?? [];
+ok(count($notas) === 1 && strpos($notas[0]['txt'], 'audio') !== false,
+    'a dona ve na ficha do lead por que a conversa parou com o robo');
+
+/* --- 23. cliente que pergunta duas vezes em vez de responder tambem vai
+   para gente. As mensagens entram no log pelo webhook, que grava antes de
+   chamar o motor: e por isso que o teste as insere aqui. */
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $DB['po_wa_mensagens'] = []; $ENVIADAS = [];
+wa_processar(ev('mensagem', 'quero saber da turquia'));
+$DB['po_wa_conversas'][0]['aguardando_desde'] = gmdate('c', time() - 600);
+$DB['po_wa_mensagens'][] = ['wa_id'=>$WA,'wamid'=>'in1','direcao'=>'in','autor'=>'cliente','tipo'=>'text','texto'=>'quanto custa?','ts'=>gmdate('c', time() - 300)];
+$acao = wa_processar(ev('mensagem', 'quanto custa?'));
+ok($acao === 'aguardando', "a primeira pergunta ainda espera resposta (deu: $acao)");
+ok($DB['po_wa_conversas'][0]['estado'] === 'enviado_roteiro', 'e o robo continua no comando');
+$DB['po_wa_mensagens'][] = ['wa_id'=>$WA,'wamid'=>'in2','direcao'=>'in','autor'=>'cliente','tipo'=>'text','texto'=>'tem parcelamento?','ts'=>gmdate('c', time() - 60)];
+$acao = wa_processar(ev('mensagem', 'tem parcelamento?'));
+ok($acao === 'precisa_humano', "a segunda pergunta sem resposta vai para gente (deu: $acao)");
+ok($DB['po_wa_conversas'][0]['estado'] === 'humano', 'o cliente nao fica esperando o cron encerrar');
+
 // --- interpretacao da resposta sobre a data (a unica que desqualifica)
 ok(wa_resposta_data('sim')                    === true,  'sim');
 ok(wa_resposta_data('Tenho sim!')             === true,  'tenho sim');
