@@ -286,6 +286,16 @@ $acao = wa_processar(ev('mensagem', 'tem parcelamento?'));
 ok($acao === 'precisa_humano', "a segunda pergunta sem resposta vai para gente (deu: $acao)");
 ok($DB['po_wa_conversas'][0]['estado'] === 'humano', 'o cliente nao fica esperando o cron encerrar');
 
+/* --- 24. lead criado pelo eco nasce com telefone (revisao: Important 6).
+   Quando ela inicia a conversa pelo celular, o robo nunca viu aquele
+   contato: o lead entrava so com status e carimbo, e aparecia no painel
+   como "(sem nome)" com telefone "-". */
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $DB['po_wa_mensagens'] = []; $ENVIADAS = [];
+$acao = wa_processar(ev('eco', '#proposta'));
+ok($acao === 'proposta', "atalho no primeiro contato pelo celular move o funil (deu: $acao)");
+ok($DB['po_leads'][0]['telefone'] === $WA, 'o lead nasce com o telefone em E.164');
+ok($DB['po_leads'][0]['wa_id'] === $WA, 'e com o wa_id, que liga a conversa ao lead');
+
 // --- interpretacao da resposta sobre a data (a unica que desqualifica)
 ok(wa_resposta_data('sim')                    === true,  'sim');
 ok(wa_resposta_data('Tenho sim!')             === true,  'tenho sim');

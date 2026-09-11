@@ -295,7 +295,14 @@ function wa_lead_set($wa_id, $campos) {
     if (wa_lead($wa_id)) {
         wa_call('update', 'po_leads', 'wa_id=eq.' . rawurlencode($wa_id), $campos);
     } else {
-        wa_call('insert', 'po_leads', array_merge(['wa_id' => $wa_id], $campos));
+        // O telefone entra SO no insert: no update sobrescreveria a edicao
+        // feita a mao no painel. O wa_id ja esta em E.164, entao serve como
+        // telefone sem conversao. Sem isto, o lead nascido do eco (ela
+        // inicia a conversa pelo celular, ou digita #proposta numa conversa
+        // que o robo nunca viu) aparecia como "(sem nome)" com telefone
+        // "-", e ela nao conseguia nem ligar para a pessoa a partir da
+        // ficha. O nome, quando existe, ja vem em $campos.
+        wa_call('insert', 'po_leads', array_merge(['wa_id' => $wa_id, 'telefone' => $wa_id], $campos));
     }
 }
 
