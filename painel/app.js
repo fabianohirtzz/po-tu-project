@@ -451,6 +451,17 @@ function roteiroForm(r){
       Pode enviar o arquivo original, de qualquer tamanho: o painel comprime antes de enviar.</p>
   </div>
 
+  <div class="dr-section-l">Roteiro em PDF (download)</div>
+  <div class="field">
+    <div id="r-pdf-wrap">${r.pdf_url?pdfPreview(r.pdf_url):''}</div>
+    <input type="hidden" id="r-pdf" value="${esc(r.pdf_url||'')}">
+    <input type="file" id="r-pdf-file" accept="application/pdf,.pdf" hidden>
+    <button type="button" class="rep-add" id="r-pdf-btn">Enviar PDF</button>
+    <span class="uploading" id="r-pdf-up"></span>
+    <p class="vid-hint">Aparece na faixa "Baixar roteiro em PDF" da página. Sem PDF, a faixa não aparece.
+      Envie o PDF que você exporta do Word, de qualquer tamanho. Abre em nova aba para o visitante.</p>
+  </div>
+
   <div class="dr-section-l">Roteiro dia a dia</div>
   <div class="rep" id="r-dias-rep">${dias}</div>
   <button type="button" class="rep-add" id="r-dias-add">+ Adicionar dia</button>
@@ -517,7 +528,63 @@ function wireRoteiroForm(){
       toast('Vídeo removido. Salve o roteiro para confirmar.');
     });
   });
+  // PDF do roteiro (download na página)
+  $('#r-pdf-btn').onclick=()=>$('#r-pdf-file').click();
+  $('#r-pdf-file').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(f)await sendPdf(f);};
+  $('#r-pdf-wrap').addEventListener('click',async e=>{
+    if(!e.target.classList.contains('vid-rm'))return;
+    if(!confirm('Remover o PDF deste roteiro?'))return;
+    const {data:{session}}=await sb.auth.getSession();
+    await POPdf.remove(curSlug(),session&&session.access_token?session.access_token:'');
+    $('#r-pdf').value='';$('#r-pdf-wrap').innerHTML='';
+    toast('PDF removido. Salve o roteiro para confirmar.');
+  });
 }
+function pdfPreview(url){return `<div class="pdf-prev"><a href="${esc(url)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> Ver PDF atual</a><button type="button" class="vid-rm" title="Remover PDF">✕</button></div>`;}
+// PDF não passa por compressão (diferente do vídeo): sobe direto, em fatias.
+async function sendPdf(file){
+  const st=$('#r-pdf-up'),btn=$('#r-pdf-btn'),slug=curSlug();
+  if(!slug||slug==='roteiro'){toast('Defina o título (ou o slug) do roteiro antes de enviar o PDF.',true);return;}
+  if(file.type&&file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name)){toast('Envie um arquivo PDF.',true);return;}
+  const {data:{session}}=await sb.auth.getSession();
+  const token=session&&session.access_token?session.access_token:'';
+  if(!token){toast('Sessão expirada. Faça login novamente.',true);return;}
+  btn.disabled=true;
+  try{
+    st.textContent='Enviando… 0%';
+    const url=await POPdf.upload(file,slug,token,p=>{st.textContent='Enviando… '+Math.round(p*100)+'%';});
+    $('#r-pdf').value=url;$('#r-pdf-wrap').innerHTML=pdfPreview(url);st.textContent='';
+    toast('PDF enviado ('+(file.size/1048576).toFixed(1)+' MB). Salve o roteiro para publicar.');
+  }catch(err){st.textContent='';toast('Erro no PDF: '+((err&&err.message)||err),true);}
+  finally{btn.disabled=false;}
+}
+// Sobe o PDF em fatias de 5 MB para o upload-pdf.php (mesmo motivo do vídeo:
+// contorna o upload_max_filesize do cPanel). Sem re-encode: PDF vai como está.
+const POPdf=(()=>{
+  const CHUNK=5*1024*1024;
+  async function upload(file,slug,token,onProgress){
+    const uid=Array.from(crypto.getRandomValues(new Uint8Array(8))).map(b=>b.toString(16).padStart(2,'0')).join('');
+    let url='';
+    for(let offset=0;offset<file.size;offset+=CHUNK){
+      const fim=Math.min(offset+CHUNK,file.size),last=fim>=file.size;
+      const fd=new FormData();
+      fd.append('sb_token',token);fd.append('slug',slug);fd.append('uid',uid);
+      fd.append('offset',String(offset));fd.append('last',last?'1':'0');
+      fd.append('chunk',file.slice(offset,fim),'chunk');
+      const resp=await fetch('../upload-pdf.php',{method:'POST',body:fd});
+      const txt=await resp.text();let j;try{j=JSON.parse(txt);}catch(_){j=null;}
+      if(!resp.ok||!j||!j.ok)throw new Error((j&&j.error)||('Falha no envio ('+resp.status+').'));
+      if(onProgress)onProgress(fim/file.size);
+      if(last)url=j.url;
+    }
+    return url;
+  }
+  async function remove(slug,token){
+    const fd=new FormData();fd.append('sb_token',token);fd.append('slug',slug);fd.append('action','delete');
+    await fetch('../upload-pdf.php',{method:'POST',body:fd});
+  }
+  return {upload,remove};
+})();
 // Os dois vídeos do roteiro usam o mesmo fluxo; só mudam os campos da tela
 // e o perfil de compressão (ver painel/video-encode.js).
 const VID={
@@ -598,6 +665,7 @@ function collectRoteiro(){
     // o que os roteiros antigos já têm gravado.
     ordem:Number($('#r-ordem').value)||0,badge:$('#r-badge').value.trim(),periodo:$('#r-periodo').value.trim(),
     video_capa_url:$('#r-vcapa').value.trim()||null,video_insta_url:$('#r-vid').value.trim()||null,
+    pdf_url:$('#r-pdf').value.trim()||null,
     ativo:$('#r-ativo').value==='1',capa_url:$('#r-capa').value.trim()||null,
     roteiro_dias:dias,hoteis:lines('r-hoteis'),inclui:lines('r-inclui'),nao_inclui:lines('r-naoinclui'),
     valores:valores,galeria:galeria

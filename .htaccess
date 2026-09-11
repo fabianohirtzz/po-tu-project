@@ -62,6 +62,8 @@ RedirectMatch 301 ^/(en|es)(/.*)?$ /
   ExpiresByType text/css     "access plus 1 month"
   ExpiresByType application/javascript "access plus 1 month"
   ExpiresByType image/x-icon "access plus 1 year"
+  # PDF dos roteiros (/docs): nome tem hash, trocar o PDF muda a URL, cache seguro
+  ExpiresByType application/pdf "access plus 1 month"
 </IfModule>
 
 # Compressão

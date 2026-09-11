@@ -107,6 +107,29 @@ function po_hero_video($r) {
         . 'disablepictureinpicture disableremoteplayback tabindex="-1" aria-hidden="true"></video>';
 }
 
+/* Faixa "Baixar roteiro em PDF". So sai quando o roteiro tem pdf_url
+   (sem PDF a secao nao existe, como na home sem banco). O botao ABRE EM
+   NOVA ABA (decisao do cliente: o publico 60+ prefere ver antes de baixar).
+   O "documento" usa a capa do roteiro como imagem da folha. */
+function po_pdf_section($r) {
+    if (empty($r['pdf_url'])) return '';
+    $pdf     = po_e($r['pdf_url']);
+    $capaCss = po_css_url($r['capa_url'] ?? '');
+    return '<section class="sec rpdf" id="pdf"><div class="wrap rpdf__grid">'
+        . '<figure class="rpdf__doc reveal">'
+        . '<div class="rpdf__sheet" style="background-image:url(\'' . $capaCss . '\')"></div>'
+        . '<span class="rpdf__badge"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>PDF</span>'
+        . '</figure>'
+        . '<div class="rpdf__body reveal" data-delay="1">'
+        . '<p class="tag sec__eyebrow"><span></span>Roteiro completo</p>'
+        . '<h2 class="sec__h">Leve este roteiro com você.</h2>'
+        . '<p class="rpdf__lead">Baixe o roteiro completo em PDF, com o dia a dia, os hotéis previstos, o que está incluído e os valores, no documento oficial da Pereira Oliveira. Guarde no celular ou imprima para decidir com calma.</p>'
+        . '<a class="btn btn--dark rpdf__btn" href="' . $pdf . '" target="_blank" rel="noopener">Baixar roteiro em PDF'
+        . '<svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg></a>'
+        . '<p class="rpdf__meta"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Documento em PDF · preparado por nossa equipe</p>'
+        . '</div></div></section>';
+}
+
 /* Corpo inteiro da pagina de roteiro. Porte 1:1 do antigo renderizador
    client-side (funcao render), na mesma ordem de secoes. */
 function po_roteiro_html($r, ?array $outros = null) {
@@ -211,6 +234,11 @@ function po_roteiro_html($r, ?array $outros = null) {
             . '<div class="invest__actions">' . po_btn_ir('#contato', 'Quero este roteiro') . po_btn_wa()
             . '</div></div></div></section>';
     }
+
+    /* PDF (download). So aparece quando o roteiro tem pdf_url; a faixa
+       fica logo apos o INVESTIMENTO (o visitante viu o preco, agora leva
+       o roteiro inteiro para decidir com calma). */
+    $h .= po_pdf_section($r);
 
     /* GALERIA */
     if (count($galeria)) {
@@ -372,7 +400,7 @@ if (!defined('PO_TEST')) {
         'description' => mb_substr($desc, 0, 155),
         'canonical'   => po_url(po_roteiro_href($r)),
         'og_image'    => $r['capa_url'] ?? po_url('/assets/images/roteiro-grecia.jpg'),
-        'css'         => ['/assets/css/roteiro.css?v=7'],
+        'css'         => ['/assets/css/roteiro.css?v=8'],
         'jsonld'      => po_roteiro_jsonld($r),
     ]);
     echo po_header();

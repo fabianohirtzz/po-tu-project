@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="pt-BR" class="po-boot">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Preview · Seção "Baixar roteiro em PDF"</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- CSS real da pagina de roteiro (para o entorno ficar fiel) -->
+<link rel="stylesheet" href="assets/css/roteiro.css?v=7">
+
+<style>
+/* A secao .rpdf agora vive no assets/css/roteiro.css (linkado acima).
+   Este preview NAO redefine nada dela: e o teste real daquele CSS. */
+
+/* ---- so para o preview: revela os .reveal sem depender do roteiro.js ---- */
+.reveal{opacity:1;transform:none}
+.po-preview-note{
+  position:fixed;left:12px;bottom:12px;z-index:200;max-width:340px;
+  background:#0C1017;color:#fff;padding:12px 16px;border-radius:12px;
+  font:500 12.5px/1.5 "DM Sans",sans-serif;box-shadow:0 12px 30px rgba(0,0,0,.3);
+}
+.po-preview-note b{color:#84C440}
+</style>
+</head>
+<body>
+
+<!-- HEADER (glass), simplificado -->
+<header class="hd">
+  <a class="hd__logo" href="#"><img src="assets/images/logo.png" alt="Pereira Oliveira Turismo"></a>
+  <nav class="hd__nav">
+    <a href="#">Início</a>
+    <a href="#">Nossa História</a>
+    <a href="#" aria-current="page">Roteiros</a>
+    <a href="#">Contato</a>
+  </nav>
+  <div class="hd__actions">
+    <a class="hd__cta" href="#">Quero este roteiro</a>
+    <a class="hd__wa" href="#">WhatsApp</a>
+  </div>
+</header>
+
+<main>
+  <!-- HERO curto (so para dar contexto do topo) -->
+  <section class="hero" style="height:78vh;min-height:520px">
+    <div class="hero__media">
+      <div class="hero__poster" style="background-image:url('assets/images/roteiro-grecia.jpg')"></div>
+    </div>
+    <div class="hero__scrim"></div>
+    <div class="hero__inner">
+      <p class="hero__crumb"><a href="#">Início</a> › <a href="#">Roteiros</a> › <span>Grécia Terra e Mar</span></p>
+      <h1 class="hero__title">Grécia Terra e Mar</h1>
+      <p class="hero__sub">16 dias entre Atenas, as ilhas e o azul do Egeu.</p>
+      <div class="hero__actions">
+        <a class="btn" href="#">Quero este roteiro</a>
+        <a class="btn btn--wa" href="#">Reserve pelo WhatsApp</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- INVESTIMENTO (escuro) — so para mostrar o ritmo antes da nova secao -->
+  <section class="sec invest">
+    <div class="wrap">
+      <div class="invest__head reveal">
+        <p class="tag" style="margin-bottom:14px">Investimento</p>
+        <h2>Valor por pessoa.</h2>
+        <p>Investimento aproximado por pessoa. Valores sujeitos a alteração, apenas cotação.</p>
+      </div>
+      <div class="invest__cards">
+        <div class="pcard pcard--feat reveal">
+          <div class="pcard__tag">Em quarto duplo</div>
+          <div class="pcard__val">€ 6.115</div>
+          <p class="pcard__extra">+ € 535 taxas · entrada 30% + 10x</p>
+        </div>
+        <div class="pcard reveal">
+          <div class="pcard__val">€ 7.635</div>
+          <p class="pcard__extra">Quarto individual</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ★★★ NOVA SECAO ★★★ -->
+  <section class="sec rpdf" id="pdf">
+    <div class="wrap rpdf__grid">
+      <figure class="rpdf__doc reveal">
+        <div class="rpdf__sheet" style="background-image:url('assets/images/roteiro-grecia.jpg')"></div>
+        <span class="rpdf__badge">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          PDF
+        </span>
+      </figure>
+      <div class="rpdf__body reveal" data-delay="1">
+        <p class="tag sec__eyebrow"><span></span>Roteiro completo</p>
+        <h2 class="sec__h">Leve este roteiro com você.</h2>
+        <p class="rpdf__lead">Baixe o roteiro completo em PDF, com o dia a dia, os hotéis previstos, o que está incluído e os valores, no documento oficial da Pereira Oliveira. Guarde no celular ou imprima para decidir com calma.</p>
+        <a class="btn btn--dark rpdf__btn" href="#" target="_blank" rel="noopener">
+          Baixar roteiro em PDF
+          <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        <p class="rpdf__meta">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          Documento em PDF · preparado por nossa equipe
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- OUTROS (claro) — so para fechar o ritmo depois da nova secao -->
+  <section class="more">
+    <div class="wrap">
+      <div class="more__head">
+        <div><p class="tag sec__eyebrow"><span></span>Outros roteiros</p><h2>Talvez o próximo destino seja outro.</h2></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- FOOTER (escuro), minimo -->
+<footer class="ft">
+  <div class="wrap"><p style="max-width:none">Pereira Oliveira Turismo · Realizando sonhos desde 1967 · Florianópolis/SC</p></div>
+</footer>
+
+<div class="po-preview-note">
+  <b>Preview</b> — só a faixa <b>"Baixar roteiro em PDF"</b> é nova. O resto usa o CSS real do roteiro, com uma capa de exemplo. O botão ainda não baixa nada.
+</div>
+
+</body>
+</html>
