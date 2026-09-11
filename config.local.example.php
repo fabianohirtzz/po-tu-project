@@ -30,3 +30,4 @@ $WA_TOKEN        = '';  // token permanente do System User
 $WA_PHONE_ID     = '';  // Phone Number ID (nao e o telefone)
 $WA_APP_SECRET   = '';  // App Secret, usado para validar a assinatura
 $WA_VERIFY_TOKEN = '';  // string inventada por nos, repetida no cadastro do webhook
+$WA_CRON_KEY     = '';  // string inventada por nos, protege wa-cron.php pela web
