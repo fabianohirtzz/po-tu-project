@@ -18,7 +18,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     $modo     = $_GET['hub_mode']         ?? '';
     $token    = $_GET['hub_verify_token'] ?? '';
     $desafio  = $_GET['hub_challenge']    ?? '';
-    if ($modo === 'subscribe' && hash_equals((string) ($cfg['WA_VERIFY_TOKEN'] ?? ''), (string) $token)) {
+    // wa_verifica_token (lib/wa-webhook.php) recusa sempre quando o token
+    // configurado esta vazio ou e curto demais.
+    if ($modo === 'subscribe' && wa_verifica_token($cfg['WA_VERIFY_TOKEN'] ?? '', $token)) {
         header('Content-Type: text/plain');
         echo $desafio;
         exit;
@@ -29,7 +31,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
 
 $corpo = file_get_contents('php://input');
 
-// 2) Assinatura. Sem isso, qualquer um posta evento falso no webhook.
+// 2) Assinatura. Sem isso, qualquer um posta evento falso no webhook - e o
+//    processamento grava no Supabase com a service_role. Segredo vazio
+//    recusa tudo (ver wa_segredo_util).
 $assinatura = $_SERVER['HTTP_X_HUB_SIGNATURE_256'] ?? '';
 if (!wa_verifica_assinatura($corpo, $assinatura, $cfg['WA_APP_SECRET'] ?? '')) {
     error_log('whatsapp.php: assinatura invalida');

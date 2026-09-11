@@ -13,6 +13,23 @@ ok(wa_verifica_assinatura($corpo, 'sha256=00', $segredo) === false, 'assinatura 
 ok(wa_verifica_assinatura($corpo, '', $segredo) === false, 'sem assinatura barra');
 ok(wa_verifica_assinatura($corpo . ' ', $boa, $segredo) === false, 'corpo alterado barra');
 
+// --- segredo ausente ou fraco nunca autoriza (revisao: Critical 1).
+// Com WA_APP_SECRET vazio o HMAC e calculavel por qualquer um, e o
+// atacante posta evento forjado que o motor grava com a service_role.
+$forjada = 'sha256=' . hash_hmac('sha256', $corpo, '');
+ok(wa_verifica_assinatura($corpo, $forjada, '') === false, 'segredo vazio recusa assinatura calculada com segredo vazio');
+ok(wa_verifica_assinatura($corpo, 'sha256=' . hash_hmac('sha256', $corpo, 'curto'), 'curto') === false, 'segredo com menos de 16 caracteres nao e levado a serio, mesmo batendo');
+ok(wa_segredo_util('') === false, 'segredo vazio nao serve');
+ok(wa_segredo_util('123456789012345') === false, 'quinze caracteres nao bastam');
+ok(wa_segredo_util('1234567890123456') === true, 'dezesseis caracteres bastam');
+
+// --- token de verificacao do GET, mesma regra
+ok(wa_verifica_token('', '') === false, 'token vazio nunca devolve o desafio, nem contra pedido tambem vazio');
+ok(wa_verifica_token('', 'qualquer-coisa') === false, 'token vazio nunca autoriza');
+ok(wa_verifica_token('token-curto', 'token-curto') === false, 'token curto demais nao autoriza, mesmo batendo');
+ok(wa_verifica_token('token-de-verificacao-longo', 'outro-token-longo-qualquer') === false, 'token configurado longo, recebido errado, nao autoriza');
+ok(wa_verifica_token('token-de-verificacao-longo', 'token-de-verificacao-longo') === true, 'token configurado longo e igual ao recebido autoriza');
+
 // --- mensagem de texto do cliente
 $msg = json_decode('{
  "entry":[{"changes":[{"value":{

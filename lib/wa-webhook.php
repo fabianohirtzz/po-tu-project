@@ -9,12 +9,42 @@
 require_once __DIR__ . '/wa-fone.php';
 require_once __DIR__ . '/wa-db.php';
 
+/* Minimo pra um segredo do webhook ser levado a serio. Mesmo numero e
+   mesma regra de WA_CRON_KEY_MIN (lib/wa-timeout.php): segredo ausente ou
+   fraco e ausencia de permissao, nunca permissao. Sem isto o HMAC de um
+   WA_APP_SECRET vazio e calculavel por qualquer um, e hash_equals('','')
+   devolve true no token de verificacao - as duas portas abertas enquanto
+   as chaves nao estao no config.local.php, que e o estado de hoje. */
+const WA_SEGREDO_MIN = 16;
+
+/* Funcao pura (sem $_GET, sem rede) pra dar pra testar: o segredo
+   configurado precisa existir e ter tamanho de segredo ANTES de qualquer
+   comparacao. */
+function wa_segredo_util($segredo) {
+    return strlen((string) $segredo) >= WA_SEGREDO_MIN;
+}
+
 /* hash_equals e obrigatorio: comparar com == vaza o segredo por tempo de
    resposta, um byte de cada vez. */
 function wa_verifica_assinatura($corpo, $header, $segredo) {
+    if (!wa_segredo_util($segredo)) {
+        error_log('wa_verifica_assinatura: WA_APP_SECRET ausente ou curto demais, POST recusado');
+        return false;
+    }
     if (!$header || strpos($header, 'sha256=') !== 0) return false;
     $esperado = 'sha256=' . hash_hmac('sha256', $corpo, $segredo);
     return hash_equals($esperado, $header);
+}
+
+/* Verificacao do webhook (o GET que a Meta faz no cadastro). Mesma regra
+   da assinatura: sem WA_VERIFY_TOKEN configurado, ninguem passa - senao um
+   GET com hub_verify_token vazio devolvia o hub_challenge. */
+function wa_verifica_token($configurado, $recebido) {
+    if (!wa_segredo_util($configurado)) {
+        error_log('wa_verifica_token: WA_VERIFY_TOKEN ausente ou curto demais, verificacao recusada');
+        return false;
+    }
+    return hash_equals((string) $configurado, (string) $recebido);
 }
 
 function wa_norm_fone($digitos) {
