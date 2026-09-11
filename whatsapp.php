@@ -54,19 +54,11 @@ if (function_exists('fastcgi_finish_request')) {
 try {
     $json = json_decode($corpo, true);
     foreach (wa_parse_evento(is_array($json) ? $json : []) as $ev) {
-        // Idempotencia: o unique em wamid barra o reenvio da Meta. Se a
-        // linha ja existia, este evento ja foi tratado.
+        // Idempotencia: o unique em wamid barra o reenvio da Meta. So o
+        // 'duplicado' (409 de verdade) pula o processamento; 'falha' (rede
+        // ou erro do banco) processa mesmo assim, ver wa_registra_evento().
         if ($ev['wamid'] !== '' && $ev['tipo'] !== 'status') {
-            $novo = wa_db_insert('po_wa_mensagens', [
-                'wa_id'   => $ev['wa_id'],
-                'wamid'   => $ev['wamid'],
-                'direcao' => $ev['tipo'] === 'eco' ? 'out' : 'in',
-                'autor'   => $ev['tipo'] === 'eco' ? 'humano' : 'cliente',
-                'tipo'    => $ev['tipo_msg'],
-                'texto'   => $ev['texto'],
-                'ts'      => gmdate('c', $ev['ts']),
-            ], true);
-            if ($novo === null) continue; // ja processado, ou falha de rede
+            if (wa_registra_evento($ev) === 'duplicado') continue;
         }
         wa_processar($ev);
     }

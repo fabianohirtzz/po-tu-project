@@ -82,4 +82,22 @@ ok($ev[0]['tipo'] === 'status' && $ev[0]['texto'] === 'delivered', 'status de en
 ok(wa_parse_evento([]) === [], 'json vazio devolve []');
 ok(wa_parse_evento(['entry' => [['changes' => [['value' => []]]]]]) === [], 'change sem mensagem devolve []');
 
+// --- wa_registra_evento: distingue duplicado (409) de falha (rede/5xx/RLS).
+// Um so vale idempotencia de verdade; o outro tem que processar mesmo
+// assim, senao vira mensagem de cliente descartada em silencio.
+$evento = ['wa_id' => '+5548996048882', 'wamid' => 'wamid.GGG', 'tipo' => 'mensagem',
+           'tipo_msg' => 'text', 'texto' => 'oi', 'ts' => 1757548800];
+
+wa_db_set_transport(function () { return ['status' => 201, 'body' => '[{"id":"1"}]']; });
+ok(wa_registra_evento($evento) === 'novo', 'gravou: novo');
+
+wa_db_set_transport(function () { return ['status' => 409, 'body' => '{"code":"23505"}']; });
+ok(wa_registra_evento($evento) === 'duplicado', '409 e duplicado, nao falha');
+
+wa_db_set_transport(function () { return null; });
+ok(wa_registra_evento($evento) === 'falha', 'rede fora e falha, nao duplicado');
+
+wa_db_set_transport(function () { return ['status' => 500, 'body' => 'erro interno']; });
+ok(wa_registra_evento($evento) === 'falha', '5xx do banco e falha, nao duplicado');
+
 echo "test-wa-webhook OK\n";
