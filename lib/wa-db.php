@@ -33,6 +33,13 @@ function wa_db_http($metodo, $url, $corpo, $headers) {
     if (isset($GLOBALS['WA_DB_TRANSPORT']) && $GLOBALS['WA_DB_TRANSPORT']) {
         return call_user_func($GLOBALS['WA_DB_TRANSPORT'], $metodo, $url, $corpo, $headers);
     }
+    // Sem curl no servidor isto seria fatal, e quem chama e o webhook: um
+    // fatal derruba a resposta pra Meta, ela reenvia em loop e acaba
+    // desinscrevendo o webhook. Mesmo contorno da rede fora do ar: null.
+    if (!function_exists('curl_init')) {
+        error_log('wa_db_http sem curl disponivel | ' . $url);
+        return null;
+    }
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_CUSTOMREQUEST  => $metodo,
@@ -72,7 +79,9 @@ function wa_db_insert($tabela, $linha, $ignora_conflito = false) {
     if (!$r) return null;
     if ($r['status'] === 409 && $ignora_conflito) return null;
     if ($r['status'] >= 300) {
-        error_log('wa_db_insert ' . $tabela . ' status ' . $r['status'] . ': ' . $r['body']);
+        // Sem o corpo de proposito: em unique_violation o Postgres ecoa o
+        // valor em conflito, que aqui pode ser telefone de cliente.
+        error_log('wa_db_insert ' . $tabela . ' status ' . $r['status']);
         return null;
     }
     $j = json_decode($r['body'], true);
@@ -83,18 +92,9 @@ function wa_db_update($tabela, $query, $campos) {
     $r = wa_db_http('PATCH', wa_db_url($tabela, $query), json_encode($campos), wa_db_headers());
     if (!$r) return false;
     if ($r['status'] >= 300) {
-        error_log('wa_db_update ' . $tabela . ' status ' . $r['status'] . ': ' . $r['body']);
+        // Idem: sem o corpo, que pode carregar dado de cliente.
+        error_log('wa_db_update ' . $tabela . ' status ' . $r['status']);
         return false;
     }
     return true;
-}
-
-/* Upsert pela coluna unica: cria se nao existe, atualiza se existe. */
-function wa_db_upsert($tabela, $linha, $chave) {
-    $h = wa_db_headers();
-    $h[] = 'Prefer: resolution=merge-duplicates';
-    $r = wa_db_http('POST', wa_db_url($tabela, 'on_conflict=' . $chave), json_encode($linha), $h);
-    if (!$r || $r['status'] >= 300) return null;
-    $j = json_decode($r['body'], true);
-    return (is_array($j) && isset($j[0])) ? $j[0] : null;
 }
