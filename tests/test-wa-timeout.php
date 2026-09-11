@@ -31,10 +31,14 @@ $ENVIADAS = []; $ENVIADAS_TXT = []; $UPDATES = [];
 // wa_motor_set_deps), NAO por WA_TO_DEPS. wa_varre_timeouts chama wa_texto
 // para montar o lembrete, entao sem isto o select de textos cai no
 // wa_db_select de verdade e o teste sai para a rede.
+$LOG = [];
 wa_motor_set_deps([
     'select' => function ($t, $q) {
         return $t === 'po_wa_textos' ? [['chave'=>'lembrete','texto'=>'Oi {nome}, tudo bem? So passando para saber se voce chegou a ver o roteiro que enviei.']] : [];
     },
+    // O lembrete e gravado no log de saida por wa_registra_saida, que
+    // tambem resolve pelo WA_DEPS. Sem este insert o teste sairia para a rede.
+    'insert' => function ($t, $linha) use (&$LOG) { $LOG[] = [$t, $linha]; return $linha; },
 ]);
 
 // Estas sao as dependencias que wa_varre_timeouts usa diretamente. O
@@ -70,6 +74,12 @@ ok($ENVIADAS === ['+5548900000002'], 'lembrete so para quem esta em silencio ha 
 ok($ENVIADAS_TXT['+5548900000002'] ===
     'Oi Sandra, tudo bem? So passando para saber se voce chegou a ver o roteiro que enviei.',
     'lembrete usa o nome real do lead, com pontuacao correta (veio: "' . ($ENVIADAS_TXT['+5548900000002'] ?? '') . '")');
+
+// O lembrete tambem e mensagem do robo e precisa ficar no log: e o que
+// impede o eco dele de ser lido como handoff (revisao: Critical 3).
+ok(count($LOG) === 1, 'o lembrete entrou no log de saida (deu: ' . count($LOG) . ')');
+ok($LOG[0][0] === 'po_wa_mensagens' && $LOG[0][1]['autor'] === 'robo' && $LOG[0][1]['direcao'] === 'out',
+    'registrado como saida do robo em po_wa_mensagens');
 
 ok($r['encerrados'] === 1, 'exatamente um encerrado (deu: ' . $r['encerrados'] . ')');
 $perdidos = array_values(array_filter($UPDATES, fn($u) => ($u[2]['status'] ?? '') === 'perdido'));

@@ -65,7 +65,13 @@ function wa_varre_timeouts($agora = null) {
                 // mensagem que chega pro cliente.
                 $lead = wa_to_call('select', 'po_leads', 'wa_id=eq.' . rawurlencode($wa));
                 $nome = $lead[0]['nome'] ?? '';
-                $envio = wa_to_call('send_text', $wa, wa_texto('lembrete', ['nome' => $nome]));
+                $msg   = wa_texto('lembrete', ['nome' => $nome]);
+                $envio = wa_to_call('send_text', $wa, $msg);
+                // O lembrete tambem e mensagem do robo: entra no log pelo
+                // mesmo caminho do resto (wa_registra_saida, em
+                // lib/wa-motor.php), senao some da aba de conversa e o
+                // eco dele viraria handoff.
+                wa_registra_saida($wa, $envio, 'text', $msg);
                 // So grava lembrete_at se o envio realmente saiu. Sem isto,
                 // uma falha de rede/token marcava o lead como "avisado" e o
                 // encerramento vinha 24h depois sem o cliente ter recebido

@@ -5,7 +5,7 @@ function ok($cond, $msg) { if (!$cond) { fwrite(STDERR, "ASSERT: $msg\n"); exit(
 
 /* Simulador: o banco vira um array em memoria e o envio vira uma lista.
    Nenhum teste toca a rede. */
-$DB = ['po_wa_conversas' => [], 'po_wa_contatos' => [], 'po_leads' => [],
+$DB = ['po_wa_conversas' => [], 'po_wa_contatos' => [], 'po_leads' => [], 'po_wa_mensagens' => [],
        'po_wa_textos' => [
            ['chave'=>'envio_pdf','texto'=>'Segue o roteiro completo do {roteiro}.'],
            ['chave'=>'perguntas','texto'=>'1. Tem disponibilidade? 2. Ja viajou em grupo?'],
@@ -22,6 +22,11 @@ wa_motor_set_deps([
     },
     'select' => function ($tabela, $query) use (&$DB) {
         if ($tabela === 'po_wa_textos') return $DB['po_wa_textos'];
+        // Antes do wa_id: 'wamid=eq.' e a busca do log de saida.
+        if (preg_match('/wamid=eq\.([^&]+)/', $query, $m)) {
+            $w = urldecode($m[1]);
+            return array_values(array_filter($DB[$tabela] ?? [], fn($l) => ($l['wamid'] ?? '') === $w));
+        }
         if (preg_match('/wa_id=eq\.([^&]+)/', $query, $m)) {
             $wa = urldecode($m[1]);
             return array_values(array_filter($DB[$tabela], fn($l) => ($l['wa_id'] ?? '') === $wa));
@@ -239,6 +244,25 @@ ok($acao === 'qualificou', "tem data e nunca viajou em grupo QUALIFICA (deu: $ac
 ok($DB['po_leads'][0]['status'] === 'atendimento', 'lead vai para atendimento, nao para perdido');
 ok($DB['po_leads'][0]['qualif_data'] === true, 'carimba a data');
 ok($DB['po_leads'][0]['qualif_grupo'] === false, 'e registra que nunca viajou em grupo, sem desqualificar');
+
+/* --- 18. o eco do proprio envio do robo nao pode silenciar o robo
+   (revisao: Critical 3). Nada no payload da Meta separa "a dona digitou"
+   de "nos enviamos pela API". Se a coexistencia ecoar o que sai pela API,
+   sem esta guarda o primeiro PDF silenciava o robo em toda conversa. */
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $DB['po_wa_mensagens'] = []; $ENVIADAS = [];
+wa_processar(ev('mensagem', 'quero saber da turquia'));
+$saidas = array_values(array_filter($DB['po_wa_mensagens'], fn($l) => $l['autor'] === 'robo'));
+ok(count($saidas) === 2, 'o PDF e as perguntas entram no log como saida do robo (deu: ' . count($saidas) . ')');
+ok($saidas[0]['direcao'] === 'out' && $saidas[0]['tipo'] === 'document', 'o PDF fica registrado como documento de saida');
+$meu_wamid = $saidas[0]['wamid'];
+$ENVIADAS = [];
+$acao = wa_processar(ev('eco', 'Segue o roteiro completo', ['wamid' => $meu_wamid]));
+ok($acao === 'eco_do_robo', "eco com wamid nosso e ignorado (deu: $acao)");
+ok($DB['po_wa_conversas'][0]['estado'] === 'enviado_roteiro', 'o robo NAO foi silenciado pelo proprio envio');
+// E o eco de verdade, com wamid que nao e nosso, continua silenciando.
+$acao = wa_processar(ev('eco', 'Oi, aqui e a Simone'));
+ok($acao === 'silenciou', "eco de wamid desconhecido continua sendo handoff (deu: $acao)");
+ok($DB['po_wa_conversas'][0]['estado'] === 'humano', 'a fala da dona silencia o robo');
 
 // --- 17. "sim" solto qualifica sem inventar o dado do grupo
 $DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $ENVIADAS = [];

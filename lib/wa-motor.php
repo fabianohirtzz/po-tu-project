@@ -79,6 +79,47 @@ function wa_limpa_pontuacao($t) {
     return trim($t);
 }
 
+/* ---------- log do que o robo manda ----------
+   Duas coisas de uma vez:
+
+   1) po_wa_mensagens vira o log completo que a spec promete (secao 4) e
+      que a aba de conversa do lead vai ler. Antes so entrava mensagem do
+      cliente e eco, entao a aba nasceria mostrando as respostas sem as
+      perguntas.
+
+   2) E o unico jeito de reconhecer o proprio envio quando ele volta como
+      eco. Nada no payload da Meta distingue "a dona digitou no celular" de
+      "nos enviamos pela Cloud API": se a configuracao de coexistencia
+      ecoar tambem o que sai pela API, o primeiro PDF que o robo mandar
+      volta como eco, vira handoff e silencia o robo naquele contato para
+      sempre - em toda conversa, e o sintoma pareceria "o robo so responde
+      uma vez".
+
+   Envio que falhou nao entra: sem wamid nao ha o que reconhecer depois. */
+function wa_registra_saida($wa_id, $envio, $tipo, $texto) {
+    if (empty($envio['ok']) || empty($envio['wamid'])) return;
+    wa_call('insert', 'po_wa_mensagens', [
+        'wa_id'   => $wa_id,
+        'wamid'   => $envio['wamid'],
+        'direcao' => 'out',
+        'autor'   => 'robo',
+        'tipo'    => $tipo,
+        'texto'   => $texto,
+        'ts'      => gmdate('c'),
+    ]);
+}
+
+/* O eco carrega o wamid da mensagem ecoada. Se ele ja esta no log como
+   nosso, o evento e o proprio envio voltando, nao a dona falando. */
+function wa_msg_do_robo($wamid) {
+    if ($wamid === '' || $wamid === null) return false;
+    $linhas = wa_call('select', 'po_wa_mensagens', 'wamid=eq.' . rawurlencode($wamid));
+    foreach ($linhas as $l) {
+        if (($l['wamid'] ?? null) === $wamid) return ($l['autor'] ?? '') === 'robo';
+    }
+    return false;
+}
+
 /* Envia texto puro, mas nunca com o corpo vazio: uma chave apagada do
    painel nao pode virar mensagem em branco entregue ao cliente. Tratado
    como falha de envio, no mesmo formato de wa_send_text, para o chamador
@@ -88,7 +129,9 @@ function wa_envia_texto($wa_id, $texto) {
         error_log('wa_envia_texto: texto vazio, nada enviado para ' . $wa_id);
         return ['ok' => false, 'wamid' => null, 'erro' => 'texto vazio'];
     }
-    return wa_call('send_text', $wa_id, $texto);
+    $envio = wa_call('send_text', $wa_id, $texto);
+    wa_registra_saida($wa_id, $envio, 'text', $texto);
+    return $envio;
 }
 
 /* Meses por extenso, sem acento (mesma normalizacao de wa_normaliza). So
@@ -268,6 +311,7 @@ function wa_envia_roteiro($wa_id, $r, $nome) {
     if (!empty($r['pdf_url'])) {
         $arquivo = ($r['slug'] ?? 'roteiro') . '.pdf';
         $envio = wa_call('send_doc', $wa_id, $r['pdf_url'], $arquivo, $legenda);
+        wa_registra_saida($wa_id, $envio, 'document', $legenda);
     } else {
         // Sem PDF a conversa nao pode morrer: manda o link da pagina, que
         // sempre existe porque o roteiro esta ativo no banco.
@@ -344,6 +388,12 @@ function wa_processar($ev) {
 
     /* ----- eco: ela falou pelo celular ----- */
     if ($ev['tipo'] === 'eco') {
+        // ...ou fomos nos. O eco pode ser o proprio envio do robo voltando
+        // pela Cloud API, e trata-lo como handoff silenciaria o robo no
+        // primeiro PDF que ele mandasse, em toda conversa. O log de saida
+        // (wa_registra_saida) e o que permite separar os dois.
+        if (wa_msg_do_robo($ev['wamid'] ?? '')) return 'eco_do_robo';
+
         $conv      = wa_conversa($wa_id);
         $ja_humano = ($conv['estado'] ?? '') === 'humano';
 
@@ -475,6 +525,7 @@ function wa_processar($ev) {
         return 'falha_envio';
     }
     $envio = wa_call('send_list', $wa_id, $corpo_menu, 'Ver roteiros', $itens);
+    wa_registra_saida($wa_id, $envio, 'list', $corpo_menu);
     if (empty($envio['ok'])) {
         error_log('wa_processar: falha ao enviar o menu para ' . $wa_id);
         return 'falha_envio';
