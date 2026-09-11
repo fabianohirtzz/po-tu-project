@@ -429,6 +429,18 @@ function wa_processar($ev) {
     // Conversa entregue a humana nunca volta para o robo.
     if (($conv['estado'] ?? '') === 'humano') return 'silenciado';
 
+    // O cliente voltou a falar: o relogio do timeout recomeca do zero. E o
+    // significado real de "ele respondeu", e vale para qualquer mensagem,
+    // nao so para a que o robo consegue interpretar. Sem isto, um
+    // lembrete_at de ontem sobrevivia a conversa viva e wa_varre_timeouts
+    // encerrava como perdida uma conversa em que o cliente escreveu
+    // minutos antes (a varredura decide pelo lembrete_at e ignora o
+    // aguardando_desde depois que ele existe).
+    if (!empty($conv['lembrete_at'])) {
+        wa_conversa_set($wa_id, ['lembrete_at' => null]);
+        $conv['lembrete_at'] = null;
+    }
+
     $roteiros = wa_call('roteiros');
 
     // Primeiro contato: cria lead e contato.

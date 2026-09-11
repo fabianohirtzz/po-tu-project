@@ -200,6 +200,16 @@ wa_motor_set_deps(['send_doc' => function ($para, $url, $arq, $leg) use (&$ENVIA
     return ['ok' => true, 'wamid' => 'w' . count($ENVIADAS), 'erro' => null];
 }]);
 
+/* --- 19. cliente que volta a falar zera o relogio do timeout
+   (revisao: Important 1). O cron decide pelo lembrete_at e ignora o
+   aguardando_desde depois que ele existe: um lembrete velho encerrava
+   como perdida uma conversa em que o cliente tinha escrito minutos antes. */
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $DB['po_wa_mensagens'] = []; $ENVIADAS = [];
+wa_processar(ev('mensagem', 'quero saber da turquia'));
+$DB['po_wa_conversas'][0]['lembrete_at'] = gmdate('c', time() - 86400);
+wa_processar(ev('mensagem', 'oi, ainda estou pensando'));
+ok($DB['po_wa_conversas'][0]['lembrete_at'] === null, 'mensagem do cliente zera o lembrete_at');
+
 // --- interpretacao da resposta sobre a data (a unica que desqualifica)
 ok(wa_resposta_data('sim')                    === true,  'sim');
 ok(wa_resposta_data('Tenho sim!')             === true,  'tenho sim');
