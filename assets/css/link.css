@@ -62,9 +62,8 @@ ul{margin:0;padding:0;list-style:none}
 }
 .lk__google:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(34,36,43,.1)}
 .lk__google-ic{width:17px;height:17px;flex:none}
-.lk__google-sep{width:1px;height:15px;background:var(--his-line)}
-.lk__stars{color:#F5A623;font-size:.9rem;letter-spacing:.06em}
-.lk__google-n{font-family:var(--font-mono);font-size:.92rem;font-weight:500}
+.lk__stars{color:#F5A623;font-size:.9rem;letter-spacing:.06em;flex:none}
+.lk__google-txt{font-size:.95rem;font-weight:600;color:var(--his-ink)}
 
 .lk__h1{
   margin:24px 0 0;font-size:clamp(1.9rem,8vw,2.4rem);font-weight:700;letter-spacing:-.02em;
