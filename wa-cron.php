@@ -18,7 +18,11 @@ if (!$cli) {
     // aparecer la (ver lib/wa-config.php).
     $cfg = wa_config();
     $k = $_GET['k'] ?? '';
-    if (!hash_equals((string) ($cfg['WA_CRON_KEY'] ?? ''), (string) $k)) {
+    // wa_cron_autorizado (lib/wa-timeout.php) recusa sempre quando a chave
+    // configurada esta vazia ou e curta demais: segredo nao configurado e
+    // ausencia de permissao, nunca permissao (hash_equals('','') === true
+    // deixaria isto aberto pra qualquer um enquanto WA_CRON_KEY nao existe).
+    if (!wa_cron_autorizado($cfg['WA_CRON_KEY'] ?? '', $k)) {
         http_response_code(403);
         exit;
     }

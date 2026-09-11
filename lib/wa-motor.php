@@ -63,7 +63,20 @@ function wa_texto($chave, $vars = []) {
     }
     foreach ($vars as $k => $v) $t = str_replace('{' . $k . '}', (string) $v, $t);
     // Placeholder sem valor nao pode vazar para o cliente.
-    return trim(preg_replace('/\{[a-z_]+\}/', '', $t));
+    $t = preg_replace('/\{[a-z_]+\}/', '', $t);
+    return wa_limpa_pontuacao($t);
+}
+
+/* Rede de seguranca contra placeholder vazio (ex.: {nome} quando quem
+   chama nao tem o nome do lead a mao): sem isto sobra pontuacao orfa no
+   texto que vai pro cliente, tipo "Oi , tudo bem?" em vez de "Oi, tudo
+   bem?". Nao existe pra "consertar" a falta do dado, so pra nenhum texto
+   sair visivelmente quebrado quando isso acontece (revisao: Important 2). */
+function wa_limpa_pontuacao($t) {
+    $t = preg_replace('/ {2,}/', ' ', $t);           // espaco duplo
+    $t = preg_replace('/\s+([,.!?;:])/', '$1', $t);  // espaco antes de pontuacao
+    $t = preg_replace('/([,.!?;:])\1+/', '$1', $t);  // pontuacao duplicada
+    return trim($t);
 }
 
 /* Envia texto puro, mas nunca com o corpo vazio: uma chave apagada do
