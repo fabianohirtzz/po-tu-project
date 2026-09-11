@@ -1,0 +1,154 @@
+<?php
+require __DIR__ . '/../lib/wa-motor.php';
+
+function ok($cond, $msg) { if (!$cond) { fwrite(STDERR, "ASSERT: $msg\n"); exit(1); } }
+
+/* Simulador: o banco vira um array em memoria e o envio vira uma lista.
+   Nenhum teste toca a rede. */
+$DB = ['po_wa_conversas' => [], 'po_wa_contatos' => [], 'po_leads' => [],
+       'po_wa_textos' => [
+           ['chave'=>'envio_pdf','texto'=>'Segue o roteiro completo do {roteiro}.'],
+           ['chave'=>'perguntas','texto'=>'1. Tem disponibilidade? 2. Ja viajou em grupo?'],
+           ['chave'=>'qualificado','texto'=>'Perfeito, {nome}.'],
+           ['chave'=>'menu','texto'=>'Sobre qual viagem?'],
+           ['chave'=>'sem_data','texto'=>'Entendo, {nome}.'],
+       ]];
+$ENVIADAS = [];
+
+wa_motor_set_deps([
+    'roteiros' => function () {
+        return [['slug'=>'turquia','titulo'=>'Turquia com Antalia','pdf_url'=>'https://x/t.pdf','data_label'=>'10/05/27'],
+                ['slug'=>'escandinavia','titulo'=>'O melhor da Escandinavia','pdf_url'=>'https://x/e.pdf','data_label'=>'02/06/27']];
+    },
+    'select' => function ($tabela, $query) use (&$DB) {
+        if ($tabela === 'po_wa_textos') return $DB['po_wa_textos'];
+        if (preg_match('/wa_id=eq\.([^&]+)/', $query, $m)) {
+            $wa = urldecode($m[1]);
+            return array_values(array_filter($DB[$tabela], fn($l) => ($l['wa_id'] ?? '') === $wa));
+        }
+        return $DB[$tabela] ?? [];
+    },
+    'insert' => function ($tabela, $linha) use (&$DB) {
+        $linha['id'] = $tabela . '-' . count($DB[$tabela] ?? []);
+        $DB[$tabela][] = $linha;
+        return $linha;
+    },
+    'update' => function ($tabela, $query, $campos) use (&$DB) {
+        preg_match('/wa_id=eq\.([^&]+)/', $query, $m);
+        $wa = isset($m[1]) ? urldecode($m[1]) : null;
+        foreach ($DB[$tabela] as $i => $l) {
+            if ($wa === null || ($l['wa_id'] ?? '') === $wa) $DB[$tabela][$i] = array_merge($l, $campos);
+        }
+        return true;
+    },
+    'send_text' => function ($para, $texto) use (&$ENVIADAS) { $ENVIADAS[] = ['text', $para, $texto]; return ['ok'=>true,'wamid'=>'w'.count($ENVIADAS),'erro'=>null]; },
+    'send_doc'  => function ($para, $url, $arq, $leg) use (&$ENVIADAS) { $ENVIADAS[] = ['doc', $para, $url, $leg]; return ['ok'=>true,'wamid'=>'w'.count($ENVIADAS),'erro'=>null]; },
+    'send_list' => function ($para, $corpo, $botao, $itens) use (&$ENVIADAS) { $ENVIADAS[] = ['list', $para, count($itens)]; return ['ok'=>true,'wamid'=>'w'.count($ENVIADAS),'erro'=>null]; },
+]);
+
+$WA = '+5548996048882';
+function ev($tipo, $texto, $extra = []) {
+    global $WA;
+    return array_merge(['tipo'=>$tipo,'wa_id'=>$WA,'wamid'=>'wamid.'.md5($texto.mt_rand()),
+        'tipo_msg'=>'text','texto'=>$texto,'nome'=>'Maria','ad_id'=>null,'ctwa_clid'=>null,'ts'=>time()], $extra);
+}
+
+// --- 1. primeira mensagem com destino reconhecivel: manda PDF + perguntas
+$acao = wa_processar(ev('mensagem', 'oi queria saber da Turquia'));
+ok($acao === 'enviou_roteiro', "primeira mensagem com destino manda roteiro (deu: $acao)");
+ok($ENVIADAS[0][0] === 'doc', 'mandou o PDF primeiro');
+ok(strpos($ENVIADAS[0][2], 't.pdf') !== false, 'o PDF e o do roteiro certo');
+ok($ENVIADAS[1][0] === 'text', 'depois o texto');
+ok(strpos($ENVIADAS[1][2], 'disponibilidade') !== false, 'as duas perguntas vao junto, sem pedir licenca');
+ok($DB['po_wa_conversas'][0]['estado'] === 'enviado_roteiro', 'estado avancou');
+ok($DB['po_leads'][0]['status'] === 'novo', 'lead entra como novo');
+ok($DB['po_leads'][0]['roteiro'] === 'Turquia com Antalia', 'lead guarda o roteiro');
+
+// --- 2. sim para as duas perguntas: qualifica
+$ENVIADAS = [];
+$acao = wa_processar(ev('mensagem', 'tenho sim, e ja viajei em grupo pra Portugal'));
+ok($acao === 'qualificou', "sim e sim qualifica (deu: $acao)");
+ok($DB['po_wa_conversas'][0]['estado'] === 'qualificado', 'estado qualificado');
+ok($DB['po_leads'][0]['status'] === 'atendimento', 'lead vai para atendimento');
+ok($DB['po_leads'][0]['qualif_data'] === true, 'carimba disponibilidade');
+
+// --- 3. o eco cala o robo naquele contato, para sempre
+$ENVIADAS = [];
+$acao = wa_processar(ev('eco', 'Bom dia Maria, aqui e a Simone'));
+ok($acao === 'silenciou', "eco silencia (deu: $acao)");
+ok($DB['po_wa_conversas'][0]['estado'] === 'humano', 'estado humano');
+ok($ENVIADAS === [], 'o robo nao respondeu nada');
+
+$acao = wa_processar(ev('mensagem', 'e quanto custa?'));
+ok($acao === 'silenciado', "com humano no comando o robo continua calado (deu: $acao)");
+ok($ENVIADAS === [], 'nada enviado mesmo com pergunta nova');
+
+// --- 4. atalho de proposta, vindo do eco
+$acao = wa_processar(ev('eco', '#proposta'));
+ok($acao === 'proposta', "atalho #proposta move o funil (deu: $acao)");
+ok($DB['po_leads'][0]['status'] === 'negociacao', 'lead em negociacao');
+ok(!empty($DB['po_leads'][0]['proposta_at']), 'carimba proposta_at');
+
+// --- 5. atalho de fechamento com valor
+$acao = wa_processar(ev('eco', '#fechou 22900'));
+ok($acao === 'venda', "atalho #fechou registra venda (deu: $acao)");
+ok($DB['po_leads'][0]['status'] === 'venda', 'lead em venda');
+ok((float) $DB['po_leads'][0]['venda'] === 22900.0, 'valor da venda gravado');
+ok(!empty($DB['po_leads'][0]['venda_at']), 'carimba venda_at, que alimenta o ciclo');
+
+// --- 6. PDF enviado por ela tambem marca proposta
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $ENVIADAS = [];
+wa_processar(ev('mensagem', 'me fala da escandinavia'));
+wa_processar(ev('mensagem', 'sim, e ja viajei em grupo'));
+$acao = wa_processar(ev('eco', 'proposta.pdf', ['tipo_msg' => 'document']));
+ok($acao === 'proposta', "PDF enviado por ela marca proposta (deu: $acao)");
+
+// --- 7. texto sem destino reconhecivel cai no menu
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $ENVIADAS = [];
+$acao = wa_processar(ev('mensagem', 'oi boa tarde'));
+ok($acao === 'menu', "sem destino manda o menu (deu: $acao)");
+ok($ENVIADAS[0][0] === 'list', 'mandou lista');
+ok($ENVIADAS[0][2] === 2, 'com os dois roteiros ativos');
+
+// --- 8. escolha no menu retoma o fluxo
+$ENVIADAS = [];
+$acao = wa_processar(ev('mensagem', 'turquia', ['tipo_msg' => 'list_reply']));
+ok($acao === 'enviou_roteiro', "escolha no menu manda o roteiro (deu: $acao)");
+
+// --- 9. nao tem data: desqualifica sem gastar o tempo dela
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $ENVIADAS = [];
+wa_processar(ev('mensagem', 'quero saber da turquia'));
+$acao = wa_processar(ev('mensagem', 'nessa data nao consigo, infelizmente'));
+ok($acao === 'desqualificou', "sem data desqualifica (deu: $acao)");
+ok($DB['po_leads'][0]['status'] === 'perdido', 'lead vai para perdido');
+
+// --- 10. anuncio define o roteiro sem perguntar nada
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $ENVIADAS = [];
+wa_motor_set_anuncios(['120210000' => 'escandinavia']);
+$acao = wa_processar(ev('mensagem', 'oi', ['ad_id' => '120210000', 'ctwa_clid' => 'ARxyz']));
+ok($acao === 'enviou_roteiro', "anuncio identifica o roteiro sem menu (deu: $acao)");
+ok(strpos($ENVIADAS[0][2], 'e.pdf') !== false, 'mandou o PDF do roteiro do anuncio');
+ok($DB['po_leads'][0]['ctwa_clid'] === 'ARxyz', 'atribuicao do anuncio gravada no lead');
+
+// --- 11. marcador do link do site tem prioridade sobre o texto
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $ENVIADAS = [];
+$acao = wa_processar(ev('mensagem', 'Quero saber sobre a escandinavia [r:turquia]'));
+ok(strpos($ENVIADAS[0][2], 't.pdf') !== false, 'marcador ganha do texto');
+
+// --- 12. roteiro sem PDF nao pode travar: manda o link da pagina
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $ENVIADAS = [];
+wa_motor_set_deps(['roteiros' => function () { return [['slug'=>'turquia','titulo'=>'Turquia','pdf_url'=>null,'data_label'=>'10/05/27']]; }]);
+$acao = wa_processar(ev('mensagem', 'quero saber da turquia'));
+ok($acao === 'enviou_roteiro', 'roteiro sem PDF ainda responde');
+ok($ENVIADAS[0][0] === 'text', 'sem PDF manda texto com o link');
+ok(strpos($ENVIADAS[0][2], '/roteiros/turquia') !== false, 'o link e o da pagina do roteiro');
+
+// --- interpretacao de sim e nao
+ok(wa_resposta_sim('sim')                    === true,  'sim');
+ok(wa_resposta_sim('Tenho sim!')             === true,  'tenho sim');
+ok(wa_resposta_sim('claro, pode ser')        === true,  'claro');
+ok(wa_resposta_sim('nao consigo nessa data') === false, 'nao');
+ok(wa_resposta_sim('infelizmente nao')       === false, 'infelizmente nao');
+ok(wa_resposta_sim('qual o valor?')          === null,  'pergunta nao e sim nem nao');
+
+echo "test-wa-motor OK\n";
