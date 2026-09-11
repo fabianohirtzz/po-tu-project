@@ -46,8 +46,12 @@ function wa_varre_timeouts($agora = null) {
     $agora = $agora ?: time();
     $lembretes = 0; $encerrados = 0;
 
+    // order= junto do limit: sem ordem definida, se um dia passar de 500
+    // conversas abertas, o Postgrest devolve um recorte qualquer e as mais
+    // antigas poderiam nunca ser varridas. As mais antigas primeiro sao
+    // justamente as que estao esperando ha mais tempo (conhecido 8).
     $abertas = wa_to_call('select', 'po_wa_conversas',
-        'estado=in.(enviado_roteiro,aguardando_roteiro)&limit=500');
+        'estado=in.(enviado_roteiro,aguardando_roteiro)&order=aguardando_desde.asc&limit=500');
 
     foreach ($abertas as $c) {
         // Guarda dupla: mesmo que a query mude, estado fora da lista nao entra.
@@ -65,7 +69,12 @@ function wa_varre_timeouts($agora = null) {
                 // mensagem que chega pro cliente.
                 $lead = wa_to_call('select', 'po_leads', 'wa_id=eq.' . rawurlencode($wa));
                 $nome = $lead[0]['nome'] ?? '';
-                $msg   = wa_texto('lembrete', ['nome' => $nome]);
+                // Texto por estado: quem esta em aguardando_roteiro recebeu
+                // a lista de viagens, nao um roteiro. O texto unico dizia
+                // "o roteiro que enviei" e afirmava, para um cliente real,
+                // algo que o robo nunca fez.
+                $chave = (($c['estado'] ?? '') === 'aguardando_roteiro') ? 'lembrete_menu' : 'lembrete';
+                $msg   = wa_texto($chave, ['nome' => $nome]);
                 $envio = wa_to_call('send_text', $wa, $msg);
                 // O lembrete tambem e mensagem do robo: entra no log pelo
                 // mesmo caminho do resto (wa_registra_saida, em

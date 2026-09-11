@@ -34,7 +34,11 @@ $ENVIADAS = []; $ENVIADAS_TXT = []; $UPDATES = [];
 $LOG = [];
 wa_motor_set_deps([
     'select' => function ($t, $q) {
-        return $t === 'po_wa_textos' ? [['chave'=>'lembrete','texto'=>'Oi {nome}, tudo bem? So passando para saber se voce chegou a ver o roteiro que enviei.']] : [];
+        if ($t !== 'po_wa_textos') return [];
+        return [
+            ['chave'=>'lembrete',     'texto'=>'Oi {nome}, tudo bem? So passando para saber se voce chegou a ver o roteiro que enviei.'],
+            ['chave'=>'lembrete_menu','texto'=>'Oi {nome}, tudo bem? Mandei a lista das nossas proximas viagens. Quer que eu envie o roteiro completo de alguma delas?'],
+        ];
     },
     // O lembrete e gravado no log de saida por wa_registra_saida, que
     // tambem resolve pelo WA_DEPS. Sem este insert o teste sairia para a rede.
@@ -132,6 +136,25 @@ wa_timeout_set_deps([
 $r3 = wa_varre_timeouts($agora3);
 ok($r3['lembretes'] === 0, 'envio que falha nao conta como lembrete enviado');
 ok(count($UPDATES3) === 0, 'envio que falha nao grava lembrete_at, senao o lead encerraria sem ter recebido nada');
+
+/* --- cenario isolado: quem so viu o menu leva outro texto (revisao: Important 3)
+   O texto unico afirmava "o roteiro que enviei" para quem recebeu apenas a
+   lista de viagens: o robo dizia ter mandado algo que nunca mandou. */
+$CONVERSAS4 = [
+    ['wa_id'=>'+5548900000007','estado'=>'aguardando_roteiro','aguardando_desde'=>h($agora,25),'lembrete_at'=>null],
+];
+$ENVIADAS_TXT4 = [];
+wa_timeout_set_deps([
+    'select'    => function ($t, $q) use (&$CONVERSAS4) { return $t === 'po_wa_conversas' ? $CONVERSAS4 : []; },
+    'update'    => function ($t, $q, $c) { return true; },
+    'send_text' => function ($para, $txt) use (&$ENVIADAS_TXT4) { $ENVIADAS_TXT4[$para] = $txt; return ['ok'=>true,'wamid'=>'w','erro'=>null]; },
+]);
+$r4 = wa_varre_timeouts($agora);
+ok($r4['lembretes'] === 1, 'quem recebeu o menu tambem leva lembrete');
+ok(strpos($ENVIADAS_TXT4['+5548900000007'], 'lista das nossas proximas viagens') !== false,
+    'e o texto e o do menu, nao o do roteiro (veio: "' . ($ENVIADAS_TXT4['+5548900000007'] ?? '') . '")');
+ok(strpos($ENVIADAS_TXT4['+5548900000007'], 'roteiro que enviei') === false,
+    'o robo nao afirma ter enviado um roteiro que nunca enviou');
 
 // --- wa_cron_autorizado: segredo ausente ou fraco nunca autoriza (revisao: Critical) ---
 ok(wa_cron_autorizado('', '') === false, 'chave vazia nunca autoriza, nem contra pedido tambem vazio');

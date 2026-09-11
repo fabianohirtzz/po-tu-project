@@ -53,7 +53,7 @@ function wa_http_get_service($url) {
 
 $txt = json_decode(wa_http_get_service($base . 'po_wa_textos?select=chave') ?: '[]', true);
 $chaves = array_column($txt ?: [], 'chave');
-foreach (['saudacao','envio_pdf','perguntas','qualificado','menu','lembrete','sem_data'] as $k) {
+foreach (['saudacao','envio_pdf','perguntas','qualificado','menu','lembrete','lembrete_menu','sem_data'] as $k) {
     ok(in_array($k, $chaves, true), "texto inicial '$k' foi inserido");
 }
 
