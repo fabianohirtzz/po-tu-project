@@ -34,6 +34,18 @@ ok(count($dois) === 2, 'dois destinos citados devolvem dois slugs');
 // --- palavra curta nao pode casar por pedaco: "ar" nao e "Antalia"
 ok(wa_match_roteiros('ar', $cat) === [], 'fragmento curto nao casa');
 
+// --- bug real de revisao: substring casa palavra comum do portugues com
+// nome de destino. Palavra de 4+ letras tambem nao pode casar por pedaco.
+$catAsia = array_merge($cat, [['slug' => 'tesouros-asiaticos', 'titulo' => 'Tesouros Asiaticos']]);
+ok(wa_match_roteiros('preciso de uma cama de casal no hotel', $cat)     === [], 'cama nao e substring valida de atacama');
+ok(wa_match_roteiros('qual o caminho para chegar ai',        $cat)     === [], 'caminho nao e substring valida de caminhos');
+ok(wa_match_roteiros('tenho um parente que mora na asia',    $catAsia) === [], 'asia nao e substring valida de asiaticos');
+
+// --- a correcao acima nao pode quebrar o casamento legitimo pelo nome
+// inteiro do roteiro (o token "caminhos" virou palavra vazia, mas "india"
+// continua identificando o destino sozinho)
+ok(wa_match_roteiros('quero saber dos caminhos da india', $cat) === ['caminhos-da-india'], 'caminhos da india ainda casa pelo nome inteiro');
+
 // --- marcador do link do site tem prioridade e nunca vaza para o cliente
 ok(wa_slug_do_marcador('Quero saber do roteiro [r:turquia]') === 'turquia', 'le o marcador');
 ok(wa_slug_do_marcador('Quero saber do roteiro')             === null,      'sem marcador devolve null');
