@@ -143,6 +143,58 @@ ok($acao === 'enviou_roteiro', 'roteiro sem PDF ainda responde');
 ok($ENVIADAS[0][0] === 'text', 'sem PDF manda texto com o link');
 ok(strpos($ENVIADAS[0][2], '/roteiros/turquia') !== false, 'o link e o da pagina do roteiro');
 
+// --- 13. eco de atalho a partir de enviado_roteiro tambem silencia (revisao: Critical 1)
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $ENVIADAS = [];
+wa_motor_set_deps([
+    'roteiros' => function () {
+        return [['slug'=>'turquia','titulo'=>'Turquia com Antalia','pdf_url'=>'https://x/t.pdf','data_label'=>'10/05/27'],
+                ['slug'=>'escandinavia','titulo'=>'O melhor da Escandinavia','pdf_url'=>'https://x/e.pdf','data_label'=>'02/06/27']];
+    },
+]);
+wa_processar(ev('mensagem', 'quero saber da turquia'));
+ok($DB['po_wa_conversas'][0]['estado'] === 'enviado_roteiro', 'preparo: estado enviado_roteiro antes do eco');
+$ENVIADAS = [];
+$acao = wa_processar(ev('eco', '#proposta'));
+ok($acao === 'proposta', "atalho por eco continua movendo o funil (deu: $acao)");
+ok($DB['po_wa_conversas'][0]['estado'] === 'humano', 'o eco tambem silencia o robo, mesmo vindo de enviado_roteiro');
+$ENVIADAS = [];
+$acao = wa_processar(ev('mensagem', 'tenho sim, e ja viajei em grupo'));
+ok($acao === 'silenciado', "com humano no comando o robo nao qualifica por cima da dona (deu: $acao)");
+ok($ENVIADAS === [], 'nada enviado: o robo nao responde a uma pergunta que a humana ja esta tratando');
+ok($DB['po_wa_conversas'][0]['estado'] === 'humano', 'estado continua humano');
+
+// --- 14. eco de documento a partir de qualificado tambem silencia (revisao: Critical 1)
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $ENVIADAS = [];
+wa_processar(ev('mensagem', 'quero saber da turquia'));
+wa_processar(ev('mensagem', 'sim, e ja viajei em grupo'));
+ok($DB['po_wa_conversas'][0]['estado'] === 'qualificado', 'preparo: estado qualificado antes do eco');
+$ENVIADAS = [];
+$acao = wa_processar(ev('eco', 'proposta.pdf', ['tipo_msg' => 'document']));
+ok($acao === 'proposta', "documento por eco continua marcando proposta (deu: $acao)");
+ok($DB['po_wa_conversas'][0]['estado'] === 'humano', 'o eco tambem silencia o robo, mesmo vindo de qualificado');
+$ENVIADAS = [];
+$acao = wa_processar(ev('mensagem', 'oi, tudo bem?'));
+ok($acao === 'silenciado', "com humano no comando o robo nao reenvia o menu por cima da negociacao (deu: $acao)");
+ok($ENVIADAS === [], 'nada enviado: nem menu, nem qualquer outra coisa');
+ok($DB['po_wa_conversas'][0]['estado'] === 'humano', 'estado continua humano, nao volta para aguardando_roteiro');
+
+// --- 15. envio que falha nao avanca o estado nem marca o lead (revisao: Critical 2)
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $ENVIADAS = [];
+wa_motor_set_deps(['send_doc' => function ($para, $url, $arq, $leg) {
+    return ['ok' => false, 'wamid' => null, 'erro' => 'timeout'];
+}]);
+$acao = wa_processar(ev('mensagem', 'quero saber da turquia'));
+ok($acao === 'falha_envio', "envio que falha nao finge que o roteiro saiu (deu: $acao)");
+ok($DB['po_wa_conversas'][0]['estado'] === 'novo', 'estado NAO avancou para enviado_roteiro');
+ok(!isset($DB['po_leads'][0]['roteiro']), 'lead nao fica marcado com um roteiro que o cliente nunca recebeu');
+ok($ENVIADAS === [], 'as perguntas nao saem depois de um roteiro que falhou');
+// Restaura o envio de documento (nao ha teste depois que dependa disso, mas
+// evita que uma falha injetada aqui vaze pra frente se a ordem mudar).
+wa_motor_set_deps(['send_doc' => function ($para, $url, $arq, $leg) use (&$ENVIADAS) {
+    $ENVIADAS[] = ['doc', $para, $url, $leg];
+    return ['ok' => true, 'wamid' => 'w' . count($ENVIADAS), 'erro' => null];
+}]);
+
 // --- interpretacao de sim e nao
 ok(wa_resposta_sim('sim')                    === true,  'sim');
 ok(wa_resposta_sim('Tenho sim!')             === true,  'tenho sim');
@@ -150,5 +202,11 @@ ok(wa_resposta_sim('claro, pode ser')        === true,  'claro');
 ok(wa_resposta_sim('nao consigo nessa data') === false, 'nao');
 ok(wa_resposta_sim('infelizmente nao')       === false, 'infelizmente nao');
 ok(wa_resposta_sim('qual o valor?')          === null,  'pergunta nao e sim nem nao');
+
+// --- incerteza nao pode virar decisao (revisao: Important 2, medido com o publico real)
+ok(wa_resposta_sim('acho que sim, mas preciso ver com meu marido') === null, 'duvida com o marido nao qualifica sozinha');
+ok(wa_resposta_sim('nao sei ainda')                                === null, 'nao sei ainda nao e um nao');
+ok(wa_resposta_sim('sim, mas so em outubro')                       === null, 'confirmacao com ressalva de data fica em duvida');
+ok(wa_resposta_sim('pode ser que sim')                             === null, '"pode ser que" e duvida, diferente de "pode ser" sozinho');
 
 echo "test-wa-motor OK\n";
