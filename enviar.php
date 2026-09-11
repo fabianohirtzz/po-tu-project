@@ -114,9 +114,10 @@ $corpo .= "------------------------------------------\n";
 $corpo .= "Origem: " . campo('origem') . "\n";
 $corpo .= "Enviado em " . date('d/m/Y') . " as " . date('H:i') . "\n";
 
-// O nome entra no assunto para que cada lead vire um e-mail separado: assunto
-// idêntico faz o Gmail empilhar todos numa thread só e esconder os novos.
-$assunto = 'NOVO LEAD SITE PO TURISMO' . ($nome !== '' ? " — $nome" : '');
+// O roteiro e o nome entram no assunto para que cada lead vire um e-mail
+// separado: assunto idêntico faz o Gmail empilhar todos numa thread só e
+// esconder os novos. Caixa natural (não gritada) para não pontuar como spam.
+$assunto = 'Novo lead' . ($roteiro !== '' ? " — $roteiro" : '') . " — $nome";
 
 /* Grava no Supabase (po_leads) com a service_role key. Roda ANTES do e-mail
    para nunca perder o lead; não bloqueia o envio se falhar. */
@@ -175,6 +176,11 @@ try {
 
     $mail->setFrom($REMETENTE, $NOME_SITE);
     $mail->addAddress($DESTINO);
+    // Cópia oculta na conta do próprio domínio (entrega local, garantida): se o
+    // provedor do DESTINO filtrar/atrasar o e-mail, o lead nunca se perde.
+    if (strcasecmp($REMETENTE, $DESTINO) !== 0) {
+        $mail->addBCC($REMETENTE);
+    }
     if ($email !== '') {
         $mail->addReplyTo($email, $nome !== '' ? $nome : $email);
     }
