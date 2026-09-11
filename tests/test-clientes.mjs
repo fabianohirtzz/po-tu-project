@@ -68,4 +68,26 @@ assert.deepEqual(poAgrupaPessoas([]), [], 'lista vazia');
 assert.equal(poAgrupaPessoas([{id:9, tel:'—', nome:'(sem nome)', status:'novo', orc:0, ven:0, data:null}]).length,
   1, 'lead sem telefone e sem data ainda vira uma pessoa');
 
+// --- a ficha monta HTML seguro: nome e roteiro vem do WhatsApp, que e
+// dado de terceiro. Sem escapar, um nome com "<img onerror>" executa
+// script dentro do painel da cliente.
+const ctxUi = new Function(
+  pega('poDigitos') + pega('poChavePessoa') + pega('poAgrupaPessoas') +
+  pega('poLinhaPessoa') +
+  'function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c]));}' +
+  'function brl(n){return n>0?("R$ "+n):"—";}' +
+  'function fmtData(d){return d?"01 set":"—";}' +
+  '; return {poLinhaPessoa, poAgrupaPessoas};'
+)();
+
+const malicioso = ctxUi.poAgrupaPessoas([{
+  id: 1, tel: '(48) 99604-8882', nome: '<img src=x onerror=alert(1)>',
+  email: '', cidade: '', roteiro: '<script>', status: 'novo',
+  orc: 0, ven: 0, data: '2026-09-01T12:00:00Z', notas: [],
+}])[0];
+const html = ctxUi.poLinhaPessoa(malicioso);
+assert.ok(!html.includes('<img src=x'), 'nome de terceiro e escapado na lista');
+assert.ok(html.includes('&lt;img'), 'o nome aparece escapado, nao sumido');
+assert.ok(html.includes('data-chave="5548996048882"'), 'a linha carrega a chave da pessoa');
+
 console.log('test-clientes OK');

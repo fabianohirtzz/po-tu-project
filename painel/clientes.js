@@ -72,3 +72,91 @@ function poAgrupaPessoas(leads) {
   pessoas.sort((a, b) => String(b.ultimaData || '').localeCompare(String(a.ultimaData || '')));
   return pessoas;
 }
+
+/* ---------- lista de pessoas ---------- */
+
+/* Separada do render para poder ser testada: o nome vem do perfil do
+   WhatsApp, que e dado de terceiro, e precisa sair escapado. */
+function poLinhaPessoa(p) {
+  const etiqueta = p.temVenda
+    ? '<span class="cli-tag cli-tag--cliente">Cliente</span>'
+    : '<span class="cli-tag">Lead</span>';
+  const viagens = p.vendas === 1 ? '1 viagem' : p.vendas + ' viagens';
+  return '<tr data-chave="' + esc(p.chave) + '">' +
+    '<td><div class="c-name">' + esc(p.nome) + '</div>' +
+         '<div class="c-sub">' + esc(p.cidade || '—') + '</div></td>' +
+    '<td class="mono">' + esc(p.tel) + '</td>' +
+    '<td>' + etiqueta + '</td>' +
+    '<td class="mono">' + p.total + '</td>' +
+    '<td class="mono">' + (p.vendas ? viagens : '—') + '</td>' +
+    '<td class="money ' + (p.valorVendido ? '' : 'zero') + '">' + brl(p.valorVendido) + '</td>' +
+    '<td class="mono">' + fmtData(p.ultimaData) + '</td>' +
+    '</tr>';
+}
+
+function poPessoas() {
+  return poAgrupaPessoas(typeof filtered === 'function' ? filtered() : LEADS);
+}
+
+function poRenderClientes() {
+  const pessoas = poPessoas();
+  const tb = document.querySelector('#cli-rows');
+  if (!tb) return;
+  tb.innerHTML = pessoas.length
+    ? pessoas.map(poLinhaPessoa).join('')
+    : '<tr><td colspan="7"><div class="empty">Nenhum cliente com esses filtros.</div></td></tr>';
+  tb.querySelectorAll('tr[data-chave]').forEach(tr => {
+    tr.onclick = () => poAbreFicha(tr.dataset.chave);
+  });
+
+  const clientes = pessoas.filter(p => p.temVenda).length;
+  const faturado = pessoas.reduce((s, p) => s + p.valorVendido, 0);
+  document.querySelector('#cli-kpis').innerHTML =
+    '<div class="kpi"><div class="kpi-l">Pessoas</div><div class="kpi-n">' + pessoas.length + '</div>' +
+      '<div class="kpi-sub">' + clientes + ' ja compraram</div></div>' +
+    '<div class="kpi k-green"><div class="kpi-l">Ja viajaram</div><div class="kpi-n">' + clientes + '</div>' +
+      '<div class="kpi-sub">a melhor lista para o proximo roteiro</div></div>' +
+    '<div class="kpi k-green"><div class="kpi-l">Faturado</div><div class="kpi-n" style="font-size:1.7rem">' +
+      brl2(faturado) + '</div><div class="kpi-sub">soma de todas as vendas</div></div>';
+}
+
+/* ---------- ficha ---------- */
+function poAbreFicha(chave) {
+  const p = poPessoas().find(x => x.chave === chave);
+  if (!p) return;
+
+  document.querySelector('#fi-nome').textContent = p.nome;
+  document.querySelector('#fi-tel').textContent  = p.tel;
+  document.querySelector('#fi-mail').textContent = p.email || '—';
+  document.querySelector('#fi-cid').textContent  = p.cidade || '—';
+  document.querySelector('#fi-resumo').innerHTML =
+    '<b>' + p.total + '</b> ' + (p.total === 1 ? 'interesse' : 'interesses') +
+    ' · <b>' + p.vendas + '</b> ' + (p.vendas === 1 ? 'viagem feita' : 'viagens feitas') +
+    (p.valorVendido ? ' · <b>' + brl2(p.valorVendido) + '</b>' : '');
+
+  // Cada interesse abre a gaveta do lead correspondente, que ja existe e
+  // ja sabe editar status, valores, notas e (na Task 6) a conversa.
+  document.querySelector('#fi-leads').innerHTML = p.leads.map(l => {
+    const st = STATUS[l.status] || STATUS.semresposta;
+    return '<button class="fi-lead" data-id="' + esc(l.id) + '">' +
+      '<span class="fi-lead-d mono">' + esc(fmtData(l.data)) + '</span>' +
+      '<span class="fi-lead-r">' + esc(l.roteiro) + '</span>' +
+      '<span class="status-sel ' + st.cls + '">' + st.label + '</span>' +
+      '<span class="money ' + (l.ven ? '' : 'zero') + '">' + brl(l.ven || l.orc) + '</span>' +
+      '</button>';
+  }).join('');
+  document.querySelectorAll('#fi-leads .fi-lead').forEach(b => {
+    b.onclick = () => { poFechaFicha(); openDrawer(b.dataset.id); };
+  });
+
+  document.querySelector('#scrim').classList.add('on');
+  document.querySelector('#ficha').classList.add('on');
+}
+
+function poFechaFicha() {
+  document.querySelector('#ficha').classList.remove('on');
+  const gaveta = document.querySelector('#drawer');
+  if (!gaveta || !gaveta.classList.contains('on')) {
+    document.querySelector('#scrim').classList.remove('on');
+  }
+}
