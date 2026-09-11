@@ -460,6 +460,51 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
   Google proíbe estrela de review que a própria empresa controla; é violação com risco de
   ação manual. Avaliação no site é **conversão, não SEO**. Nota real **5,0** pode ser
   publicada; usar `<blockquote>` semântico.
+
+## Automação de WhatsApp + funil automático (11/09/2026)
+
+Projeto novo, vendido por **R$ 2.850 (3x) ou R$ 2.300 (2x)**, sem mensalidade. Proposta em
+`propostas.freelainhome.com.br/proposal-2w4UybS27p5Sotv6sc7hKoVc/`.
+Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
+
+- **Arquitetura:** Cloud API oficial da Meta em **modo de convivência** (a cliente segue
+  atendendo pelo app do celular; o mesmo número roda na API em paralelo). Motor próprio em
+  PHP no cPanel, **sem BSP e sem IA**. Descartados n8n (exige VPS, o cPanel não roda Node) e
+  ManyChat/BotConversa (mensalidade + ainda exigiriam a ponte com o Supabase).
+- **Custo:** lead vindo de anúncio Click-to-WhatsApp abre janela grátis de 72h; mensagem que
+  ela digita no app **nunca** é cobrada. O único custo real é a **transmissão** (~R$ 0,31 por
+  destinatário), porque a coexistência **desativa a lista de transmissão do app**.
+- **PLANO 1 DE 3 — MOTOR DA CONVERSA: FEITO E MERGEADO** (`main`, merge `14304be`).
+  8 tarefas em TDD, 13 arquivos de teste, revisão por tarefa + revisão final de branch.
+  Arquivos: `whatsapp.php` (webhook), `wa-cron.php`, `lib/wa-{config,db,send,fone,roteiro,
+  webhook,motor,timeout}.php`, migrations `2026-09-11-whatsapp-motor.sql` e
+  `2026-09-11-lembrete-menu.sql` (**as duas já rodadas no Supabase**).
+- **NADA FOI PARA PRODUÇÃO.** Não subir por FTP antes de preencher os segredos: com
+  `WA_APP_SECRET` e `WA_VERIFY_TOKEN` vazios o webhook **recusa tudo**, inclusive a
+  verificação do cadastro na Meta (segredo vazio nunca autoriza, por decisão de segurança).
+- **Regras permanentes deste subsistema:**
+  - **O eco (`smb_message_echoes`) silencia o robô para sempre naquele contato**, inclusive
+    quando o eco é atalho ou PDF. Robô e humana falando por cima uma da outra é o pior modo
+    de falha do sistema.
+  - **Estado só avança se o envio saiu** (`ok=true`, que garante `wamid`). Senão o lead fica
+    "aguardando resposta" de mensagem que nunca chegou e o cron o encerra.
+  - **Idempotência por `wamid`**, gravando antes de processar; `duplicado` pula, `falha`
+    processa assim mesmo (perder mensagem de cliente é pior que duplicar).
+  - **Só a pergunta da data desqualifica.** Quem tem data e nunca viajou em grupo é o
+    cliente-alvo, não um descarte. Incerteza ("não sei ainda") devolve `null` e não mexe no
+    funil.
+  - **Segredo vazio ou com menos de 16 caracteres nunca autoriza** (`hash_equals('','')` é
+    `true`; foi buraco real no webhook e no cron).
+  - **`po_config()` não expõe segredo** — é carregada no render público das páginas de
+    roteiro. Segredo vem de `wa_config()`, em `lib/wa-config.php`.
+  - Status do funil: `novo` (contato feito) → `atendimento` (qualificado) → `negociacao`
+    (proposta) → `venda`. `venda`/`venda_at` intocados, então ROAS e ciclo seguem valendo.
+- **Pendências conhecidas:** `docs/superpowers/reviews/2026-09-11-wa-motor-pendencias.md`.
+  As duas primeiras bloqueiam o go-live.
+- **Falta:** planos 2 (kanban + conversa no lead no painel) e 3 (importador de contatos +
+  transmissão), a conexão real com a Meta e a homologação.
+- **Aberto:** se o Embedded Signup da coexistência exige revisão de app da Meta. Se exigir,
+  entra uma etapa a mais antes de conectar.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro
