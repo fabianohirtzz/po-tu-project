@@ -217,6 +217,9 @@ wa_processar(ev('mensagem', 'quero saber da turquia'));
 $DB['po_wa_conversas'][0]['lembrete_at'] = gmdate('c', time() - 86400);
 wa_processar(ev('mensagem', 'oi, ainda estou pensando'));
 ok($DB['po_wa_conversas'][0]['lembrete_at'] === null, 'mensagem do cliente zera o lembrete_at');
+// E o aguardando_desde recomeca junto: zerar so o lembrete deixaria as 24h
+// ja vencidas e o cron mandaria outro lembrete na varredura seguinte.
+ok(strtotime($DB['po_wa_conversas'][0]['aguardando_desde']) >= time() - 5, 'e o relogio da espera recomeca junto');
 
 /* --- 20. catalogo vazio manda texto, nunca uma lista impossivel
    (revisao: Important 10). A Graph API recusa lista com zero linhas: a

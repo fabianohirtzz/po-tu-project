@@ -484,8 +484,15 @@ function wa_processar($ev) {
     // minutos antes (a varredura decide pelo lembrete_at e ignora o
     // aguardando_desde depois que ele existe).
     if (!empty($conv['lembrete_at'])) {
-        wa_conversa_set($wa_id, ['lembrete_at' => null]);
-        $conv['lembrete_at'] = null;
+        // O aguardando_desde reinicia junto, e nao por simetria: zerar so o
+        // lembrete_at deixaria a conversa com "esperando ha mais de 24h"
+        // ainda verdadeiro, e a varredura seguinte mandaria OUTRO lembrete
+        // na hora, e mais um a cada mensagem do cliente. O relogio
+        // recomecar e as duas coisas.
+        $agora = gmdate('c');
+        wa_conversa_set($wa_id, ['lembrete_at' => null, 'aguardando_desde' => $agora]);
+        $conv['lembrete_at']      = null;
+        $conv['aguardando_desde'] = $agora;
     }
 
     $roteiros = wa_call('roteiros');
