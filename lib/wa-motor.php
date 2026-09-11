@@ -123,14 +123,111 @@ function wa_tem_duvida($t) {
 }
 
 /* ---------- interpretacao de sim/nao ----------
-   Devolve true, false, ou null quando a mensagem nao e nenhum dos dois
-   (uma pergunta, por exemplo, ou duvida real). Null nunca avanca o
-   funil: preferimos deixar o lead parado a classifica-lo errado. */
-function wa_resposta_sim($texto) {
-    $t = wa_normaliza($texto);
-    if (wa_tem_duvida($t)) return null;
+   Devolve true, false, ou null quando o trecho nao e nenhum dos dois (uma
+   pergunta, por exemplo). Null nunca avanca o funil: preferimos deixar o
+   lead parado a classifica-lo errado. */
+function wa_sim_nao($t) {
     if (preg_match('/\b(nao|nunca|infelizmente|impossivel|nenhuma)\b/', $t)) return false;
     if (preg_match('/\b(sim|claro|tenho|posso|consigo|pode ser|isso|certo|perfeito|ja fui|ja viajei|ok)\b/', $t)) return true;
+    return null;
+}
+
+/* ---------- as duas perguntas, lidas separadamente ----------
+   As perguntas ("tem disponibilidade nessa data?" e "ja viajou em grupo?")
+   saem numa mensagem so, e a resposta volta numa mensagem so. Antes, um
+   unico veredicto plano decidia as duas, e o "nunca" da segunda jogava o
+   lead em perdido: "tenho disponibilidade sim, mas nunca viajei em grupo"
+   virava desqualificado. Numa operadora que VENDE viagem em grupo, quem
+   nunca viajou em grupo e o cliente-alvo, nao o descarte.
+
+   Quem desqualifica e SO a pergunta da data (spec, secao 5). A experiencia
+   previa em grupo e informacao complementar: entra no lead quando o
+   cliente falou dela, e fica null quando ninguem sabe.
+
+   A leitura e por oracao: a frase e quebrada, cada pedaco e classificado
+   pelo assunto (data, grupo ou solta) e so entao vira sim, nao ou null. */
+const WA_MARCAS_GRUPO = ['grupo', 'grupos', 'excursao', 'excursoes', 'viajei', 'viajamos', 'viajado', 'primeira vez'];
+const WA_MARCAS_DATA  = ['data', 'datas', 'disponibilidade', 'disponivel', 'periodo', 'agenda', 'livre', 'posso', 'consigo', 'nessa epoca'];
+
+function wa_oracoes($texto) {
+    // A quebra na pontuacao vem ANTES de wa_normaliza de proposito: a
+    // normalizacao troca toda pontuacao por espaco, e sem quebrar antes
+    // "tenho a data sim, mas nunca viajei em grupo" vira uma frase so,
+    // onde o "nunca" da segunda resposta contamina a primeira.
+    $oracoes = [];
+    foreach (preg_split('/[.,;:!?\r\n]+/u', (string) $texto) as $parte) {
+        $n = trim(wa_normaliza($parte));
+        if ($n === '') continue;
+        // "mas" e "e" separam as duas respostas tanto quanto a virgula
+        // ("posso sim e nunca viajei em grupo").
+        foreach (preg_split('/\b(?:mas|porem|e)\b/', $n) as $o) {
+            $o = trim($o);
+            if ($o !== '') $oracoes[] = $o;
+        }
+    }
+    return $oracoes;
+}
+
+function wa_assunto_oracao($o) {
+    // Grupo primeiro: a marca de grupo e mais especifica, entao uma oracao
+    // que fala das duas coisas conta como resposta da segunda pergunta.
+    foreach (WA_MARCAS_GRUPO as $m) if (preg_match('/\b' . $m . '\b/', $o)) return 'grupo';
+    foreach (WA_MARCAS_DATA  as $m) if (preg_match('/\b' . $m . '\b/', $o)) return 'data';
+    return 'solta';
+}
+
+/* Quando a pessoa numera ("1 sim 2 nao"), a numeracao e a evidencia mais
+   forte que existe: cada numero aponta uma pergunta. So vale se pelo menos
+   um dos dois lados decidir algo, senao "1 pessoa e 2 quartos" viraria
+   resposta das perguntas. */
+function wa_respostas_numeradas($texto) {
+    $n = wa_normaliza($texto);
+    if (!preg_match('/\b1\b\s*(.*?)\s*\b2\b\s*(.*)$/', $n, $m)) return null;
+    $d = wa_sim_nao(trim($m[1]));
+    $g = wa_sim_nao(trim($m[2]));
+    if ($d === null && $g === null) return null;
+    return ['data' => $d, 'grupo' => $g];
+}
+
+/* Pergunta 1: disponibilidade na data. E a unica que desqualifica. */
+function wa_resposta_data($texto) {
+    // Duvida em qualquer ponto da mensagem derruba a data para null: "sim,
+    // mas so em outubro" e "acho que sim, preciso ver com meu marido" nao
+    // decidiram nada. Null nao classifica ninguem, fica para a humana.
+    if (wa_tem_duvida(wa_normaliza($texto))) return null;
+
+    $num = wa_respostas_numeradas($texto);
+    if ($num && $num['data'] !== null) return $num['data'];
+
+    // A oracao que fala de data manda. Sem nenhuma, vale a primeira oracao
+    // solta: a resposta da pergunta 1 vem primeiro na frase quase sempre.
+    $solta = null;
+    foreach (wa_oracoes($texto) as $o) {
+        $assunto = wa_assunto_oracao($o);
+        if ($assunto === 'data') {
+            $v = wa_sim_nao($o);
+            if ($v !== null) return $v;
+        } elseif ($assunto === 'solta' && $solta === null) {
+            $solta = wa_sim_nao($o);
+        }
+    }
+    return $solta;
+}
+
+/* Pergunta 2: ja viajou em grupo. Nunca desqualifica, e so aceita
+   evidencia explicita: um "sim" solto responde a pergunta 1, e carimbar
+   qualif_grupo com ele seria inventar um dado que a dona vai ler no painel
+   como se tivesse saido da boca do cliente. */
+function wa_resposta_grupo($texto) {
+    $num = wa_respostas_numeradas($texto);
+    if ($num && $num['grupo'] !== null) return $num['grupo'];
+
+    foreach (wa_oracoes($texto) as $o) {
+        if (wa_assunto_oracao($o) === 'grupo') {
+            $v = wa_sim_nao($o);
+            if ($v !== null) return $v;
+        }
+    }
     return null;
 }
 
@@ -300,7 +397,8 @@ function wa_processar($ev) {
 
     // Já mandou o roteiro: o que chega agora e resposta das perguntas.
     if (($conv['estado'] ?? '') === 'enviado_roteiro') {
-        $r = wa_resposta_sim($texto);
+        $r     = wa_resposta_data($texto);
+        $grupo = wa_resposta_grupo($texto);
         if ($r === false) {
             // Manda primeiro, avanca o estado so se saiu: um envio que
             // falhou nao pode gravar "perdido" no lead como se a cliente
@@ -312,7 +410,9 @@ function wa_processar($ev) {
                 return 'falha_envio';
             }
             wa_conversa_set($wa_id, ['estado' => 'desqualificado']);
-            wa_lead_set($wa_id, ['status' => 'perdido', 'qualif_data' => false]);
+            $campos = ['status' => 'perdido', 'qualif_data' => false];
+            if ($grupo !== null) $campos['qualif_grupo'] = $grupo;
+            wa_lead_set($wa_id, $campos);
             return 'desqualificou';
         }
         if ($r === true) {
@@ -322,12 +422,17 @@ function wa_processar($ev) {
                 return 'falha_envio';
             }
             wa_conversa_set($wa_id, ['estado' => 'qualificado']);
-            wa_lead_set($wa_id, [
-                'status'       => 'atendimento',
-                'qualif_data'  => true,
-                'qualif_grupo' => true,
-                'qualif_at'    => gmdate('c'),
-            ]);
+            // Data confirmada qualifica, tenha o cliente viajado em grupo
+            // antes ou nao. qualif_grupo so e gravado quando existe
+            // evidencia: sem ela a coluna fica como estava, em vez de
+            // receber um true que ninguem disse.
+            $campos = [
+                'status'      => 'atendimento',
+                'qualif_data' => true,
+                'qualif_at'   => gmdate('c'),
+            ];
+            if ($grupo !== null) $campos['qualif_grupo'] = $grupo;
+            wa_lead_set($wa_id, $campos);
             return 'qualificou';
         }
         // Nem sim nem nao (uma pergunta, por exemplo): nao classifica

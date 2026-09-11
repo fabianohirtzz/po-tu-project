@@ -195,18 +195,56 @@ wa_motor_set_deps(['send_doc' => function ($para, $url, $arq, $leg) use (&$ENVIA
     return ['ok' => true, 'wamid' => 'w' . count($ENVIADAS), 'erro' => null];
 }]);
 
-// --- interpretacao de sim e nao
-ok(wa_resposta_sim('sim')                    === true,  'sim');
-ok(wa_resposta_sim('Tenho sim!')             === true,  'tenho sim');
-ok(wa_resposta_sim('claro, pode ser')        === true,  'claro');
-ok(wa_resposta_sim('nao consigo nessa data') === false, 'nao');
-ok(wa_resposta_sim('infelizmente nao')       === false, 'infelizmente nao');
-ok(wa_resposta_sim('qual o valor?')          === null,  'pergunta nao e sim nem nao');
+// --- interpretacao da resposta sobre a data (a unica que desqualifica)
+ok(wa_resposta_data('sim')                    === true,  'sim');
+ok(wa_resposta_data('Tenho sim!')             === true,  'tenho sim');
+ok(wa_resposta_data('claro, pode ser')        === true,  'claro');
+ok(wa_resposta_data('nao consigo nessa data') === false, 'nao');
+ok(wa_resposta_data('infelizmente nao')       === false, 'infelizmente nao');
+ok(wa_resposta_data('qual o valor?')          === null,  'pergunta nao e sim nem nao');
 
 // --- incerteza nao pode virar decisao (revisao: Important 2, medido com o publico real)
-ok(wa_resposta_sim('acho que sim, mas preciso ver com meu marido') === null, 'duvida com o marido nao qualifica sozinha');
-ok(wa_resposta_sim('nao sei ainda')                                === null, 'nao sei ainda nao e um nao');
-ok(wa_resposta_sim('sim, mas so em outubro')                       === null, 'confirmacao com ressalva de data fica em duvida');
-ok(wa_resposta_sim('pode ser que sim')                             === null, '"pode ser que" e duvida, diferente de "pode ser" sozinho');
+ok(wa_resposta_data('acho que sim, mas preciso ver com meu marido') === null, 'duvida com o marido nao qualifica sozinha');
+ok(wa_resposta_data('nao sei ainda')                                === null, 'nao sei ainda nao e um nao');
+ok(wa_resposta_data('sim, mas so em outubro')                       === null, 'confirmacao com ressalva de data fica em duvida');
+ok(wa_resposta_data('pode ser que sim')                             === null, '"pode ser que" e duvida, diferente de "pode ser" sozinho');
+
+/* --- "tenho a data, mas nunca viajei em grupo" e lead BOM (revisao: Critical 2)
+   Sao as quatro frases medidas na revisao, que antes viravam todas
+   desqualificado + perdido. Numa operadora que vende viagem em grupo,
+   quem nunca viajou em grupo e exatamente o cliente-alvo. */
+$mistas = [
+    'Tenho disponibilidade sim, mas nunca viajei em grupo',
+    'Tenho a data sim. Nunca viajei em grupo, seria a primeira vez',
+    '1 sim 2 nao',
+    'Posso sim, e nao, nunca viajei em grupo',
+];
+foreach ($mistas as $frase) {
+    ok(wa_resposta_data($frase)  === true,  "a data esta confirmada em: $frase");
+    ok(wa_resposta_grupo($frase) === false, "e o 'nunca em grupo' fica so como informacao em: $frase");
+}
+
+// Um "sim" solto responde a pergunta 1. A 2 continua sem resposta: carimbar
+// qualif_grupo aqui seria inventar dado que a dona le no painel como do cliente.
+ok(wa_resposta_data('sim')  === true, 'sim solto confirma a data');
+ok(wa_resposta_grupo('sim') === null, 'sim solto NAO diz nada sobre viagem em grupo');
+ok(wa_resposta_grupo('sim, ja viajei em grupo') === true, 'evidencia explicita de grupo e lida');
+
+// --- 16. resposta mista qualifica pelo lado da data (revisao: Critical 2)
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $ENVIADAS = [];
+wa_processar(ev('mensagem', 'quero saber da turquia'));
+$ENVIADAS = [];
+$acao = wa_processar(ev('mensagem', 'Tenho disponibilidade sim, mas nunca viajei em grupo'));
+ok($acao === 'qualificou', "tem data e nunca viajou em grupo QUALIFICA (deu: $acao)");
+ok($DB['po_leads'][0]['status'] === 'atendimento', 'lead vai para atendimento, nao para perdido');
+ok($DB['po_leads'][0]['qualif_data'] === true, 'carimba a data');
+ok($DB['po_leads'][0]['qualif_grupo'] === false, 'e registra que nunca viajou em grupo, sem desqualificar');
+
+// --- 17. "sim" solto qualifica sem inventar o dado do grupo
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $ENVIADAS = [];
+wa_processar(ev('mensagem', 'quero saber da turquia'));
+$acao = wa_processar(ev('mensagem', 'sim'));
+ok($acao === 'qualificou', "sim solto qualifica (deu: $acao)");
+ok(!array_key_exists('qualif_grupo', $DB['po_leads'][0]), 'qualif_grupo nao e gravado sem evidencia');
 
 echo "test-wa-motor OK\n";
