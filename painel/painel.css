@@ -463,3 +463,20 @@ tbody tr:last-child td{border-bottom:none}
   background:var(--surface);border:1px solid var(--border);font-size:.78rem;color:var(--ink)}
 .ic-campo--vazio{color:var(--muted);font-style:italic}
 #ic-fusoes td{vertical-align:top;white-space:normal}
+
+/* ===== REVISAO DE CONTATOS IMPORTADOS (task 4, spec 8.1) ===== */
+/* O contador fica na propria navegacao porque a fila e uma pendencia, nao um
+   relatorio: sem ele, a cliente so descobre que ha contato esperando se abrir
+   a aba por acaso — e contato nao revisado nunca entra em campanha. */
+.nav-count{margin-left:auto;background:var(--azul);color:#fff;font-family:var(--font-mono);
+  font-size:.62rem;font-weight:500;line-height:1;padding:3px 7px;border-radius:9px}
+/* .btn-primary tem flex:1 para esticar no rodape da gaveta; aqui os dois
+   botoes ficam do tamanho do proprio texto. */
+.rev-acoes{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.rev-acoes .btn{flex:0 0 auto}
+/* A tabela geral tem min-width:900px por causa das 11 colunas dos leads.
+   Aqui sao 4: forcar 900px so criaria rolagem lateral a toa no celular. */
+#view-revisao table{min-width:520px}
+#view-revisao .rev-chk-col{width:40px}
+#view-revisao tbody tr{cursor:default}
+.rev-chk,#rev-todos{width:16px;height:16px;cursor:pointer;accent-color:var(--azul)}

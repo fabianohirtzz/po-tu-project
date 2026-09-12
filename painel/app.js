@@ -97,6 +97,10 @@ async function loadData(){
   spend={};(spendData||[]).forEach(s=>{spend[s.month]=Number(s.amount)||0;});
   ROTEIROS=rotData||[];
   buildMonths();renderLeads();renderRoteiros();
+  /* O contador da fila de revisao vive na navegacao: precisa ser preenchido
+     na carga, senao a cliente so descobre que ha contato esperando se abrir
+     a aba por acaso — e o contato nao revisado nao entra em campanha. */
+  if(typeof poRenderRevisao==='function')poRenderRevisao();
 }
 function classifyChannel(r){
   if(r.gclid) return 'pago';
@@ -116,7 +120,10 @@ function mapRow(r){
     camp:r.utm_campaign||r.origem||'—',land:r.landing_page||'—',
     status:r.status||'semresposta',orc:Number(r.orcamento)||0,ven:Number(r.venda)||0,
     notas:Array.isArray(r.notas)?r.notas:[],vendaAt:r.venda_at||null,
-    waId:r.wa_id||''};
+    waId:r.wa_id||'',
+    /* Triagem dos contatos importados (spec 8.1). origemImport vazio = lead do
+       formulario do site, que nunca passa pela fila de revisao. */
+    origemImport:r.origem_import||'',revisado:r.revisado===true,cliente:r.cliente===true};
 }
 function buildMonths(){
   const set=[...new Set(LEADS.map(l=>monthKey(l.data)).filter(Boolean))].sort().reverse();
@@ -146,18 +153,27 @@ $('#nav-toggle').onclick=()=>{$('#side-nav').classList.contains('on')?fechaSide(
 $$('.nav-item').forEach(b=>b.onclick=()=>{
   $$('.nav-item').forEach(x=>x.classList.remove('active'));b.classList.add('active');
   const v=b.dataset.view;$$('.view').forEach(x=>x.classList.remove('on'));
-  $('#month-box').style.visibility=(v==='roteiros'||v==='importar')?'hidden':'visible';
+  $('#month-box').style.visibility=(v==='roteiros'||v==='importar'||v==='revisao')?'hidden':'visible';
   if(v==='leads'){$('#view-leads').classList.add('on');$('#top-title').innerHTML='Leads<span>.</span>';renderLeads();}
   else if(v==='reports'){$('#view-reports').classList.add('on');$('#top-title').innerHTML='Relatórios<span>.</span>';renderReports();}
   else if(v==='clientes'){$('#view-clientes').classList.add('on');$('#top-title').innerHTML='Clientes<span>.</span>';if(typeof poRenderClientes==='function')poRenderClientes();}
   else if(v==='funil'){$('#view-funil').classList.add('on');$('#top-title').innerHTML='Funil<span>.</span>';if(typeof poRenderFunil==='function')poRenderFunil();}
   else if(v==='importar'){$('#view-importar').classList.add('on');$('#top-title').innerHTML='Importar<span>.</span>';if(typeof poRenderImportar==='function')poRenderImportar();}
+  else if(v==='revisao'){$('#view-revisao').classList.add('on');$('#top-title').innerHTML='Revisão<span>.</span>';if(typeof poRenderRevisao==='function')poRenderRevisao();}
   else{$('#view-roteiros').classList.add('on');$('#top-title').innerHTML='Roteiros<span>.</span>';renderRoteiros();}
   fechaSide();
 });
 $('#month-sel').onchange=e=>{F.month=e.target.value;syncSpendInput();renderLeads();if($('#view-reports').classList.contains('on'))renderReports();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();};
 $('#q').oninput=e=>{F.q=e.target.value;renderLeads();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();};
 $('#status-filter').onchange=e=>{F.status=e.target.value;renderLeads();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();};
+/* Fila de revisao dos contatos importados (spec 8.1). Os dois botoes marcam
+   revisado=true — a revisao aconteceu com qualquer resposta; o que muda e se
+   a pessoa entra em campanha (cliente=true) ou fica na base fora de disparo
+   (cliente=false). Marcar "nao e cliente" nunca apaga ninguem. */
+$('#rev-cliente').onclick=()=>poRevMarcar(true);
+$('#rev-naocliente').onclick=()=>poRevMarcar(false);
+$('#rev-todos').onchange=e=>$$('#rev-rows .rev-chk').forEach(c=>{c.checked=e.target.checked;});
+
 $$('#orig-filter .chip').forEach(c=>c.onclick=()=>{$$('#orig-filter .chip').forEach(x=>x.classList.remove('active'));c.classList.add('active');F.orig=c.dataset.orig;renderLeads();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();});
 
 /* ============================================================ LEADS */
