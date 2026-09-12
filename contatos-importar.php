@@ -31,6 +31,11 @@ require_once __DIR__ . '/lib/wa-db.php';     // ja carrega o lib/wa-config.php
 const CI_MAX_BYTES = 8 * 1024 * 1024;   // agenda inteira em vCard da ~1 MB
 const CI_PAGINA    = 1000;              // paginacao da leitura da base
 
+/* Prazo da reserva do lote. Enquanto uma linha reservada for mais nova que
+   isto, outra requisicao do MESMO arquivo e tratada como "pode estar
+   rodando" e recusada. Passado o prazo, a linha e orfa e libera o retry. */
+const CI_LOTE_LEASE = 600;              // 10 min
+
 header('Content-Type: application/json; charset=utf-8');
 
 /* A mensagem de erro NUNCA carrega trecho do arquivo: sao nome, telefone,
@@ -48,6 +53,43 @@ function cpost($k) {
     $v = $_POST[$k] ?? '';
     return is_string($v) ? trim($v) : '';
 }
+
+/* Estado de um lote ja registrado, para a guarda de idempotencia:
+
+     ausente    nunca foi importado
+     concluido  importacao terminou por inteiro
+     andamento  linha RESERVADA ha pouco: outra requisicao pode estar
+                escrevendo os leads agora mesmo
+     orfao      linha reservada ha muito tempo e nunca concluida: a
+                importacao morreu no meio (fatal, max_execution_time) e a
+                cliente pode tentar de novo sem precisar do forcar
+
+   O relogio e o unico jeito de separar 'andamento' de 'orfao' sem um
+   heartbeat, que este projeto nao tem. CI_LOTE_LEASE e folgado de proposito:
+   o PHP da hospedagem morre muito antes disso, entao uma linha mais velha que
+   o prazo esta orfa de verdade. */
+function ci_lote_estado($hash) {
+    $r = wa_db_select_estrito('po_import_lotes',
+        'select=id,created_at,concluido_at&hash=eq.' . rawurlencode($hash) . '&limit=1');
+    /* Leitura ESTRITA, pelo mesmo motivo da base: o wa_db_select comum
+       devolve [] tanto para "nao achei" quanto para "o Supabase recusou".
+       Tratar erro como "nao achei" aqui e concluir que o lote e novo com o
+       banco fora do ar - exatamente a duplicacao que esta guarda impede. */
+    if ($r === null) return null;
+    if (!$r)         return ['estado' => 'ausente'];
+
+    $l = is_array($r[0] ?? null) ? $r[0] : [];
+    if (!empty($l['concluido_at'])) return ['estado' => 'concluido', 'linha' => $l];
+
+    $t = strtotime((string) ($l['created_at'] ?? ''));
+    // created_at ilegivel conta como 'andamento': na duvida, nao deixar
+    // escrever por cima de uma importacao que pode estar correndo.
+    $vivo = ($t === false) || (time() - $t < CI_LOTE_LEASE);
+    return ['estado' => $vivo ? 'andamento' : 'orfao', 'linha' => $l];
+}
+
+/* Instante atual em ISO 8601 UTC, do jeito que o PostgREST aceita. */
+function ci_agora() { return gmdate('Y-m-d\TH:i:s\Z'); }
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') cfail(405, 'Metodo nao permitido.');
 
@@ -123,24 +165,28 @@ if (function_exists('mb_check_encoding') && !mb_check_encoding($texto, 'UTF-8'))
    nenhum - essas nao casam com nada na segunda passada e entrariam
    duplicadas, sem nenhum sinal.
 
-   A conferencia vem ANTES da leitura da base: quem esta no retry ja perdeu
-   uma vez, e nao ha por que ler 800 leads para depois recusar. */
+   Esta conferencia pega o retry disparado DEPOIS que a primeira importacao
+   terminou, e vem ANTES da leitura da base porque quem esta no retry ja
+   perdeu uma vez e nao ha por que ler 800 leads para so entao recusar.
+   O retry disparado COM A PRIMEIRA AINDA RODANDO nao se resolve aqui - para
+   esse existe a reserva do lote, mais abaixo. */
 $hash   = wa_import_hash_lote($texto, $origem);
 $forcar = cpost('forcar') === '1';
+$lote   = ['estado' => 'ausente'];
 
 if ($modo === 'aplicar' && !$forcar) {
-    /* Leitura ESTRITA, pelo mesmo motivo da base: o wa_db_select comum
-       devolve [] tanto para "nao achei" quanto para "o Supabase recusou".
-       Tratar erro como "nao achei" aqui e concluir que o lote e novo com o
-       banco fora do ar - exatamente a duplicacao que esta guarda impede. */
-    $ja = wa_db_select_estrito('po_import_lotes',
-        'select=id,created_at&hash=eq.' . rawurlencode($hash) . '&limit=1');
-    if ($ja === null) {
+    $lote = ci_lote_estado($hash);
+    if ($lote === null) {
         cfail(503, 'Nao consegui conferir se este arquivo ja foi importado. Nada foi gravado. Tente de novo em instantes.');
     }
-    if (!empty($ja)) {
+    if ($lote['estado'] === 'concluido') {
         cfail(409, 'Este arquivo ja foi importado nesta origem. Se quiser importar mesmo assim, marque "importar novamente".');
     }
+    if ($lote['estado'] === 'andamento') {
+        cfail(409, 'Uma importacao deste mesmo arquivo comecou ha pouco e pode ainda estar rodando. Espere ela terminar e confira a base antes de tentar de novo.');
+    }
+    // 'orfao' segue adiante: a tentativa anterior morreu no meio e a cliente
+    // tem direito de tentar de novo sem precisar do forcar.
 }
 /* O preview NUNCA passa por aqui de proposito: ver de novo o que o arquivo
    faria nao escreve nada, entao recusar seria so atrapalhar. */
@@ -205,29 +251,86 @@ if ($modo === 'preview') {
     exit;
 }
 
+/* ============================================================
+   FASE 1 DO REGISTRO: RESERVA a linha do lote ANTES de escrever lead nenhum.
+
+   Registrar so no fim (o desenho anterior) fecha apenas o retry disparado
+   depois que tudo terminou, que e o caso facil. O caso que o timeout produz
+   e o outro: o fetch estoura DURANTE a escrita - o proxy do host corta a
+   conexao e o PHP nem percebe, porque so responde no fim -, o botao volta a
+   ficar clicavel e a segunda requisicao consulta a po_import_lotes ANTES de
+   a primeira registrar o lote. As duas passam pela guarda e a base duplica.
+
+   O unique em 'hash' e o lock: das duas requisicoes concorrentes, so uma
+   consegue inserir. A outra para aqui, com 409, sem escrever lead nenhum.
+   A linha so ganha concluido_at na fase 2, entao uma importacao que morrer
+   no meio deixa linha incompleta - que depois do prazo vira orfa e libera o
+   retry, preservando a intencao do desenho original. */
+$arquivoNome = substr((string) ($_FILES['arquivo']['name'] ?? ''), 0, 120);
+
+if ($lote['estado'] === 'orfao') {
+    /* Orfa: o insert bateria no unique da linha que ficou para tras. Aqui a
+       reserva e reivindicar a linha existente, renovando o relogio para que
+       uma terceira requisicao veja 'andamento' enquanto esta escreve. */
+    if (!wa_db_update('po_import_lotes', 'hash=eq.' . rawurlencode($hash), [
+            'origem'       => $origem,
+            'arquivo'      => $arquivoNome,
+            'total'        => $resumo['total'] ?? 0,
+            'novos'        => 0,
+            'preenchidos'  => 0,
+            'concluido_at' => null,
+            'created_at'   => ci_agora(),
+        ])) {
+        cfail(503, 'Nao consegui reservar o registro desta importacao. Nada foi gravado.');
+    }
+} else {
+    /* Sem $ignora_conflito de proposito: aqui o 409 do unique NAO e rotina,
+       e o sinal de que outra requisicao ganhou a corrida. */
+    $reserva = wa_db_insert('po_import_lotes', [
+        'hash'        => $hash,
+        'origem'      => $origem,
+        'arquivo'     => $arquivoNome,   // so o nome; o conteudo tem CPF e telefone
+        'total'       => $resumo['total'] ?? 0,
+        'novos'       => 0,              // a contagem real entra na fase 2
+        'preenchidos' => 0,
+    ]);
+    if ($reserva === null) {
+        /* null e ambiguo: conflito no unique (alguem chegou primeiro, ou -
+           com forcar - a linha da importacao anterior) ou falha de verdade
+           do banco. Quem distingue os dois e reler o estado. */
+        $dep = ci_lote_estado($hash);
+        if ($dep === null || $dep['estado'] === 'ausente') {
+            cfail(503, 'Nao consegui reservar o registro desta importacao. Nada foi gravado.');
+        }
+        if (!$forcar) {
+            cfail(409, 'Uma importacao deste mesmo arquivo comecou ha pouco e pode ainda estar rodando. Espere ela terminar e confira a base antes de tentar de novo.');
+        }
+        // Com forcar, a linha que conflitou e a da importacao anterior: a
+        // fase 2 fecha em cima dela, com a contagem nova.
+    }
+}
+
 $res = wa_import_aplica(
     $plano,
     fn($linha) => wa_db_insert('po_leads', $linha),
     fn($id, $campos) => wa_db_update('po_leads', 'id=eq.' . rawurlencode((string) $id), $campos)
 );
 
-/* Grava o lote DEPOIS da escrita: se a importacao morreu no meio, o lote nao
-   fica registrado e a cliente consegue tentar de novo sem precisar do forcar.
-   Registrar antes trocaria o problema de lado - a base ficaria pela metade e
-   a segunda tentativa levaria 409.
+/* FASE 2: fecha o registro com a contagem real. Se este update nao passar, os
+   leads ja estao gravados e a linha fica incompleta - depois do prazo ela
+   vira orfa e libera um retry que duplicaria a base. Por isso o
+   'lote_registrado' vai no JSON: a tela precisa poder avisar, em vez de o
+   unico rastro ser um error_log que ninguem le. */
+$fechou = wa_db_update('po_import_lotes', 'hash=eq.' . rawurlencode($hash), [
+    'total'        => $resumo['total'] ?? 0,
+    'novos'        => $res['novos'] ?? 0,
+    'preenchidos'  => $res['preenchidos'] ?? 0,
+    'concluido_at' => ci_agora(),
+]);
 
-   Sem o conteudo do arquivo, so o hash dele: nome, telefone e CPF de cliente
-   nao tem por que morar numa tabela de log. $ignora_conflito=true porque o
-   unique em 'hash' E a idempotencia: dois cliques simultaneos fazem o
-   segundo insert bater no unique, e isso e o comportamento esperado, nao
-   erro que deva derrubar uma importacao que ja escreveu. */
-wa_db_insert('po_import_lotes', [
-    'hash'        => $hash,
-    'origem'      => $origem,
-    'arquivo'     => substr((string) ($_FILES['arquivo']['name'] ?? ''), 0, 120),
-    'total'       => $resumo['total'] ?? 0,
-    'novos'       => $res['novos'] ?? 0,
-    'preenchidos' => $res['preenchidos'] ?? 0,
-], true);
-
-echo json_encode(['ok' => true, 'resumo' => $resumo, 'aplicado' => $res], JSON_UNESCAPED_UNICODE);
+echo json_encode([
+    'ok'              => true,
+    'resumo'          => $resumo,
+    'aplicado'        => $res,
+    'lote_registrado' => $fechou === true,
+], JSON_UNESCAPED_UNICODE);

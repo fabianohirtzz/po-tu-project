@@ -29,6 +29,15 @@ function ci_lead($i = 'L1') {
             'status'=>'venda', 'venda'=>5000, 'notas'=>[]];
 }
 
+/* Uma linha de po_import_lotes. $concluido nulo = reserva ainda aberta (a
+   importacao esta rodando, ou morreu no meio); $criado diz ha quanto tempo a
+   reserva foi feita, que e o que separa "em andamento" de "orfa". */
+function ci_lote_row($concluido, $criado) {
+    return ['id'=>'LOTE-1',
+            'created_at'   => gmdate('Y-m-d\TH:i:s\Z', strtotime($criado)),
+            'concluido_at' => $concluido ? gmdate('Y-m-d\TH:i:s\Z', strtotime($concluido)) : null];
+}
+
 /* ============================================================
    FILHO: monta a requisicao e roda o endpoint.
 ============================================================ */
@@ -67,25 +76,63 @@ function ci_filho($caso) {
            novo o que o arquivo faria nao escreve nada, entao a guarda nao
            pode barrar. */
         case 'lote-repetido':
-        case 'lote-consulta-falha':   $_POST['modo'] = 'aplicar'; break;
+        case 'lote-consulta-falha':
+        case 'lote-em-andamento':
+        case 'lote-orfao':
+        case 'lote-corrida':
+        case 'lote-reserva-falha':
+        case 'lote-fecha-falha':      $_POST['modo'] = 'aplicar'; break;
         case 'lote-repetido-forcado': $_POST['modo'] = 'aplicar'; $_POST['forcar'] = '1'; break;
         case 'lote-repetido-preview': $_POST['modo'] = 'preview'; break;
     }
 
-    wa_db_set_transport(function ($metodo, $url, $corpo, $headers) use ($caso, &$chamadas) {
+    $lotesGet = 0;   // a corrida precisa responder diferente na releitura
+
+    wa_db_set_transport(function ($metodo, $url, $corpo, $headers) use ($caso, &$chamadas, &$lotesGet) {
         $chamadas[] = ['metodo'=>$metodo, 'url'=>$url, 'corpo'=>$corpo];  // headers NUNCA
 
-        /* A consulta do lote e uma tabela diferente da base: responder as
-           duas pelo mesmo ramo faria o teste passar por acidente. */
-        if ($metodo === 'GET' && strpos($url, 'po_import_lotes') !== false) {
-            if ($caso === 'lote-consulta-falha') {
-                return ['status'=>503, 'body'=>'{"message":"service unavailable"}'];
+        /* A po_import_lotes e uma tabela diferente da base: responder as duas
+           pelo mesmo ramo faria o teste passar por acidente. */
+        if (strpos($url, 'po_import_lotes') !== false) {
+            if ($metodo === 'GET') {
+                $lotesGet++;
+                if ($caso === 'lote-consulta-falha') {
+                    return ['status'=>503, 'body'=>'{"message":"service unavailable"}'];
+                }
+                // A CORRIDA: na primeira consulta nao ha lote nenhum; quando a
+                // reserva bate no unique e o endpoint rele, a linha da outra
+                // requisicao ja esta la, recem-criada.
+                if ($caso === 'lote-corrida') {
+                    return ['status'=>200, 'body'=>json_encode(
+                        $lotesGet === 1 ? [] : [ci_lote_row(null, '-30 seconds')])];
+                }
+                if ($caso === 'lote-reserva-falha') return ['status'=>200, 'body'=>'[]'];
+                if ($caso === 'lote-em-andamento') {
+                    // Reservado ha 30s e ainda sem concluido_at: a primeira
+                    // requisicao pode estar escrevendo os leads AGORA.
+                    return ['status'=>200, 'body'=>json_encode([ci_lote_row(null, '-30 seconds')])];
+                }
+                if ($caso === 'lote-orfao') {
+                    // Reservado ha 3h e nunca concluido: morreu no meio.
+                    return ['status'=>200, 'body'=>json_encode([ci_lote_row(null, '-3 hours')])];
+                }
+                if (in_array($caso, ['lote-repetido', 'lote-repetido-preview',
+                                     'lote-repetido-forcado'], true)) {
+                    return ['status'=>200, 'body'=>json_encode([ci_lote_row('-2 days', '-2 days')])];
+                }
+                return ['status'=>200, 'body'=>'[]'];      // nunca importado
             }
-            $repetido = in_array($caso, ['lote-repetido', 'lote-repetido-preview',
-                                         'lote-repetido-forcado'], true);
-            return ['status'=>200, 'body'=>json_encode(
-                $repetido ? [['id'=>'LOTE-1', 'created_at'=>'2026-09-11T14:00:00+00:00']] : []
-            )];
+            if ($metodo === 'POST') {
+                // 409 = unique violation: alguem ja tem a reserva deste hash.
+                if ($caso === 'lote-corrida' || $caso === 'lote-repetido-forcado') {
+                    return ['status'=>409, 'body'=>'{"code":"23505"}'];
+                }
+                if ($caso === 'lote-reserva-falha') return ['status'=>503, 'body'=>'{"message":"boom"}'];
+                return ['status'=>201, 'body'=>'[{"id":"LOTE-1"}]'];
+            }
+            // PATCH: reivindicacao da orfa e fechamento do lote
+            if ($caso === 'lote-fecha-falha') return ['status'=>503, 'body'=>'{"message":"boom"}'];
+            return ['status'=>204, 'body'=>''];
         }
 
         if ($metodo === 'GET') {
@@ -154,6 +201,15 @@ function ci_de($r, $tabela) {
 }
 function ci_metodos_de($r, $tabela) { return array_map(fn($c) => $c['metodo'], ci_de($r, $tabela)); }
 
+/* A conversa INTEIRA com o banco, em ordem e com a tabela de cada chamada.
+   Fixar so o recorte de uma tabela deixa passar escrita em tabela nao
+   relacionada; e a ORDEM e o que prova que a reserva do lote vem antes da
+   escrita dos leads e o fechamento depois. */
+function ci_seq($r) {
+    return array_map(fn($c) => $c['metodo'] . ' '
+        . (strpos($c['url'], 'po_import_lotes') !== false ? 'lotes' : 'leads'), $r['chamadas']);
+}
+
 /* --- login e checado ANTES de qualquer leitura ou escrita --- */
 $r = ci_roda('sem-auth');
 ok($r['codigo'] === 401, 'sessao invalida responde 401');
@@ -187,6 +243,13 @@ ok(!isset($r['json']['itens'][0]['candidato']), 'o preview nao devolve o dado pe
 $r = ci_roda('aplicar');
 ok($r['json']['ok'] === true, 'aplicar deu certo');
 ok($r['json']['aplicado'] === ['novos'=>1,'preenchidos'=>1,'revisar'=>0,'ignorados'=>0,'falhas'=>0], 'contagem do que foi feito');
+
+/* A conversa inteira, em ordem. Fixar so o recorte da po_leads deixaria
+   passar escrita em tabela nao relacionada; e a ordem e o que prova que a
+   reserva do lote vem ANTES dos leads e o fechamento DEPOIS. */
+ok(ci_seq($r) === ['GET lotes', 'GET leads', 'GET leads',
+                   'POST lotes', 'PATCH leads', 'POST leads', 'PATCH lotes'],
+   'conferiu o lote, leu a base, RESERVOU, escreveu os leads e so entao fechou o lote');
 
 $escritas = array_values(array_filter(ci_de($r, 'po_leads'), fn($c) => $c['metodo'] !== 'GET'));
 ok(count($escritas) === 2, 'duas escritas na base: um insert e um update');
@@ -234,7 +297,7 @@ $m = ci_metodos($r);
 ok(ci_metodos_de($r, 'po_leads') === ['GET', 'GET'], 'leu a primeira pagina, tentou a segunda e parou');
 ok(!in_array('POST', $m, true) && !in_array('PATCH', $m, true), 'base lida pela metade nao escreve nada');
 ok(ci_metodos_de($r, 'po_import_lotes') === ['GET'],
-   'import que abortou no meio NAO registra o lote: senao a segunda tentativa cairia no 409');
+   'import que abortou ANTES de escrever nao reserva nem registra lote nenhum');
 
 /* ============================================================
    IDEMPOTENCIA: reaplicar o mesmo arquivo nao pode duplicar a base.
@@ -261,8 +324,15 @@ ok(strpos($r['bruto'], 'BEGIN:VCARD') === false, 'o 409 nao ecoa conteudo do arq
 $r = ci_roda('lote-repetido-forcado');
 ok($r['codigo'] === 200 || $r['codigo'] === 0, 'forcar=1 aplica mesmo com lote repetido');
 ok($r['json']['ok'] === true, 'e diz que deu certo');
-ok(ci_de($r, 'po_import_lotes') === [] || ci_metodos_de($r, 'po_import_lotes') === ['POST'],
-   'com forcar nem consulta o lote, so registra o novo');
+/* Forcar nao consulta ANTES (nao ha o que conferir: a cliente ja decidiu).
+   A reserva bate no unique da linha da importacao anterior - por isso o POST
+   e seguido de um GET, que e como o endpoint distingue "alguem ja tem a
+   reserva" de "o banco falhou" - e o PATCH final fecha o registro com a
+   contagem nova. O que nao pode acontecer e forcar NAO registrar nada. */
+ok(ci_metodos_de($r, 'po_import_lotes') === ['POST', 'GET', 'PATCH'],
+   'forcar nao consulta antes, mas reserva e REGISTRA');
+ok(in_array('PATCH lotes', ci_seq($r), true), 'forcar fecha o lote no fim');
+ok($r['json']['lote_registrado'] === true, 'e avisa que o registro fechou');
 $escritas = array_values(array_filter(ci_de($r, 'po_leads'), fn($c) => $c['metodo'] !== 'GET'));
 ok(count($escritas) === 2, 'forcar escreve de verdade: um insert e um update');
 
@@ -285,27 +355,101 @@ ok(ci_de($r, 'po_leads') === [], 'nem chega a ler a base');
 ok(!in_array('POST', ci_metodos($r), true) && !in_array('PATCH', ci_metodos($r), true),
    'NADA e escrito quando nao da para conferir o lote');
 
-/* --- o lote e registrado DEPOIS da escrita, com a contagem do que foi feito --- */
+/* ============================================================
+   O RETRY DURANTE, que e o que o timeout produz de verdade.
+
+   Se o fetch estoura NO MEIO da escrita (o proxy do host corta a conexao; o
+   PHP nem percebe, porque so responde no fim), o botao volta a ficar
+   clicavel e a segunda requisicao consulta a po_import_lotes ANTES de a
+   primeira registrar o lote. Com o registro so no fim, as duas passavam pela
+   guarda e a base duplicava - o unique em 'hash' dedupe a linha de log, nao
+   os leads. Por isso a reserva vem antes da escrita.
+============================================================ */
+
+/* --- corrida: a consulta passa, mas a RESERVA bate no unique --- */
+$r = ci_roda('lote-corrida');
+ok($r['codigo'] === 409, 'quem perde a corrida da reserva responde 409');
+ok($r['json']['ok'] === false, 'e nao finge que importou');
+ok(!in_array('POST leads', ci_seq($r), true) && !in_array('PATCH leads', ci_seq($r), true),
+   'NENHUM lead e escrito: a reserva vem antes da escrita, nao depois');
+ok(ci_metodos_de($r, 'po_import_lotes') === ['GET', 'POST', 'GET'],
+   'conferiu, tentou reservar, e releu para saber se o null foi conflito ou falha');
+
+/* --- reserva que falha DE VERDADE (nao e conflito) tambem nao escreve --- */
+/* Com $ignora_conflito o null do wa_db_insert seria ambiguo. A releitura e
+   quem separa: aqui ela diz "nao existe lote nenhum", logo nao foi o unique,
+   foi o banco - e a resposta e 503, nao 409. */
+$r = ci_roda('lote-reserva-falha');
+ok($r['codigo'] === 503, 'falha real na reserva responde 503, nao 409');
+ok(strpos(strtolower($r['json']['error'] ?? ''), 'reservar') !== false,
+   'a mensagem diz que nao deu para reservar');
+ok(!in_array('POST leads', ci_seq($r), true) && !in_array('PATCH leads', ci_seq($r), true),
+   'e nada e escrito na base');
+
+/* --- lote reservado ha pouco e ainda aberto: a primeira pode estar rodando --- */
+$r = ci_roda('lote-em-andamento');
+ok($r['codigo'] === 409, 'lote reservado e ainda em andamento responde 409');
+ok(ci_de($r, 'po_leads') === [], 'nem le a base');
+ok(strpos(strtolower($r['json']['error'] ?? ''), 'rodando') !== false,
+   'a mensagem explica que pode haver uma importacao em andamento');
+
+/* --- lote reservado ha horas e nunca concluido: a tentativa morreu no meio --- */
+/* Aqui a cliente TEM que conseguir tentar de novo sem o forcar - e a intencao
+   do desenho original ("gravar depois"), preservada sem o buraco da corrida. */
+$r = ci_roda('lote-orfao');
+ok($r['codigo'] === 200 || $r['codigo'] === 0, 'lote orfao NAO bloqueia o retry');
+ok($r['json']['ok'] === true, 'e a importacao roda');
+ok(ci_seq($r) === ['GET lotes', 'GET leads', 'GET leads',
+                   'PATCH lotes', 'PATCH leads', 'POST leads', 'PATCH lotes'],
+   'reivindica a linha orfa (PATCH, nao POST: o unique impediria o insert) antes de escrever');
+$claim = json_decode(ci_de($r, 'po_import_lotes')[1]['corpo'], true);
+ok(array_key_exists('concluido_at', $claim) && $claim['concluido_at'] === null,
+   'a reivindicacao reabre a linha: sem concluido_at ela segue como em andamento');
+ok(!empty($claim['created_at']),
+   'e renova o relogio, para uma terceira requisicao ver "em andamento" enquanto esta escreve');
+
+/* --- o lote e RESERVADO antes e FECHADO depois, com a contagem real --- */
 $r = ci_roda('aplicar');
 $lotes = ci_de($r, 'po_import_lotes');
-ok(ci_metodos_de($r, 'po_import_lotes') === ['GET', 'POST'], 'conferiu o lote e depois registrou');
-$reg = json_decode($lotes[1]['corpo'], true);
+ok(ci_metodos_de($r, 'po_import_lotes') === ['GET', 'POST', 'PATCH'],
+   'conferiu, reservou antes de escrever e fechou depois');
+
+$reserva = json_decode($lotes[1]['corpo'], true);
 /* trim() porque cpost() apara o campo 'texto' colado; pelo upload o conteudo
    vai byte a byte como veio. Cada caminho e consistente consigo mesmo, que e
    o que a idempotencia precisa. */
-ok(is_array($reg) && ($reg['hash'] ?? '') === wa_import_hash_lote(trim(CI_VCF), 'agenda-esposa'),
-   'o lote e gravado com o hash do conteudo + origem');
-ok(strpos($lotes[0]['url'], 'hash=eq.' . $reg['hash']) !== false,
-   'o hash gravado e o MESMO que foi consultado: senao a guarda nunca acharia o proprio lote');
-ok($reg['origem'] === 'agenda-esposa', 'e com a origem');
-ok($reg['total'] === 2 && $reg['novos'] === 1 && $reg['preenchidos'] === 1,
-   'a contagem gravada e a do que realmente foi aplicado');
-ok(strpos(json_encode($reg), 'BEGIN:VCARD') === false, 'o registro do lote nao guarda o arquivo');
+ok(is_array($reserva) && ($reserva['hash'] ?? '') === wa_import_hash_lote(trim(CI_VCF), 'agenda-esposa'),
+   'a reserva leva o hash do conteudo + origem');
+ok(strpos($lotes[0]['url'], 'hash=eq.' . $reserva['hash']) !== false,
+   'o hash reservado e o MESMO que foi consultado: senao a guarda nunca acharia o proprio lote');
+ok($reserva['origem'] === 'agenda-esposa', 'e a origem');
+ok(!array_key_exists('concluido_at', $reserva) || $reserva['concluido_at'] === null,
+   'a reserva nasce SEM concluido_at: e isso que a marca como em andamento');
+ok(($reserva['novos'] ?? null) === 0 && ($reserva['preenchidos'] ?? null) === 0,
+   'e sem contagem, que so existe depois de escrever');
+ok(strpos(json_encode($reserva), 'BEGIN:VCARD') === false, 'o registro do lote nao guarda o arquivo');
 
-$ordem = array_map(fn($c) => $c['metodo'] . ' ' . (strpos($c['url'], 'po_import_lotes') !== false ? 'lotes' : 'leads'),
-                   $r['chamadas']);
-ok(array_search('POST lotes', $ordem, true) > array_search('POST leads', $ordem, true),
-   'o lote entra DEPOIS dos leads: import que falha no meio nao fica registrado');
+$fecha = json_decode($lotes[2]['corpo'], true);
+ok(strpos($lotes[2]['url'], 'hash=eq.' . $reserva['hash']) !== false, 'o fechamento mira a propria linha');
+ok(!empty($fecha['concluido_at']), 'o fechamento e o que carimba concluido_at');
+ok($fecha['total'] === 2 && $fecha['novos'] === 1 && $fecha['preenchidos'] === 1,
+   'a contagem gravada e a do que realmente foi aplicado');
+ok($r['json']['lote_registrado'] === true, 'e a resposta confirma que o registro fechou');
+
+$ordem = ci_seq($r);
+ok(array_search('POST lotes', $ordem, true) < array_search('POST leads', $ordem, true),
+   'a RESERVA entra antes dos leads: e ela que fecha a corrida do retry');
+ok(array_search('PATCH lotes', $ordem, true) > array_search('POST leads', $ordem, true),
+   'e o FECHAMENTO depois: import que morre no meio deixa linha orfa, nao lote concluido');
+
+/* --- fechamento que falha: os leads entraram, o registro nao --- */
+/* O unico rastro disso seria um error_log que ninguem le, e a linha orfa
+   libera um retry que duplicaria. A tela precisa poder avisar. */
+$r = ci_roda('lote-fecha-falha');
+ok($r['codigo'] === 200 || $r['codigo'] === 0, 'a importacao ja escreveu, entao a resposta nao vira erro');
+ok($r['json']['ok'] === true, 'e diz que os leads foram aplicados');
+ok($r['json']['lote_registrado'] === false,
+   'mas avisa que o registro do lote NAO fechou: a tela tem que poder alertar');
 
 /* --- o hash muda com o conteudo e com a origem --- */
 ok(wa_import_hash_lote('AAA', 'agenda-esposa') === wa_import_hash_lote('AAA', 'agenda-esposa'),
