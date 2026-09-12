@@ -112,17 +112,43 @@ assert.ok(cliSrc.includes('filtradasPessoas()'), 'a aba Clientes le de filtradas
 // do contador — o teste ficava verde mesmo com o filtro removido.
 const rowsForReportsFn = src.match(/function rowsForReports\(\)[\s\S]*?\n\}/);
 assert.ok(rowsForReportsFn, 'rowsForReports encontrada');
-assert.ok(/origemImport/.test(rowsForReportsFn[0]),
-  'rowsForReports leva origemImport em conta');
+assert.ok(/poCorteImportados\(/.test(rowsForReportsFn[0]),
+  'rowsForReports passa pelo corte da base importada');
 assert.ok(/F\.importados/.test(src),
   'existe um estado de filtro para incluir ou nao os importados');
 
-// E a aba Leads NAO muda: ela sempre mostrou tudo, e continuar mostrando e o
-// que permite a cliente achar a ficha de um cliente antigo.
+/* O corte em si, exercitado como funcao: e o UNICO lugar onde origemImport
+   decide quem conta, e agora DUAS telas o usam (Relatorios e o KPI da aba
+   Leads). Testar o comportamento, e nao so a presenca da palavra no fonte. */
+const { poCorteImportados } = new Function(pega('poCorteImportados') + '; return {poCorteImportados};')();
+const MISTO = [
+  {id:1, origemImport:''},               // lead normal do site
+  {id:2, origemImport:null},             // idem, campo nulo do banco
+  {id:3, origemImport:'crm-toninho'},    // base importada
+  {id:4, origemImport:'agenda-esposa'},  // base importada
+];
+assert.deepEqual(poCorteImportados(MISTO, {importados:false}).map(l => l.id), [1, 2],
+  'por padrao a base importada fica fora da conta');
+assert.deepEqual(poCorteImportados(MISTO, {importados:true}).map(l => l.id), [1, 2, 3, 4],
+  'com o controle ligado, entra todo mundo');
+assert.deepEqual(poCorteImportados(null, {importados:false}), [], 'lista ausente nao estoura');
+
+/* E a TABELA da aba Leads NAO muda: ela sempre mostrou tudo, e continuar
+   mostrando e o que permite a cliente achar a ficha de um cliente antigo.
+   O que mudou foi so o KPI, que abria dizendo "Leads no periodo: 775" com 0%
+   de conversao enquanto os Relatorios, do mesmo mes, diziam 0 leads. As duas
+   asserceos abaixo separam as duas coisas: a tabela recebe 'rows' inteiro, o
+   KPI recebe o corte. */
 const leads = src.match(/function renderLeads\(\)[\s\S]*?\n\}/);
 assert.ok(leads, 'renderLeads encontrada');
 assert.ok(!/origemImport/.test(leads[0]),
-  'a aba Leads segue mostrando todo mundo, inclusive os importados');
+  'a aba Leads nao filtra por origemImport na mao');
+assert.ok(/tb\.innerHTML=rows\.map/.test(leads[0]),
+  'a TABELA da aba Leads recebe as linhas inteiras, sem corte');
+assert.ok(/renderLeadKpis\(poCorteImportados\(rows,F\)\)/.test(leads[0]),
+  'e o KPI recebe o mesmo corte dos Relatorios');
+assert.ok(!/poCorteImportados/.test((src.match(/function filtered\(\)[^\n]*/) || [''])[0]),
+  'filtered() — a fonte da tabela — segue sem o corte');
 
 /* ---------- o controle "incluir a base importada" comeca desmarcado.
    Mesmo padrao do checkbox #ic-forcar em test-importar-contatos.mjs: se um

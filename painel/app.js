@@ -169,11 +169,21 @@ $('#status-filter').onchange=e=>{F.status=e.target.value;renderLeads();if($('#vi
 /* Fila de revisao dos contatos importados (spec 8.1). Os dois botoes marcam
    revisado=true — a revisao aconteceu com qualquer resposta; o que muda e se
    a pessoa entra em campanha (cliente=true) ou fica na base fora de disparo
-   (cliente=false). Marcar "nao e cliente" nunca apaga ninguem. */
-$('#rev-cliente').onclick=()=>poRevMarcar(true);
-$('#rev-naocliente').onclick=()=>poRevMarcar(false);
-$('#rev-todos').onchange=e=>$$('#rev-rows .rev-chk').forEach(c=>{c.checked=e.target.checked;});
-$('#rev-revisados').onchange=()=>poRenderRevisao();
+   (cliente=false). Marcar "nao e cliente" nunca apaga ninguem.
+
+   Os quatro sao ligados COM GUARDA DE NULO, ao contrario do resto do arquivo:
+   deploy aqui e FTP manual, arquivo a arquivo, e subir o app.js antes do
+   index.html mataria o painel INTEIRO com TypeError nesta linha — o script
+   para de executar e nada abaixo daqui e ligado. A aba nova pode faltar; o
+   painel nao pode cair por causa dela.
+
+   O "marcar todos" marca SO os pendentes (poRevAplicaTodos): com a caixa
+   "mostrar ja revisados" ligada, a tela tem os 775 contatos ja revisados do
+   CRM, e um clique em "Nao e cliente" os tiraria todos das campanhas. */
+if($('#rev-cliente'))$('#rev-cliente').onclick=()=>poRevMarcar(true);
+if($('#rev-naocliente'))$('#rev-naocliente').onclick=()=>poRevMarcar(false);
+if($('#rev-todos'))$('#rev-todos').onchange=e=>poRevAplicaTodos($$('#rev-rows .rev-chk'),e.target.checked);
+if($('#rev-revisados'))$('#rev-revisados').onchange=()=>poRenderRevisao();
 
 $$('#orig-filter .chip').forEach(c=>c.onclick=()=>{$$('#orig-filter .chip').forEach(x=>x.classList.remove('active'));c.classList.add('active');F.orig=c.dataset.orig;renderLeads();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();});
 
@@ -205,6 +215,15 @@ function filtradosFunil(){return poFiltraLeads(LEADS,F,{mes:true,origem:true,sta
    para responder "quem ja viajou com a gente" abria mostrando so quem deu
    sinal neste mes, e os KPIs contavam so essas pessoas. */
 function filtradasPessoas(){return poFiltraLeads(LEADS,F,{mes:false,origem:true,status:true});}
+/* Tira a base importada do recorte, a menos que o controle esteja ligado.
+   Vive aqui porque DUAS telas precisam do mesmo corte: os Relatorios e o KPI
+   da aba Leads. Sem isto as duas se contradiziam na tela de abertura — em
+   2026-09 ha 775 fichas do CRM e ZERO leads normais, entao Relatorios abria
+   com "0 leads" e a aba Leads, logo ao lado, com "Leads no periodo: 775" e 0%
+   de conversao. O KPI da aba Leads e o primeiro numero que a cliente le.
+   A TABELA da aba Leads nao passa por aqui de proposito: ela sempre mostrou
+   todo mundo, e e o que permite achar a ficha de um cliente antigo. */
+function poCorteImportados(rows,f){return (rows||[]).filter(l=>f.importados||!l.origemImport);}
 function origBadge(o){const x=ORIG[o]||ORIG.direto;return `<span class="orig ${x.cls}">${x.label}</span>`;}
 function renderLeads(){
   const rows=filtered();const tb=$('#lead-rows');
@@ -222,7 +241,10 @@ function renderLeads(){
     <td class="money ${l.ven?'':'zero'}">${brl(l.ven)}</td>
     <td class="mono ${cicloDias(l)==null?'zero':''}">${cicloDias(l)==null?'—':cicloDias(l)+'d'}</td></tr>`;}).join('');
   $$('#lead-rows tr[data-id]').forEach(tr=>tr.onclick=()=>openDrawer(tr.dataset.id));
-  renderLeadKpis(rows);
+  // A tabela recebe 'rows' (tudo); o KPI recebe o mesmo recorte dos
+  // Relatorios. Ver poCorteImportados: as duas telas diziam numeros
+  // incompativeis para o mesmo mes.
+  renderLeadKpis(poCorteImportados(rows,F));
 }
 function renderLeadKpis(rows){
   const total=rows.length,vendas=rows.filter(l=>l.status==='venda');
@@ -408,8 +430,7 @@ function curSpend(){return F.month==='all'?Object.values(spend).reduce((a,b)=>a+
    nao sao leads captados este mes, sao clientes antigos de outro sistema.
    O controle deixa ver o total quando a pergunta for essa. */
 function rowsForReports(){
-  return LEADS.filter(inMonth)
-              .filter(l=>F.importados||!l.origemImport)
+  return poCorteImportados(LEADS.filter(inMonth),F)
               .filter(l=>F.orig==='todos'||l.origem===F.orig);
 }
 function renderReports(){
