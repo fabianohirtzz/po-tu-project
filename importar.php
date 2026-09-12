@@ -58,37 +58,11 @@ if ($GEMINI_API_KEY === '' || strpos($GEMINI_API_KEY, 'COLOQUE') !== false) {
 }
 
 /* -------- valida o login (Supabase Auth) -------- */
-function bearerToken() {
-    if (!empty($_POST['sb_token'])) return trim((string) $_POST['sb_token']);
-    $h = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
-    if ($h === '' && function_exists('getallheaders')) {
-        foreach (getallheaders() as $k => $v) {
-            if (strtolower($k) === 'authorization') { $h = $v; break; }
-        }
-    }
-    return preg_match('/Bearer\s+(.+)/i', $h, $m) ? trim($m[1]) : '';
-}
+/* As funcoes vivem em lib/po-auth.php: eram copiadas em cada endpoint
+   (importar, upload-video, upload-pdf) e agora ha uma so. */
+require_once __DIR__ . '/lib/po-auth.php';
 
-function usuarioValido($url, $anon, $token) {
-    if ($token === '') return false;
-    $ch = curl_init(rtrim($url, '/') . '/auth/v1/user');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 10,
-        CURLOPT_HTTPHEADER     => [
-            'apikey: ' . $anon,
-            'Authorization: Bearer ' . $token,
-        ],
-    ]);
-    $resp = curl_exec($ch);
-    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    if ($resp === false || $code < 200 || $code >= 300) return false;
-    $u = json_decode($resp, true);
-    return is_array($u) && !empty($u['id']);
-}
-
-if (!usuarioValido($SUPABASE_URL, $SUPABASE_ANON_KEY, bearerToken())) {
+if (!po_auth_ok($SUPABASE_URL, $SUPABASE_ANON_KEY)) {
     fail(401, 'Sessão inválida. Faça login no painel novamente.');
 }
 

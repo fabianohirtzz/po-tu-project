@@ -68,35 +68,15 @@ function fail($code, $msg) {
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail(405, 'Método não permitido.');
 if (!function_exists('curl_init')) fail(500, 'cURL indisponível no servidor.');
 
-/* -------- valida o login (Supabase Auth) — mesmo padrão do importar.php -------- */
-function bearerToken() {
-    if (!empty($_POST['sb_token'])) return trim((string) $_POST['sb_token']);
-    $h = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
-    if ($h === '' && function_exists('getallheaders')) {
-        foreach (getallheaders() as $k => $v) {
-            if (strtolower($k) === 'authorization') { $h = $v; break; }
-        }
-    }
-    return preg_match('/Bearer\s+(.+)/i', $h, $m) ? trim($m[1]) : '';
-}
+/* -------- valida o login (Supabase Auth) --------
+   As funcoes vivem em lib/po-auth.php: a mesma dupla estava copiada aqui,
+   no importar.php e no upload-pdf.php, e copia de rotina de autorizacao
+   envelhece torto - o dia em que uma delas ganhar um remendo de seguranca,
+   as outras ficam para tras em silencio. Comportamento identico ao que
+   estava aqui, com uma trava a mais: token so de espaco nunca autoriza. */
+require_once __DIR__ . '/lib/po-auth.php';
 
-function usuarioValido($url, $anon, $token) {
-    if ($token === '') return false;
-    $ch = curl_init(rtrim($url, '/') . '/auth/v1/user');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 10,
-        CURLOPT_HTTPHEADER     => ['apikey: ' . $anon, 'Authorization: Bearer ' . $token],
-    ]);
-    $resp = curl_exec($ch);
-    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    if ($resp === false || $code < 200 || $code >= 300) return false;
-    $u = json_decode($resp, true);
-    return is_array($u) && !empty($u['id']);
-}
-
-if (!usuarioValido($SUPABASE_URL, $SUPABASE_ANON_KEY, bearerToken())) {
+if (!po_auth_ok($SUPABASE_URL, $SUPABASE_ANON_KEY)) {
     fail(401, 'Sessão inválida. Faça login no painel novamente.');
 }
 

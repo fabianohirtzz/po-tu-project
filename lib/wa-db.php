@@ -64,11 +64,29 @@ function wa_db_url($tabela, $query = '') {
     return rtrim($cfg['SUPABASE_URL'], '/') . '/rest/v1/' . $tabela . ($query !== '' ? '?' . $query : '');
 }
 
-function wa_db_select($tabela, $query) {
+/* Leitura que DISTINGUE erro de vazio: devolve null quando a rede caiu ou o
+   PostgREST recusou, e array (possivelmente vazio) quando a consulta rodou.
+
+   O wa_db_select devolve [] nos dois casos. Isso e aceitavel no webhook -
+   uma conversa que nao carrega e uma mensagem perdida - e e VENENO na
+   importacao de contatos: base lida como vazia faz todo contato do arquivo
+   entrar como lead novo e duplicar a base inteira em silencio (regra 3).
+   Quem escreve em cima do que leu usa esta; quem so exibe usa a outra. */
+function wa_db_select_estrito($tabela, $query) {
     $r = wa_db_http('GET', wa_db_url($tabela, $query), null, wa_db_headers());
-    if (!$r || $r['status'] >= 300) return [];
+    if (!$r || $r['status'] >= 300) {
+        // Sem o corpo: em erro do PostgREST ele ecoa a consulta, que aqui
+        // carrega filtro por telefone e cpf de cliente.
+        error_log('wa_db_select_estrito ' . $tabela . ' status ' . ($r ? $r['status'] : 'sem resposta'));
+        return null;
+    }
     $j = json_decode($r['body'], true);
-    return is_array($j) ? $j : [];
+    return is_array($j) ? $j : null;
+}
+
+function wa_db_select($tabela, $query) {
+    $r = wa_db_select_estrito($tabela, $query);
+    return $r === null ? [] : $r;
 }
 
 /* $ignora_conflito: para o log de mensagens, onde o unique em wamid E a
