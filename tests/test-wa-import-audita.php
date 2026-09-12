@@ -128,6 +128,51 @@ ok(in_array('telefone', WA_IMPORT_CAMPOS_PREENCHIVEIS, true), 'telefone e preenc
 ok(in_array('cpf', WA_IMPORT_CAMPOS_PREENCHIVEIS, true), 'cpf e preenchivel');
 ok(in_array('passaporte_numero', WA_IMPORT_CAMPOS_PREENCHIVEIS, true), 'bloco de ficha e preenchivel');
 
+/* ------------------------------------------------------------
+   wa_id NA FUSAO. O insert ja gravava wa_id no contato novo, mas o caminho
+   'funde' monta o update a partir do 'preenche', que passa pela whitelist -
+   e wa_id estava fora dela. A base tem 11 leads do formulario do site com
+   telefone e wa_id nulo: a agenda traria o mesmo celular, fundiria, e o
+   wa_id continuaria nulo. Na primeira mensagem da pessoa, wa_lead() consulta
+   por wa_id, nao acha, e INSERE um lead novo - a duplicacao que o importador
+   existe para fechar, deixada aberta no caminho central dele.
+------------------------------------------------------------ */
+ok(in_array('wa_id', WA_IMPORT_CAMPOS_PREENCHIVEIS, true), 'wa_id e preenchivel pela fusao');
+ok(preg_match('/(^select=|,)wa_id(,|$)/', wa_import_select_base()) === 1,
+   'e o select da base traz wa_id (sem ele a auditoria acha que esta sempre vazio)');
+
+// (a) ficha do site: telefone preenchido, wa_id NULO -> a fusao preenche.
+$baseSemWa = [wa_import_base_row(['id'=>'S1', 'telefone'=>'+5548999990001', 'wa_id'=>null,
+                                  'nome'=>'Antonio', 'email'=>null, 'status'=>'venda', 'venda'=>9000])];
+$pWa = wa_import_audita([cand(['wa_id'=>'+5548999990001','celulares'=>['+5548999990001'],
+                               'nome'=>'Antonio PO','email'=>'a@x.com'])], $baseSemWa);
+ok($pWa[0]['acao'] === 'funde' && $pWa[0]['match_id'] === 'S1', 'casou por celular com a ficha do site');
+ok(($pWa[0]['preenche']['wa_id'] ?? null) === '+5548999990001',
+   'a fusao preenche o wa_id que estava vazio');
+
+// (b) ficha que JA tem wa_id: nunca sobrescrito, nem por um numero diferente.
+// Trocar o wa_id de uma ficha jogaria a conversa dela para outro telefone.
+$baseComWa = [wa_import_base_row(['id'=>'S2', 'telefone'=>'+5548999990001',
+                                  'wa_id'=>'+5548911112222', 'nome'=>'Antonio',
+                                  'email'=>null, 'status'=>'venda', 'venda'=>9000])];
+$pWa2 = wa_import_audita([cand(['wa_id'=>'+5548999990001','celulares'=>['+5548999990001'],
+                                'nome'=>'Antonio PO','email'=>'a@x.com'])], $baseComWa);
+ok($pWa2[0]['acao'] === 'funde', 'funde do mesmo jeito');
+ok(!array_key_exists('wa_id', $pWa2[0]['preenche']), 'wa_id ja preenchido NUNCA e sobrescrito');
+ok(($pWa2[0]['preenche']['email'] ?? null) === 'a@x.com', 'e o campo realmente vazio segue sendo preenchido');
+
+// (c) so celular vira wa_id: 'campos' e texto de arquivo de terceiro e agora
+// passaria pela whitelist. Um wa_id vindo do arquivo (um fixo, ou qualquer
+// coisa) faria o motor responder a pessoa errada.
+$pWa3 = wa_import_audita([cand(['wa_id'=>'+5548999990001','celulares'=>['+5548999990001'],
+                                'nome'=>'Antonio PO',
+                                'campos'=>['wa_id'=>'+554833334444']])], $baseSemWa);
+ok(($pWa3[0]['preenche']['wa_id'] ?? null) === '+5548999990001',
+   'wa_id vindo do arquivo nao vence o celular validado pelo pipeline');
+$nova = wa_import_linha_nova(['nome'=>'Novo','wa_id'=>'+5548999998888','origem_import'=>'agenda-esposa',
+                              'campos'=>['wa_id'=>'+554833334444']]);
+ok($nova['wa_id'] === '+5548999998888', 'e nem no insert do contato novo');
+
 // --- 2) dois candidatos distintos na MESMA ficha: nada de escrita conflitante
 //     em silencio. O primeiro funde; o segundo vai para revisao humana.
 $baseUm = [['id'=>'L9','telefone'=>'+5548999990001','cpf'=>'11144477735','nome'=>'Antonio',

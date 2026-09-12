@@ -21,10 +21,15 @@ const CI_VCF = "BEGIN:VCARD\nVERSION:3.0\nFN:Antonio Pereira - PO\nEMAIL:antonio
              . "TEL;TYPE=CELL:+5548999990001\nEND:VCARD\n"
              . "BEGIN:VCARD\nVERSION:3.0\nFN:Maria Nova PO\nTEL;TYPE=CELL:48988887777\nEND:VCARD\n";
 
-/* Uma ficha na base, ja com historico (venda fechada) e SEM email: e o que
-   a fusao tem para preencher. O nome ja existe e nao pode ser sobrescrito. */
-function ci_lead($i = 'L1') {
-    return ['id'=>$i, 'telefone'=>'+5548999990001', 'nome'=>'Antonio Pereira', 'email'=>null,
+/* Uma ficha na base, ja com historico (venda fechada), SEM email e com
+   wa_id NULO: e o lead do formulario do site, que o enviar.php nunca
+   normalizou para E.164 e por isso o backfill anterior nao pegou. E o que a
+   fusao tem para preencher. O nome ja existe e nao pode ser sobrescrito.
+   $waId permite o caso inverso: ficha que JA tem wa_id nao pode ser
+   reescrita (trocar o wa_id jogaria a conversa dela para outro numero). */
+function ci_lead($i = 'L1', $waId = null) {
+    return ['id'=>$i, 'telefone'=>'+5548999990001', 'wa_id'=>$waId,
+            'nome'=>'Antonio Pereira', 'email'=>null,
             'cpf'=>null, 'cidade'=>null, 'data_nascimento'=>null,
             'status'=>'venda', 'venda'=>5000, 'notas'=>[]];
 }
@@ -64,6 +69,7 @@ function ci_filho($caso) {
     switch ($caso) {
         case 'sem-auth':      $_POST['modo'] = 'aplicar'; break;
         case 'aplicar':       $_POST['modo'] = 'aplicar'; break;
+        case 'aplicar-waid-ja': $_POST['modo'] = 'aplicar'; break;
         case 'tipo-invalido': $_POST['tipo'] = 'xml'; break;
         case 'origem-crmx':   $_POST['origem'] = 'crmx'; break;
         case 'vazio':         $_POST['texto'] = "   \n "; break;
@@ -156,7 +162,8 @@ function ci_filho($caso) {
                 for ($i = 0; $i < 1000; $i++) $linhas[] = ci_lead('L' . $i);
                 return ['status'=>200, 'body'=>json_encode($linhas)];
             }
-            return ['status'=>200, 'body'=>json_encode($off > 0 ? [] : [ci_lead()])];
+            $ja = $caso === 'aplicar-waid-ja' ? '+5548911112222' : null;
+            return ['status'=>200, 'body'=>json_encode($off > 0 ? [] : [ci_lead('L1', $ja)])];
         }
         if ($metodo === 'POST')  return ['status'=>201, 'body'=>'[{"id":"novo-1"}]'];
         return ['status'=>204, 'body'=>''];   // PATCH
@@ -236,7 +243,13 @@ ok($r['json']['resumo']['funde'] === 1, 'um casamento com a base');
 ok($r['json']['resumo']['novos'] === 1, 'um contato novo');
 ok($r['json']['resumo']['por_celular'] === 1, 'casou pelo celular');
 ok(ci_metodos($r) === ['GET', 'GET'], 'preview so le (paginou ate a pagina vazia)');
-ok($r['json']['itens'][0]['preenche'] === ['email'], 'o preview mostra a CHAVE que seria preenchida');
+/* ci_lead() E o lead do formulario do site: tem telefone e wa_id NULO (o
+   enviar.php nunca normalizou para E.164, entao o backfill nao o pegou). A
+   fusao tem que preencher os dois campos vazios - email E wa_id. Sem o wa_id,
+   na primeira mensagem que a pessoa mandar o wa_lead() consulta por wa_id,
+   nao acha, e insere um lead novo: a duplicacao pelo outro lado. */
+ok($r['json']['itens'][0]['preenche'] === ['email', 'wa_id'],
+   'o preview mostra as CHAVES que seriam preenchidas, wa_id incluso');
 ok(!isset($r['json']['itens'][0]['candidato']), 'o preview nao devolve o dado pessoal inteiro');
 
 /* --- aplicar escreve, e escreve so o que pode --- */
@@ -258,10 +271,22 @@ $patch = null; $post = null;
 foreach ($escritas as $e) { if ($e['metodo'] === 'PATCH') $patch = $e; else $post = $e; }
 ok($patch !== null && strpos($patch['url'], 'id=eq.L1') !== false, 'o update mira a ficha que casou');
 $campos = json_decode($patch['corpo'], true);
-ok(array_keys($campos) === ['email'], 'o PATCH leva exatamente as chaves de preenche');
+ok(array_keys($campos) === ['email', 'wa_id'], 'o PATCH leva exatamente as chaves de preenche');
+ok($campos['wa_id'] === '+5548999990001', 'a fusao grava o wa_id que estava nulo na ficha');
 foreach (['status','venda','venda_at','notas','nome','telefone'] as $proibido) {
     ok(!array_key_exists($proibido, $campos), "o PATCH nunca manda $proibido");
 }
+/* E o inverso, no mesmo caminho de ponta a ponta: ficha que JA tem wa_id nao
+   e reescrita. Regra "so preenche o que esta vazio", que vale para o wa_id
+   como vale para o resto - trocar o wa_id de uma ficha jogaria a conversa
+   dela para outro numero. */
+$rJa = ci_roda('aplicar-waid-ja');
+$patchJa = null;
+foreach (array_filter(ci_de($rJa, 'po_leads'), fn($c) => $c['metodo'] === 'PATCH') as $e) $patchJa = $e;
+ok($patchJa !== null, 'a fusao aconteceu tambem com wa_id ja preenchido');
+$camposJa = json_decode($patchJa['corpo'], true);
+ok(!array_key_exists('wa_id', $camposJa), 'wa_id ja preenchido NUNCA e sobrescrito');
+ok(array_keys($camposJa) === ['email'], 'so o que estava vazio e preenchido');
 $linha = json_decode($post['corpo'], true);
 ok($linha['telefone'] === '+5548988887777', 'o insert leva o celular normalizado');
 ok($linha['nome'] === 'Maria Nova', 'o marcador PO sai do nome');

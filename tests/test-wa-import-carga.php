@@ -107,8 +107,12 @@ $fichas = [
     ['nome' => 'Novo Cliente', 'telefone' => '48988887777', 'cpf' => ''],       // vira 'novo'
     ['nome' => 'Antonio', 'telefone' => '48999990001', 'cpf' => '11144477735'], // casa por cpf com a base
 ];
+/* 'wa_id' vem preenchido de proposito: o select da base o traz (esta na
+   whitelist), e sem ele esta ficha teria wa_id vazio e a fusao passaria a ter
+   o que preencher - deixando de exercitar o caso "nada de novo, ignora". */
 $baseAtual = [
-    ['id' => 'L1', 'telefone' => '+5548999990001', 'cpf' => '111.444.777-35', 'nome' => 'Antonio',
+    ['id' => 'L1', 'telefone' => '+5548999990001', 'wa_id' => '+5548999990001',
+     'cpf' => '111.444.777-35', 'nome' => 'Antonio',
      'email' => null, 'status' => 'venda', 'venda' => 5000, 'notas' => []],
 ];
 
