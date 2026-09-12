@@ -15,8 +15,10 @@ function poDigitos(s) {
 }
 
 /* A chave de agrupamento. O WhatsApp grava E.164 (+5548...) e o formulario
-   do site ainda grava o que o visitante digitou, entao a chave normaliza
-   os dois para digitos com DDI.
+   do site ainda grava o que o visitante digitou; poE164 (painel/fone.js,
+   espelho do wa_e164() do PHP) normaliza os dois formatos para a mesma
+   pessoa, inclusive o celular antigo de 8 digitos (que so o ramo antigo,
+   sem a regra do nono digito, tratava como ficha separada).
 
    Lead sem telefone recebe uma chave propria: pelo id quando ha um, ou
    pela posicao na lista (idx) quando nao ha nem telefone nem id. So usar
@@ -24,11 +26,10 @@ function poDigitos(s) {
    'sem-tel:' e colapsavam na mesma pessoa, misturando gente diferente
    numa ficha so. */
 function poChavePessoa(lead, idx) {
-  let d = poDigitos(lead && lead.tel);
-  if (d.length >= 10) {
-    if (d.length <= 11) d = '55' + d;
-    return d;
-  }
+  // Normalizador unico (fone.js): mesma regra do wa_e164 do PHP. Um celular
+  // antigo de 8 digitos agora cai na mesma pessoa, em vez de virar ficha nova.
+  const e = (typeof poE164 === 'function') ? poE164(lead && lead.tel) : null;
+  if (e) return poDigitos(e);
   const id = lead && lead.id;
   if (id != null && id !== '') return 'sem-tel:' + String(id);
   return 'sem-tel:pos:' + String(idx);

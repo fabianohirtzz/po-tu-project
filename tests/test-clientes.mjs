@@ -9,8 +9,21 @@ function pega(nome) {
   assert.ok(m, nome + ' encontrada no clientes.js');
   return m[0];
 }
+
+// poChavePessoa agora delega para poE164 (painel/fone.js), o normalizador
+// unico que espelha o wa_e164() do PHP. Sem injeta-lo aqui, a guarda
+// `typeof poE164 === 'function'` do clientes.js falha e todo lead cai no
+// ramo 'sem-tel:...', derrubando as asserções de agrupamento abaixo.
+const foneSrc = readFileSync(new URL('../painel/fone.js', import.meta.url), 'utf8');
+function pegaFone(nome) {
+  const m = foneSrc.match(new RegExp('function ' + nome + '\\([\\s\\S]*?\\n\\}'));
+  assert.ok(m, nome + ' encontrada no fone.js');
+  return m[0];
+}
+const poE164Src = pegaFone('poE164');
+
 const ctx = new Function(
-  pega('poDigitos') + pega('poChavePessoa') + pega('poAgrupaPessoas') +
+  poE164Src + pega('poDigitos') + pega('poChavePessoa') + pega('poAgrupaPessoas') +
   '; return {poDigitos, poChavePessoa, poAgrupaPessoas};'
 )();
 const { poChavePessoa, poAgrupaPessoas } = ctx;
@@ -120,7 +133,7 @@ assert.equal(semTelSemId.length, 2, 'dois leads sem telefone e sem id viram duas
 // dado de terceiro. Sem escapar, um nome com "<img onerror>" executa
 // script dentro do painel da cliente.
 const ctxUi = new Function(
-  pega('poDigitos') + pega('poChavePessoa') + pega('poAgrupaPessoas') +
+  poE164Src + pega('poDigitos') + pega('poChavePessoa') + pega('poAgrupaPessoas') +
   pega('poLinhaPessoa') +
   'function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c]));}' +
   'function brl(n){return n>0?("R$ "+n):"—";}' +

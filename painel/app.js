@@ -146,11 +146,12 @@ $('#nav-toggle').onclick=()=>{$('#side-nav').classList.contains('on')?fechaSide(
 $$('.nav-item').forEach(b=>b.onclick=()=>{
   $$('.nav-item').forEach(x=>x.classList.remove('active'));b.classList.add('active');
   const v=b.dataset.view;$$('.view').forEach(x=>x.classList.remove('on'));
-  $('#month-box').style.visibility=(v==='roteiros')?'hidden':'visible';
+  $('#month-box').style.visibility=(v==='roteiros'||v==='importar')?'hidden':'visible';
   if(v==='leads'){$('#view-leads').classList.add('on');$('#top-title').innerHTML='Leads<span>.</span>';renderLeads();}
   else if(v==='reports'){$('#view-reports').classList.add('on');$('#top-title').innerHTML='Relatórios<span>.</span>';renderReports();}
   else if(v==='clientes'){$('#view-clientes').classList.add('on');$('#top-title').innerHTML='Clientes<span>.</span>';if(typeof poRenderClientes==='function')poRenderClientes();}
   else if(v==='funil'){$('#view-funil').classList.add('on');$('#top-title').innerHTML='Funil<span>.</span>';if(typeof poRenderFunil==='function')poRenderFunil();}
+  else if(v==='importar'){$('#view-importar').classList.add('on');$('#top-title').innerHTML='Importar<span>.</span>';if(typeof poRenderImportar==='function')poRenderImportar();}
   else{$('#view-roteiros').classList.add('on');$('#top-title').innerHTML='Roteiros<span>.</span>';renderRoteiros();}
   fechaSide();
 });

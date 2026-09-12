@@ -403,3 +403,36 @@ tbody tr:last-child td{border-bottom:none}
 .cv--bot{align-self:flex-end;background:rgba(31,168,221,.1);color:#0e7fae;border:1px solid rgba(31,168,221,.28)}
 .cv-w{display:block;font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;
   color:var(--faint);margin-bottom:4px}
+
+/* ===== IMPORTAR CONTATOS ===== */
+/* A agenda do celular NAO e lista de consentimento (tem medico, dentista,
+   fornecedor no meio) — esta tela existe pra mostrar a auditoria de fusao
+   ANTES de qualquer escrita. Por isso o resumo e a tabela de revisao tem
+   destaque visual proprio, no mesmo tom claro do resto do painel. */
+.imp-ct-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:20px 22px;box-shadow:var(--shadow);margin-bottom:18px}
+.imp-ct-box .lbl{font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.imp-ct-box .hint{font-size:.78rem;color:var(--muted);margin-top:6px;max-width:640px}
+.imp-ct-form{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:16px}
+.imp-ct-filename{font-size:.78rem;color:var(--faint);font-family:var(--font-mono)}
+.imp-ct-actions{display:flex;gap:10px;margin-top:16px}
+.imp-ct-actions .btn-add:disabled{opacity:.45;cursor:default;filter:none;box-shadow:none}
+
+.imp-ct-resumo{background:linear-gradient(100deg,var(--ink),#243040);color:#fff;
+  border-radius:10px;padding:16px 20px;margin-bottom:18px}
+.imp-ct-resumo .lbl{font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;color:var(--verde)}
+.imp-ct-resumo .hint{font-size:.86rem;color:#fff;margin-top:6px;opacity:.92}
+
+.imp-ct-resultado{background:rgba(22,163,74,.1);border:1px solid rgba(22,163,74,.3);
+  border-radius:10px;padding:16px 20px;margin-top:18px}
+.imp-ct-resultado .lbl{font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;color:var(--st-venda)}
+.imp-ct-resultado .hint{font-size:.86rem;color:var(--text);margin-top:6px}
+
+/* Os TRES sabores de 'revisar' (spec 9, task 6->8): cor so de sinalizacao,
+   quem explica a diferenca e o texto de .rv-motivo, nao a cor sozinha. */
+.rv-rotulo{font-weight:600;font-size:.82rem}
+.rv-motivo{font-size:.76rem;color:var(--muted);margin-top:2px;white-space:normal;max-width:420px}
+.rv-palpite .rv-rotulo{color:var(--st-aberto)}
+.rv-disputa .rv-rotulo{color:var(--st-nego)}
+.rv-erro .rv-rotulo{color:var(--st-perdido)}
+#ic-revisar-rows td{vertical-align:top;white-space:normal}
