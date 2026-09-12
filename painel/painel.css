@@ -334,3 +334,28 @@ tbody tr:last-child td{border-bottom:none}
 .fi-lead-d{font-size:.76rem;color:var(--faint)}
 .fi-lead-r{font-size:.88rem;font-weight:500}
 @media(max-width:640px){.fi-lead{grid-template-columns:1fr auto}.fi-lead-d{grid-column:1/-1}}
+
+/* ---------- aba Funil ---------- */
+.fn-board{display:grid;grid-template-columns:repeat(5,minmax(190px,1fr));gap:12px;
+  overflow-x:auto;padding-bottom:8px}
+@media(max-width:1100px){.fn-board{grid-template-columns:repeat(5,minmax(180px,1fr));width:max-content;min-width:100%}}
+.fn-col{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 10px;
+  display:flex;flex-direction:column;gap:8px;min-height:180px}
+.fn-col.fn-col--alvo{border-color:var(--azul);background:rgba(31,168,221,.06)}
+.fn-col-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.fn-col-t{font-size:.84rem;font-weight:600}
+.fn-col-n{font-family:var(--font-mono);font-size:.78rem;color:var(--faint)}
+.fn-modo{font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;
+  border-radius:5px;align-self:flex-start}
+.fn-modo--auto{background:rgba(31,168,221,.1);color:#0e7fae}
+.fn-modo--atalho{background:rgba(224,138,0,.14);color:#b06f00}
+.fn-col-b{display:flex;flex-direction:column;gap:8px}
+.fn-card{background:var(--surface3);border:1px solid var(--border);border-radius:9px;padding:9px 10px;
+  cursor:pointer;display:flex;flex-direction:column;gap:3px}
+.fn-card:hover{border-color:var(--azul)}
+.fn-card.fn-card--arrastando{opacity:.45}
+.fn-card-n{font-size:.86rem;font-weight:600}
+.fn-card-r{font-size:.76rem;color:var(--muted)}
+.fn-card-f{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font-size:.72rem;color:var(--faint);margin-top:2px}
+.fn-vazio{font-size:.74rem;color:var(--faint);padding:6px 2px}

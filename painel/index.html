@@ -42,6 +42,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>
         Clientes
       </button>
+      <button class="nav-item" data-view="funil">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="5" height="16"/><rect x="10" y="4" width="5" height="11"/><rect x="17" y="4" width="4" height="7"/></svg>
+        Funil
+      </button>
       <button class="nav-item" data-view="reports">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
         Relatórios
@@ -133,6 +137,11 @@
           </table>
         </div>
       </div>
+    </section>
+
+    <!-- ===== FUNIL ===== -->
+    <section class="view" id="view-funil">
+      <div class="fn-board" id="fn-board"></div>
     </section>
 
     <!-- ===== RELATÓRIOS ===== -->
@@ -372,5 +381,6 @@
 <script src="video-encode.js"></script>
 <script src="app.js"></script>
 <script src="clientes.js"></script>
+<script src="funil.js"></script>
 </body>
 </html>
