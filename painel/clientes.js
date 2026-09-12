@@ -113,7 +113,9 @@ function poLinhaPessoa(p) {
 }
 
 function poPessoas() {
-  return poAgrupaPessoas(typeof filtered === 'function' ? filtered() : LEADS);
+  // filtradasPessoas, nao filtered: a base de clientes ignora o filtro de
+  // mes, senao a aba abre mostrando so quem deu sinal no mes corrente.
+  return poAgrupaPessoas(typeof filtradasPessoas === 'function' ? filtradasPessoas() : LEADS);
 }
 
 function poRenderClientes() {

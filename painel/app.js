@@ -147,12 +147,32 @@ $$('#orig-filter .chip').forEach(c=>c.onclick=()=>{$$('#orig-filter .chip').forE
 
 /* ============================================================ LEADS */
 function inMonth(l){return F.month==='all'||monthKey(l.data)===F.month;}
-function filtered(){
-  return LEADS.filter(inMonth)
-    .filter(l=>F.orig==='todos'||l.origem===F.orig)
-    .filter(l=>F.status==='todos'||l.status===F.status)
-    .filter(l=>{if(!F.q)return true;const s=(l.nome+l.cidade+l.roteiro).toLowerCase();return s.includes(F.q.toLowerCase());});
+/* O recorte dos leads em pedacos, porque cada tela quer um recorte
+   diferente e reusar o mesmo em todas dava resultado errado em duas delas.
+   'usa' liga ou desliga cada filtro; a busca vale sempre. Os leads e o
+   filtro entram por parametro para a funcao poder ser testada sem o
+   painel. */
+function poFiltraLeads(leads,f,usa){
+  const q=(f.q||'').toLowerCase();
+  return (leads||[]).filter(l=>{
+    if(usa.mes&&!(f.month==='all'||monthKey(l.data)===f.month))return false;
+    if(usa.origem&&!(f.orig==='todos'||l.origem===f.orig))return false;
+    if(usa.status&&!(f.status==='todos'||l.status===f.status))return false;
+    if(q&&!(l.nome+l.cidade+l.roteiro).toLowerCase().includes(q))return false;
+    return true;
+  });
 }
+/* A aba Leads e a tabela do mes: usa os quatro filtros. */
+function filtered(){return poFiltraLeads(LEADS,F,{mes:true,origem:true,status:true});}
+/* O Funil ignora o filtro de status: as colunas do quadro JA sao o status.
+   Com ele ligado, mover um card para outra coluna fazia o card sumir do
+   quadro inteiro, restando so o toast dizendo que tinha sido movido. */
+function filtradosFunil(){return poFiltraLeads(LEADS,F,{mes:true,origem:true,status:false});}
+/* A aba Clientes ignora o filtro de mes: base de clientes nao e recorte
+   mensal. O seletor comeca no mes mais recente, entao a aba que existe
+   para responder "quem ja viajou com a gente" abria mostrando so quem deu
+   sinal neste mes, e os KPIs contavam so essas pessoas. */
+function filtradasPessoas(){return poFiltraLeads(LEADS,F,{mes:false,origem:true,status:true});}
 function origBadge(o){const x=ORIG[o]||ORIG.direto;return `<span class="orig ${x.cls}">${x.label}</span>`;}
 function renderLeads(){
   const rows=filtered();const tb=$('#lead-rows');

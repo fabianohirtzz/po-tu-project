@@ -52,7 +52,9 @@ function poCardFunil(l) {
 function poRenderFunil() {
   const alvo = document.querySelector('#fn-board');
   if (!alvo) return;
-  const cols = poAgrupaFunil(typeof filtered === 'function' ? filtered() : LEADS);
+  // filtradosFunil, nao filtered: o quadro ignora o filtro de status, senao
+  // mover um card para outra coluna faz ele sumir da tela inteira.
+  const cols = poAgrupaFunil(typeof filtradosFunil === 'function' ? filtradosFunil() : LEADS);
 
   alvo.innerHTML = PO_COLUNAS.map(c => {
     const lista = cols[c.status] || [];
