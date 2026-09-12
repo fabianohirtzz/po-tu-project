@@ -215,6 +215,12 @@ $$('.dr-tab').forEach(t=>t.onclick=()=>{
   $$('.dr-tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');
   $('#pane-dados').classList.toggle('on',t.dataset.tab==='dados');
   $('#pane-conversa').classList.toggle('on',t.dataset.tab==='conversa');
+  // A rolagem para a ultima mensagem acontece aqui, e nao no render: a
+  // gaveta abre sempre na aba Dados, entao na hora de renderizar a aba
+  // Conversa ainda esta em display:none e um elemento sem caixa tem
+  // scrollHeight 0 — a rolagem simplesmente nao acontecia e a conversa
+  // abria na mensagem mais antiga das 300.
+  if(t.dataset.tab==='conversa'&&typeof poRolaConversaFim==='function')poRolaConversaFim();
 });
 
 /* ---------- observações em linha temporal ---------- */
@@ -257,21 +263,35 @@ function closeDrawer(){$('#scrim').classList.remove('on');$('#drawer').classList
 $('#dr-close').onclick=closeDrawer;$('#dr-cancel').onclick=closeDrawer;
 $('#fi-close').onclick=()=>poFechaFicha();
 $('#scrim').onclick=()=>{closeDrawer();closeRot();closeNewLead();poFechaFicha();};
+/* O que a gaveta grava no banco quando a dona clica em Salvar. Mora fora
+   do handler porque e regra de negocio, nao de interface, e porque e a
+   unica parte deste arquivo que consegue perder dado em silencio.
+
+   "Preencher a venda conclui o lead" continua valendo, mas so quando o
+   valor foi preenchido AGORA. O quadro do funil tira o card de "Contrato
+   assinado" mantendo o valor de proposito (um engano de arrasto nao pode
+   destruir o numero); sem a comparacao com o valor anterior, abrir esse
+   lead depois para escrever uma anotacao e salvar empurrava o status de
+   volta para venda e recarimbava venda_at com a data de hoje, apagando a
+   data real do fechamento, que alimenta o ciclo de venda dos relatorios.
+
+   venda_at que ja existe nunca e reescrito: mesma regra do poPatchStatus
+   do funil. */
+function poPatchGaveta(campos,lead,agora){
+  const ven=Number(campos.ven)||0;
+  const venMudou=ven!==(Number(lead.ven)||0);
+  const status=(ven>0&&venMudou)?'venda':campos.status;
+  const vendaAt=status==='venda'?(lead.vendaAt||agora):null;
+  return {status,origem_manual:campos.origem,orcamento:Number(campos.orc)||0,venda:ven,venda_at:vendaAt};
+}
 $('#dr-save').onclick=async()=>{
   const l=LEADS.find(x=>x.id===openId);if(!l)return;
   const btn=$('#dr-save');btn.disabled=true;btn.textContent='Salvando…';
-  const ven=Number($('#e-ven').value)||0;
-  // Preencher a venda já conclui o lead; mudar o status na mão também fecha.
-  const status=ven>0?'venda':$('#e-status').value;
-  const fechado=ven>0||status==='venda';
-  // Carimba só na primeira vez — reeditar o valor não reinicia a contagem.
-  // Desfazer a venda (zerar o valor E tirar o status) limpa o carimbo.
-  const vendaAt=fechado?(l.vendaAt||new Date().toISOString()):null;
-  const patch={status,origem_manual:$('#e-orig').value,orcamento:Number($('#e-orc').value)||0,venda:ven,venda_at:vendaAt};
+  const patch=poPatchGaveta({ven:$('#e-ven').value,orc:$('#e-orc').value,status:$('#e-status').value,origem:$('#e-orig').value},l,new Date().toISOString());
   const {error}=await sb.from('po_leads').update(patch).eq('id',l.id);
   btn.disabled=false;btn.textContent='Salvar';
   if(error){toast('Erro ao salvar: '+error.message,true);return;}
-  l.status=patch.status;l.origem=patch.origem_manual;l.orc=patch.orcamento;l.ven=patch.venda;l.vendaAt=vendaAt;
+  l.status=patch.status;l.origem=patch.origem_manual;l.orc=patch.orcamento;l.ven=patch.venda;l.vendaAt=patch.venda_at;
   $('#e-status').value=l.status;$('#dr-ciclo').textContent=fmtCiclo(cicloDias(l));
   const f=$('#save-flash');f.classList.add('on');setTimeout(()=>f.classList.remove('on'),1600);
   renderLeads();toast('Lead atualizado.');
