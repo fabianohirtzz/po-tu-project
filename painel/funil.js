@@ -35,7 +35,12 @@ function poAgrupaFunil(leads) {
 
 function poCardFunil(l) {
   const valor = l.ven || l.orc;
-  return '<article class="fn-card" draggable="true" data-id="' + esc(l.id) + '">' +
+  // typeof (nao referencia direta) porque o teste isola poCardFunil sem
+  // poMovendo no contexto: typeof numa variavel livre nao declarada nao
+  // estoura, so devolve 'undefined'.
+  const movendo = typeof poMovendo !== 'undefined' && poMovendo.has(String(l.id));
+  return '<article class="fn-card' + (movendo ? ' fn-card--movendo' : '') +
+    '" draggable="true" data-id="' + esc(l.id) + '">' +
     '<div class="fn-card-n">' + esc(l.nome) + '</div>' +
     '<div class="fn-card-r">' + esc(l.roteiro) + '</div>' +
     '<div class="fn-card-f">' +
@@ -85,13 +90,25 @@ function poPatchStatus(status, lead) {
   return patch;
 }
 
+/* Leads com um poMoveLead em andamento. Existe pra travar a corrida na
+   origem: se o mesmo card recebe um segundo pedido de mover antes do
+   primeiro update responder, as duas chamadas ficam concorrentes e podem
+   voltar em qualquer ordem — a que chegar por ultimo e falhar reverteria
+   por cima de um estado que o banco ja confirmou. Mais simples ignorar o
+   pedido novo do que tentar reconciliar depois. */
+const poMovendo = new Set();
+
 async function poMoveLead(id, status) {
-  const l = LEADS.find(x => String(x.id) === String(id));
+  const key = String(id);
+  if (poMovendo.has(key)) return;
+
+  const l = LEADS.find(x => String(x.id) === key);
   if (!l || l.status === status) return;
 
   const antes = {status: l.status, vendaAt: l.vendaAt};
   const patch = poPatchStatus(status, l);
 
+  poMovendo.add(key);
   // Move na tela primeiro: o quadro responde na hora e desfaz se o banco
   // recusar. Esperar a rede para so entao mover deixa a sensacao de travado.
   l.status = status;
@@ -99,6 +116,8 @@ async function poMoveLead(id, status) {
   poRenderFunil();
 
   const {error} = await sb.from('po_leads').update(patch).eq('id', l.id);
+  poMovendo.delete(key);
+
   if (error) {
     l.status = antes.status;
     l.vendaAt = antes.vendaAt;
@@ -106,6 +125,7 @@ async function poMoveLead(id, status) {
     toast('Nao consegui mover: ' + error.message, true);
     return;
   }
+  poRenderFunil();
   const col = PO_COLUNAS.find(c => c.status === status);
   toast('Movido para ' + (col ? col.titulo : status) + '.');
 }

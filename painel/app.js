@@ -175,7 +175,12 @@ function renderLeads(){
 function renderLeadKpis(rows){
   const total=rows.length,vendas=rows.filter(l=>l.status==='venda');
   const conv=total?Math.round(vendas.length/total*100):0;
-  const valVen=rows.reduce((s,l)=>s+l.ven,0),valOrc=rows.reduce((s,l)=>s+l.orc,0);
+  // Em vendas soma so quem esta em status 'venda': arrastar o card pra
+  // fora de venda limpa o venda_at (regra de negocio), mas o valor (ven)
+  // continua no lead de proposito (mover de volta por engano nao pode
+  // destruir o numero). Sem o filtro por status o faturamento fica
+  // inflado em silencio pra sempre.
+  const valVen=vendas.reduce((s,l)=>s+l.ven,0),valOrc=rows.reduce((s,l)=>s+l.orc,0);
   $('#lead-kpis').innerHTML=`
     <div class="kpi"><div class="kpi-l">Leads no período</div><div class="kpi-n">${total}</div><div class="kpi-sub">${rows.filter(l=>isPago(l.origem)).length} pago · ${rows.filter(l=>!isPago(l.origem)).length} orgânico</div></div>
     <div class="kpi k-green"><div class="kpi-l">Vendas fechadas</div><div class="kpi-n">${vendas.length}</div><div class="kpi-sub"><b>${conv}%</b> de conversão</div></div>
@@ -324,9 +329,13 @@ function rowsForReports(){return LEADS.filter(inMonth).filter(l=>F.orig==='todos
 function renderReports(){
   const rows=rowsForReports();const total=rows.length;
   const vendas=rows.filter(l=>l.status==='venda');
-  const valVen=rows.reduce((s,l)=>s+l.ven,0),valOrc=rows.reduce((s,l)=>s+l.orc,0);
+  // Mesma regra do KPI da aba Leads: so soma ven de quem esta em status
+  // 'venda'. O ven do lead nao e zerado ao sair de venda (o poMoveLead do
+  // funil so limpa o venda_at), entao sem este filtro o faturamento e o
+  // ROAS ficariam inflados pra sempre por um lead que saiu de venda.
+  const valVen=vendas.reduce((s,l)=>s+l.ven,0),valOrc=rows.reduce((s,l)=>s+l.orc,0);
   const conv=total?(vendas.length/total*100):0,ticket=vendas.length?valVen/vendas.length:0;
-  const sp=curSpend(),venPago=rows.filter(l=>isPago(l.origem)).reduce((s,l)=>s+l.ven,0),leadsPago=rows.filter(l=>isPago(l.origem)).length;
+  const sp=curSpend(),venPago=vendas.filter(l=>isPago(l.origem)).reduce((s,l)=>s+l.ven,0),leadsPago=rows.filter(l=>isPago(l.origem)).length;
   const roas=sp>0?venPago/sp:0,roi=sp>0?((venPago-sp)/sp*100):0,cpl=leadsPago>0?sp/leadsPago:0;
   // Ciclo: leads que ENTRARAM no período e já fecharam. Responde "quanto demorei
   // para fechar os leads deste mês" — não "o que fechou neste mês".
