@@ -656,3 +656,18 @@ function wa_import_resumo($plano) {
     }
     return $r;
 }
+
+/* ============================================================
+   IDENTIDADE DO LOTE (idempotencia da importacao)
+============================================================ */
+
+/* Identidade de um lote de importacao. O CONTEUDO, nao o nome do arquivo: a
+   cliente vai exportar dois aparelhos e os dois podem se chamar contatos.vcf.
+   A origem entra no hash porque o MESMO arquivo aplicado como agenda-esposa e
+   depois como agenda-marido e engano do operador, nao segunda importacao.
+
+   O \0 separa os dois campos. Sem ele a concatenacao e ambigua: 'ag'+'endaX'
+   e 'age'+'ndaX' dariam o mesmo hash, e dois lotes diferentes se confundiriam. */
+function wa_import_hash_lote($texto, $origem) {
+    return hash('sha256', (string) $origem . "\0" . (string) $texto);
+}

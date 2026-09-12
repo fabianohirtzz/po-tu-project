@@ -115,6 +115,36 @@ if (function_exists('mb_check_encoding') && !mb_check_encoding($texto, 'UTF-8'))
     $texto = mb_convert_encoding($texto, 'UTF-8', 'Windows-1252');
 }
 
+/* -------- idempotencia: este arquivo ja foi aplicado? -------- */
+/* O cenario que quebra a base nao e exotico: a importacao grava centenas de
+   contatos em POSTs sequenciais, o fetch do navegador estoura o timeout de
+   10s DEPOIS de o servidor ja ter gravado, a tela mostra erro e a reacao
+   natural e clicar de novo. Das 775 fichas de hoje, 615 nao tem telefone
+   nenhum - essas nao casam com nada na segunda passada e entrariam
+   duplicadas, sem nenhum sinal.
+
+   A conferencia vem ANTES da leitura da base: quem esta no retry ja perdeu
+   uma vez, e nao ha por que ler 800 leads para depois recusar. */
+$hash   = wa_import_hash_lote($texto, $origem);
+$forcar = cpost('forcar') === '1';
+
+if ($modo === 'aplicar' && !$forcar) {
+    /* Leitura ESTRITA, pelo mesmo motivo da base: o wa_db_select comum
+       devolve [] tanto para "nao achei" quanto para "o Supabase recusou".
+       Tratar erro como "nao achei" aqui e concluir que o lote e novo com o
+       banco fora do ar - exatamente a duplicacao que esta guarda impede. */
+    $ja = wa_db_select_estrito('po_import_lotes',
+        'select=id,created_at&hash=eq.' . rawurlencode($hash) . '&limit=1');
+    if ($ja === null) {
+        cfail(503, 'Nao consegui conferir se este arquivo ja foi importado. Nada foi gravado. Tente de novo em instantes.');
+    }
+    if (!empty($ja)) {
+        cfail(409, 'Este arquivo ja foi importado nesta origem. Se quiser importar mesmo assim, marque "importar novamente".');
+    }
+}
+/* O preview NUNCA passa por aqui de proposito: ver de novo o que o arquivo
+   faria nao escreve nada, entao recusar seria so atrapalhar. */
+
 $contatos = $tipo === 'csv' ? wa_csv_parse($texto) : wa_vcard_parse($texto);
 if (!$contatos) {
     cfail(422, 'Nenhum contato reconhecido no arquivo. Confira se o tipo (' . $tipo . ') esta certo.');
@@ -180,4 +210,24 @@ $res = wa_import_aplica(
     fn($linha) => wa_db_insert('po_leads', $linha),
     fn($id, $campos) => wa_db_update('po_leads', 'id=eq.' . rawurlencode((string) $id), $campos)
 );
+
+/* Grava o lote DEPOIS da escrita: se a importacao morreu no meio, o lote nao
+   fica registrado e a cliente consegue tentar de novo sem precisar do forcar.
+   Registrar antes trocaria o problema de lado - a base ficaria pela metade e
+   a segunda tentativa levaria 409.
+
+   Sem o conteudo do arquivo, so o hash dele: nome, telefone e CPF de cliente
+   nao tem por que morar numa tabela de log. $ignora_conflito=true porque o
+   unique em 'hash' E a idempotencia: dois cliques simultaneos fazem o
+   segundo insert bater no unique, e isso e o comportamento esperado, nao
+   erro que deva derrubar uma importacao que ja escreveu. */
+wa_db_insert('po_import_lotes', [
+    'hash'        => $hash,
+    'origem'      => $origem,
+    'arquivo'     => substr((string) ($_FILES['arquivo']['name'] ?? ''), 0, 120),
+    'total'       => $resumo['total'] ?? 0,
+    'novos'       => $res['novos'] ?? 0,
+    'preenchidos' => $res['preenchidos'] ?? 0,
+], true);
+
 echo json_encode(['ok' => true, 'resumo' => $resumo, 'aplicado' => $res], JSON_UNESCAPED_UNICODE);

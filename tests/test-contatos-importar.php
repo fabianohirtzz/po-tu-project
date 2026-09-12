@@ -61,10 +61,32 @@ function ci_filho($caso) {
         case 'leitura-falha':
         case 'leitura-html':
         case 'leitura-falha-pagina2': $_POST['modo'] = 'aplicar'; break;
+
+        /* Idempotencia: o mesmo arquivo, na mesma origem, chegando de novo.
+           'lote-repetido-preview' e o MESMO lote em modo preview - ver de
+           novo o que o arquivo faria nao escreve nada, entao a guarda nao
+           pode barrar. */
+        case 'lote-repetido':
+        case 'lote-consulta-falha':   $_POST['modo'] = 'aplicar'; break;
+        case 'lote-repetido-forcado': $_POST['modo'] = 'aplicar'; $_POST['forcar'] = '1'; break;
+        case 'lote-repetido-preview': $_POST['modo'] = 'preview'; break;
     }
 
     wa_db_set_transport(function ($metodo, $url, $corpo, $headers) use ($caso, &$chamadas) {
         $chamadas[] = ['metodo'=>$metodo, 'url'=>$url, 'corpo'=>$corpo];  // headers NUNCA
+
+        /* A consulta do lote e uma tabela diferente da base: responder as
+           duas pelo mesmo ramo faria o teste passar por acidente. */
+        if ($metodo === 'GET' && strpos($url, 'po_import_lotes') !== false) {
+            if ($caso === 'lote-consulta-falha') {
+                return ['status'=>503, 'body'=>'{"message":"service unavailable"}'];
+            }
+            $repetido = in_array($caso, ['lote-repetido', 'lote-repetido-preview',
+                                         'lote-repetido-forcado'], true);
+            return ['status'=>200, 'body'=>json_encode(
+                $repetido ? [['id'=>'LOTE-1', 'created_at'=>'2026-09-11T14:00:00+00:00']] : []
+            )];
+        }
 
         if ($metodo === 'GET') {
             preg_match('/offset=(\d+)/', $url, $m);
@@ -123,6 +145,15 @@ function ci_roda($caso) {
 }
 function ci_metodos($r) { return array_map(fn($c) => $c['metodo'], $r['chamadas']); }
 
+/* As chamadas de UMA tabela. A guarda de idempotencia consulta a
+   po_import_lotes antes da base, entao "so leu a base e parou" passou a
+   precisar ser dito por tabela - a contagem total agora mistura as duas. */
+function ci_de($r, $tabela) {
+    return array_values(array_filter($r['chamadas'],
+        fn($c) => strpos($c['url'], '/rest/v1/' . $tabela) !== false));
+}
+function ci_metodos_de($r, $tabela) { return array_map(fn($c) => $c['metodo'], ci_de($r, $tabela)); }
+
 /* --- login e checado ANTES de qualquer leitura ou escrita --- */
 $r = ci_roda('sem-auth');
 ok($r['codigo'] === 401, 'sessao invalida responde 401');
@@ -157,8 +188,8 @@ $r = ci_roda('aplicar');
 ok($r['json']['ok'] === true, 'aplicar deu certo');
 ok($r['json']['aplicado'] === ['novos'=>1,'preenchidos'=>1,'revisar'=>0,'ignorados'=>0,'falhas'=>0], 'contagem do que foi feito');
 
-$escritas = array_values(array_filter($r['chamadas'], fn($c) => $c['metodo'] !== 'GET'));
-ok(count($escritas) === 2, 'duas escritas: um insert e um update');
+$escritas = array_values(array_filter(ci_de($r, 'po_leads'), fn($c) => $c['metodo'] !== 'GET'));
+ok(count($escritas) === 2, 'duas escritas na base: um insert e um update');
 
 $patch = null; $post = null;
 foreach ($escritas as $e) { if ($e['metodo'] === 'PATCH') $patch = $e; else $post = $e; }
@@ -183,7 +214,7 @@ ok($linha['revisado'] === false && $linha['cliente'] === false, 'contato de agen
 $r = ci_roda('leitura-falha');
 ok($r['codigo'] === 503, 'base ilegivel responde 503');
 ok($r['json']['ok'] === false, 'e nao finge sucesso');
-ok(ci_metodos($r) === ['GET'], 'aborta na primeira falha, sem sonda e sem escrita');
+ok(ci_metodos_de($r, 'po_leads') === ['GET'], 'aborta na primeira falha, sem sonda e sem escrita');
 ok(!in_array('POST', ci_metodos($r), true), 'NADA e inserido quando a base nao pode ser lida');
 
 /* 200 com corpo que nao e JSON. Numa hospedagem compartilhada isso chega de
@@ -193,14 +224,99 @@ ok(!in_array('POST', ci_metodos($r), true), 'NADA e inserido quando a base nao p
 $r = ci_roda('leitura-html');
 ok($r['codigo'] === 503, 'resposta 200 que nao e JSON tambem responde 503');
 ok($r['json']['ok'] === false, 'e nao finge que a base esta vazia');
-ok(ci_metodos($r) === ['GET'], 'aborta na primeira resposta ilegivel');
+ok(ci_metodos_de($r, 'po_leads') === ['GET'], 'aborta na primeira resposta ilegivel');
 ok(!in_array('POST', ci_metodos($r), true), 'NADA e inserido quando a resposta nao e a base');
 
 $r = ci_roda('leitura-falha-pagina2');
 ok($r['codigo'] === 503, 'falha na segunda pagina tambem aborta');
 ok($r['json']['ok'] === false, 'nao diz que importou');
 $m = ci_metodos($r);
-ok($m === ['GET', 'GET'], 'leu a primeira pagina, tentou a segunda e parou');
+ok(ci_metodos_de($r, 'po_leads') === ['GET', 'GET'], 'leu a primeira pagina, tentou a segunda e parou');
 ok(!in_array('POST', $m, true) && !in_array('PATCH', $m, true), 'base lida pela metade nao escreve nada');
+ok(ci_metodos_de($r, 'po_import_lotes') === ['GET'],
+   'import que abortou no meio NAO registra o lote: senao a segunda tentativa cairia no 409');
+
+/* ============================================================
+   IDEMPOTENCIA: reaplicar o mesmo arquivo nao pode duplicar a base.
+   O gatilho e real: o fetch do navegador estoura o timeout DEPOIS de o
+   servidor ja ter gravado, a tela mostra erro e a reacao natural e clicar
+   de novo. Das 775 fichas de hoje, 615 nao tem telefone nenhum - essas nao
+   tem por onde ser reconciliadas numa segunda passada e entrariam
+   duplicadas, sem nenhum sinal.
+============================================================ */
+
+/* --- lote repetido: o segundo aplicar e recusado, sem escrever nada --- */
+$r = ci_roda('lote-repetido');
+ok($r['codigo'] === 409, 'lote ja aplicado responde 409');
+ok($r['json']['ok'] === false, 'e nao diz ok');
+ok(!in_array('POST', ci_metodos($r), true), 'nenhuma escrita de lead');
+ok(!in_array('PATCH', ci_metodos($r), true), 'e nenhum update tambem');
+ok(strpos(strtolower($r['json']['error'] ?? ''), 'ja foi importado') !== false,
+   'a mensagem explica que o arquivo ja foi importado');
+ok(ci_de($r, 'po_leads') === [],
+   'recusa antes de ler a base inteira: a cliente ja esta no retry, o 409 tem que ser rapido');
+ok(strpos($r['bruto'], 'BEGIN:VCARD') === false, 'o 409 nao ecoa conteudo do arquivo');
+
+/* --- com forcar=1, aplica mesmo assim --- */
+$r = ci_roda('lote-repetido-forcado');
+ok($r['codigo'] === 200 || $r['codigo'] === 0, 'forcar=1 aplica mesmo com lote repetido');
+ok($r['json']['ok'] === true, 'e diz que deu certo');
+ok(ci_de($r, 'po_import_lotes') === [] || ci_metodos_de($r, 'po_import_lotes') === ['POST'],
+   'com forcar nem consulta o lote, so registra o novo');
+$escritas = array_values(array_filter(ci_de($r, 'po_leads'), fn($c) => $c['metodo'] !== 'GET'));
+ok(count($escritas) === 2, 'forcar escreve de verdade: um insert e um update');
+
+/* --- o preview NUNCA e bloqueado pelo lote: ver de novo nao escreve nada --- */
+$r = ci_roda('lote-repetido-preview');
+ok($r['codigo'] === 200 || $r['codigo'] === 0, 'preview de lote repetido continua funcionando');
+ok($r['json']['ok'] === true, 'e devolve o plano');
+ok(ci_de($r, 'po_import_lotes') === [], 'o preview nem pergunta pelo lote');
+ok(!in_array('POST', ci_metodos($r), true) && !in_array('PATCH', ci_metodos($r), true),
+   'preview segue sem escrever nada');
+
+/* --- consulta do lote que FALHA nao pode virar "lote novo" --- */
+/* E o mesmo buraco do Critical, um andar acima: tratar erro como "nao achei"
+   aqui significa concluir que o lote e novo com o banco fora do ar, que e
+   exatamente a duplicacao que esta guarda existe para impedir. */
+$r = ci_roda('lote-consulta-falha');
+ok($r['codigo'] === 503, 'consulta do lote ilegivel responde 503');
+ok($r['json']['ok'] === false, 'e nao finge que o lote e novo');
+ok(ci_de($r, 'po_leads') === [], 'nem chega a ler a base');
+ok(!in_array('POST', ci_metodos($r), true) && !in_array('PATCH', ci_metodos($r), true),
+   'NADA e escrito quando nao da para conferir o lote');
+
+/* --- o lote e registrado DEPOIS da escrita, com a contagem do que foi feito --- */
+$r = ci_roda('aplicar');
+$lotes = ci_de($r, 'po_import_lotes');
+ok(ci_metodos_de($r, 'po_import_lotes') === ['GET', 'POST'], 'conferiu o lote e depois registrou');
+$reg = json_decode($lotes[1]['corpo'], true);
+/* trim() porque cpost() apara o campo 'texto' colado; pelo upload o conteudo
+   vai byte a byte como veio. Cada caminho e consistente consigo mesmo, que e
+   o que a idempotencia precisa. */
+ok(is_array($reg) && ($reg['hash'] ?? '') === wa_import_hash_lote(trim(CI_VCF), 'agenda-esposa'),
+   'o lote e gravado com o hash do conteudo + origem');
+ok(strpos($lotes[0]['url'], 'hash=eq.' . $reg['hash']) !== false,
+   'o hash gravado e o MESMO que foi consultado: senao a guarda nunca acharia o proprio lote');
+ok($reg['origem'] === 'agenda-esposa', 'e com a origem');
+ok($reg['total'] === 2 && $reg['novos'] === 1 && $reg['preenchidos'] === 1,
+   'a contagem gravada e a do que realmente foi aplicado');
+ok(strpos(json_encode($reg), 'BEGIN:VCARD') === false, 'o registro do lote nao guarda o arquivo');
+
+$ordem = array_map(fn($c) => $c['metodo'] . ' ' . (strpos($c['url'], 'po_import_lotes') !== false ? 'lotes' : 'leads'),
+                   $r['chamadas']);
+ok(array_search('POST lotes', $ordem, true) > array_search('POST leads', $ordem, true),
+   'o lote entra DEPOIS dos leads: import que falha no meio nao fica registrado');
+
+/* --- o hash muda com o conteudo e com a origem --- */
+ok(wa_import_hash_lote('AAA', 'agenda-esposa') === wa_import_hash_lote('AAA', 'agenda-esposa'),
+   'mesmo conteudo e mesma origem dao o mesmo hash');
+ok(wa_import_hash_lote('AAA', 'agenda-esposa') !== wa_import_hash_lote('BBB', 'agenda-esposa'),
+   'conteudo diferente muda o hash');
+ok(wa_import_hash_lote('AAA', 'agenda-esposa') !== wa_import_hash_lote('AAA', 'agenda-marido'),
+   'origem diferente muda o hash: o mesmo arquivo em duas origens e engano do operador');
+/* O separador \0 existe para isto: sem ele, 'ag' + 'endaX' e 'age' + 'ndaX'
+   dariam a mesma string e o mesmo hash. */
+ok(wa_import_hash_lote('B', 'A') !== wa_import_hash_lote('', 'AB'),
+   'a fronteira entre origem e conteudo nao pode ser ambigua');
 
 echo "test-contatos-importar OK\n";
