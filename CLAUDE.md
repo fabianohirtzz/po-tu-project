@@ -108,7 +108,7 @@ página do roteiro**.
   divergente (hospedagem compartilhada), então o `curl` precisa de `-k` para pular a
   verificação do certificado (a conexão continua criptografada).
 - **Host:** `ftp.pereiraoliveiraturismo.com.br`
-- **Usuário:** `sitepo@pereiraoliveiraturismo.com.br`
+- **Usuário:** `pereirapo@pereiraoliveiraturismo.com.br`
 - **Senha:** NÃO versionada aqui (o CLAUDE.md vai pro GitHub). O cliente/dono fornece
   na hora do deploy; usar via arquivo `.netrc` temporário no scratchpad (fora do Git),
   nunca colar a senha inline no comando. Apagar o `.netrc` ao terminar.
@@ -125,7 +125,7 @@ Receita (ajustar o `<ARQUIVO>` e o caminho de destino):
 # 1) netrc temporario no scratchpad (fora do Git)
 cat > "$SCRATCH/.netrc" <<'EOF'
 machine ftp.pereiraoliveiraturismo.com.br
-login sitepo@pereiraoliveiraturismo.com.br
+login pereirapo@pereiraoliveiraturismo.com.br
 password <SENHA_FORNECIDA_NA_HORA>
 EOF
 chmod 600 "$SCRATCH/.netrc"
@@ -479,9 +479,14 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
   Arquivos: `whatsapp.php` (webhook), `wa-cron.php`, `lib/wa-{config,db,send,fone,roteiro,
   webhook,motor,timeout}.php`, migrations `2026-09-11-whatsapp-motor.sql` e
   `2026-09-11-lembrete-menu.sql` (**as duas já rodadas no Supabase**).
-- **NADA FOI PARA PRODUÇÃO.** Não subir por FTP antes de preencher os segredos: com
-  `WA_APP_SECRET` e `WA_VERIFY_TOKEN` vazios o webhook **recusa tudo**, inclusive a
-  verificação do cadastro na Meta (segredo vazio nunca autoriza, por decisão de segurança).
+- **NO AR desde 12/09/2026, porém INERTE.** Os 10 arquivos do motor estão publicados na
+  ereHost, mas o `config.local.php` do servidor **ainda não tem as chaves da Meta** — e com
+  `WA_APP_SECRET`, `WA_VERIFY_TOKEN` e `WA_CRON_KEY` vazios os dois endpoints **recusam
+  tudo** (segredo vazio nunca autoriza, por decisão de segurança). Conferido em produção:
+  `whatsapp.php` devolve 403 no GET sem token, no `hub_verify_token` chutado e no POST sem
+  assinatura; `wa-cron.php` devolve 403 sem chave e com chave chutada; os `lib/wa-*.php`
+  servem corpo vazio. **Nenhum cron foi cadastrado no cPanel** — cadastrar só junto com as
+  chaves, senão ele roda de hora em hora sem ter o que varrer.
 - **Regras permanentes deste subsistema:**
   - **O eco (`smb_message_echoes`) silencia o robô para sempre naquele contato**, inclusive
     quando o eco é atalho ou PDF. Robô e humana falando por cima uma da outra é o pior modo
@@ -504,7 +509,7 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
 - **PLANO 2 DE 3 — PAINEL DO FUNIL: FEITO E MERGEADO** (`main`, merge `e7145ed`).
   6 tarefas em TDD, a suíte foi de 13 para **19 arquivos** de teste (o runner passou a
   rodar também os `test-*.mjs`, que existiam e nunca rodavam). Arquivos novos:
-  `painel/{clientes,funil,conversa}.js`. **Nada foi para produção** (deploy é FTP manual).
+  `painel/{clientes,funil,conversa}.js`. **NO AR desde 12/09/2026** (ver Deploy abaixo).
   - **Aba Clientes:** lista **pessoas**, não interesses avulsos. A ficha agrega por
     telefone (spec 7.1), sem tabela nova. O KPI "já viajaram" existe porque é a lista
     que a transmissão do plano 3 vai querer.
@@ -528,10 +533,22 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
       mensagens de todos os contatos. Ver as pendências.
   - **Pendências:** `docs/superpowers/reviews/2026-09-11-painel-funil-pendencias.md`.
     A primeira (duas linhas de teste) fecha o gatilho do vazamento acima.
+- **DEPLOY (12/09/2026): FEITO.** 16 arquivos por FTP, conferidos byte a byte contra o
+  local e por HTTPS: `painel/{index.html,app.js,painel.css,clientes,funil,conversa}.js`,
+  `lib/wa-{config,db,fone,send,roteiro,webhook,motor,timeout}.php`, `whatsapp.php` e
+  `wa-cron.php`. `config.local.php` **não** foi tocado. O site público segue de pé
+  (home, `/roteiros`, `/roteiros/turquia`, `/link`, `/contato.html` todos 200).
+  - **Cache-buster obrigatório no painel.** O `.htaccess` cacheia JS/CSS por 1 mês e o
+    `painel/index.html` não tinha versão nenhuma nas tags: sem o `?v=` a cliente seguiria
+    com o `app.js` e o `painel.css` de julho. Hoje está `painel.css?v=2`, `app.js?v=2`,
+    `{clientes,funil,conversa}.js?v=1`. **Toda mexida nesses arquivos exige subir o número.**
+  - **Ordem do upload importa:** os JS novos primeiro, o `index.html` por último. Ao
+    contrário, existe uma janela em que a página já pede arquivos que ainda dão 404.
 - **Falta:** plano 3 (importador de contatos + transmissão), a conexão real com a Meta,
   a homologação, e a **conferência visual do painel com login real** — seis tarefas
-  mexeram em `painel/app.js`, `index.html` e `painel.css`, que estão em produção, e
-  nenhum agente conseguiu passar do login do Supabase.
+  mexeram em `painel/app.js`, `index.html` e `painel.css`, e nenhum agente conseguiu
+  passar do login do Supabase. O deploy foi validado por sintaxe, testes (19 arquivos),
+  hash do conteúdo servido e status HTTP; **a tela em si ninguém viu logada**.
 - **Aberto:** se o Embedded Signup da coexistência exige revisão de app da Meta. Se exigir,
   entra uma etapa a mais antes de conectar.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
