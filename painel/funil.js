@@ -65,3 +65,119 @@ function poRenderFunil() {
 
   if (typeof poLigaMover === 'function') poLigaMover();
 }
+
+/* ---------- mover o card ---------- */
+
+/* O que vai para o banco quando o status muda. Separado da UI porque a
+   regra do venda_at e de negocio, nao de interface: ele alimenta o ciclo
+   de venda dos relatorios, e um carimbo errado faz o relatorio mentir
+   sem que ninguem perceba. */
+function poPatchStatus(status, lead) {
+  const patch = {status};
+  if (status === 'venda') {
+    // Venda que ja tinha carimbo mantem a data original: mover o card de
+    // novo nao pode reescrever quando a venda aconteceu.
+    if (!lead.vendaAt) patch.venda_at = new Date().toISOString();
+    else patch.venda_at = lead.vendaAt;
+  } else if (lead.vendaAt) {
+    patch.venda_at = null;
+  }
+  return patch;
+}
+
+async function poMoveLead(id, status) {
+  const l = LEADS.find(x => String(x.id) === String(id));
+  if (!l || l.status === status) return;
+
+  const antes = {status: l.status, vendaAt: l.vendaAt};
+  const patch = poPatchStatus(status, l);
+
+  // Move na tela primeiro: o quadro responde na hora e desfaz se o banco
+  // recusar. Esperar a rede para so entao mover deixa a sensacao de travado.
+  l.status = status;
+  if ('venda_at' in patch) l.vendaAt = patch.venda_at;
+  poRenderFunil();
+
+  const {error} = await sb.from('po_leads').update(patch).eq('id', l.id);
+  if (error) {
+    l.status = antes.status;
+    l.vendaAt = antes.vendaAt;
+    poRenderFunil();
+    toast('Nao consegui mover: ' + error.message, true);
+    return;
+  }
+  const col = PO_COLUNAS.find(c => c.status === status);
+  toast('Movido para ' + (col ? col.titulo : status) + '.');
+}
+
+/* Arrastar so existe no desktop: o HTML puro nao tem arrastar por toque, e
+   o projeto nao carrega biblioteca de front. No celular o toque abre o
+   menu de etapas, que e ate mais rapido do que arrastar com o dedo. */
+function poLigaMover() {
+  const board = document.querySelector('#fn-board');
+  if (!board) return;
+  const toque = window.matchMedia('(hover: none)').matches;
+
+  board.querySelectorAll('.fn-card').forEach(card => {
+    if (toque) {
+      card.draggable = false;
+      card.onclick = () => poAbreMenuEtapa(card.dataset.id);
+      return;
+    }
+    card.ondblclick = () => openDrawer(card.dataset.id);
+    card.ondragstart = e => {
+      e.dataTransfer.setData('text/plain', card.dataset.id);
+      e.dataTransfer.effectAllowed = 'move';
+      card.classList.add('fn-card--arrastando');
+    };
+    card.ondragend = () => card.classList.remove('fn-card--arrastando');
+  });
+
+  board.querySelectorAll('.fn-col').forEach(col => {
+    col.ondragover = e => { e.preventDefault(); col.classList.add('fn-col--alvo'); };
+    col.ondragleave = () => col.classList.remove('fn-col--alvo');
+    col.ondrop = e => {
+      e.preventDefault();
+      col.classList.remove('fn-col--alvo');
+      const id = e.dataTransfer.getData('text/plain');
+      if (id) poMoveLead(id, col.dataset.status);
+    };
+  });
+}
+
+function poFechaMenuEtapa() {
+  const menu = document.querySelector('#fn-menu');
+  if (menu) menu.classList.remove('on');
+}
+
+function poAbreMenuEtapa(id) {
+  const l = LEADS.find(x => String(x.id) === String(id));
+  if (!l) return;
+  const menu = document.querySelector('#fn-menu');
+  menu.querySelector('#fn-menu-n').textContent = l.nome;
+  menu.querySelector('#fn-menu-o').innerHTML = PO_COLUNAS.map(c =>
+    '<button class="fn-menu-b' + (c.status === l.status ? ' on' : '') +
+      '" data-status="' + c.status + '">' + c.titulo + '</button>').join('') +
+    '<button class="fn-menu-b fn-menu-b--ver" data-ver="1">Ver o lead completo</button>';
+  menu.querySelectorAll('.fn-menu-b').forEach(b => {
+    b.onclick = () => {
+      poFechaMenuEtapa();
+      document.querySelector('#scrim').classList.remove('on');
+      if (b.dataset.ver) openDrawer(id);
+      else if (b.dataset.status !== l.status) poMoveLead(id, b.dataset.status);
+    };
+  });
+  document.querySelector('#scrim').classList.add('on');
+  menu.classList.add('on');
+}
+
+/* O menu de etapas usa o mesmo #scrim do drawer e da ficha, que sobrevive
+   ao innerHTML do #fn-board. Por isso o listener de fechar ao tocar fora
+   e anexado uma vez so, aqui fora do poRenderFunil/poLigaMover, e via
+   addEventListener (nao onclick) para nao substituir o handler que o
+   app.js ja tem no scrim para o drawer/ficha/rdrawer/ndrawer. Sem isso o
+   menu nao tinha nenhum jeito de fechar sem escolher uma etapa. */
+(function poLigaScrimMenu() {
+  const scrim = document.querySelector('#scrim');
+  if (scrim) scrim.addEventListener('click', poFechaMenuEtapa);
+})();

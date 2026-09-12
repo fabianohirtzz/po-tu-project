@@ -61,4 +61,25 @@ assert.ok(!html.includes('<img src=x'), 'nome de terceiro escapado no card');
 assert.ok(html.includes('data-id="7"'), 'o card carrega o id do lead');
 assert.ok(html.includes('draggable="true"'), 'o card e arrastavel');
 
+// --- a regra de negocio do mover, isolada da UI: mover para 'venda'
+// precisa carimbar venda_at, e tirar de 'venda' precisa limpar, senao o
+// relatorio de ciclo de venda mente.
+const ctxMove = new Function(
+  pega('poPatchStatus') + '; return poPatchStatus;'
+)();
+
+const paraVenda = ctxMove('venda', {ven: 22900, vendaAt: null});
+assert.equal(paraVenda.status, 'venda', 'grava o status');
+assert.ok(paraVenda.venda_at, 'mover para venda carimba venda_at');
+
+const jaTinha = ctxMove('venda', {ven: 22900, vendaAt: '2026-03-20T12:00:00Z'});
+assert.equal(jaTinha.venda_at, '2026-03-20T12:00:00Z', 'venda que ja tinha carimbo mantem a data original');
+
+const saiuDeVenda = ctxMove('negociacao', {ven: 22900, vendaAt: '2026-03-20T12:00:00Z'});
+assert.equal(saiuDeVenda.status, 'negociacao', 'grava o status novo');
+assert.equal(saiuDeVenda.venda_at, null, 'tirar de venda limpa o carimbo');
+
+const comum = ctxMove('atendimento', {ven: 0, vendaAt: null});
+assert.equal(comum.venda_at, undefined, 'movimento comum nao mexe em venda_at');
+
 console.log('test-funil OK');

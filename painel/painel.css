@@ -359,3 +359,15 @@ tbody tr:last-child td{border-bottom:none}
 .fn-card-f{display:flex;align-items:center;justify-content:space-between;gap:8px;
   font-size:.72rem;color:var(--faint);margin-top:2px}
 .fn-vazio{font-size:.74rem;color:var(--faint);padding:6px 2px}
+
+/* Menu de etapas do celular. Vem de baixo, que e onde o polegar alcanca. */
+.fn-menu{position:fixed;left:0;right:0;bottom:0;z-index:70;background:var(--surface);
+  border-top:1px solid var(--border);border-radius:16px 16px 0 0;padding:16px 14px 22px;
+  transform:translateY(100%);transition:transform .25s ease}
+.fn-menu.on{transform:none}
+.fn-menu-h{font-size:.86rem;color:var(--muted);margin-bottom:12px}
+.fn-menu-o{display:flex;flex-direction:column;gap:7px}
+.fn-menu-b{width:100%;text-align:left;padding:13px 14px;border-radius:10px;cursor:pointer;
+  background:var(--surface3);border:1px solid var(--border);color:inherit;font:inherit;font-size:.9rem}
+.fn-menu-b.on{border-color:var(--azul);color:var(--azul)}
+.fn-menu-b--ver{margin-top:6px;background:transparent;color:var(--faint)}
