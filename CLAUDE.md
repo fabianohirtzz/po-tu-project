@@ -501,8 +501,37 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     (proposta) → `venda`. `venda`/`venda_at` intocados, então ROAS e ciclo seguem valendo.
 - **Pendências conhecidas:** `docs/superpowers/reviews/2026-09-11-wa-motor-pendencias.md`.
   As duas primeiras bloqueiam o go-live.
-- **Falta:** planos 2 (kanban + conversa no lead no painel) e 3 (importador de contatos +
-  transmissão), a conexão real com a Meta e a homologação.
+- **PLANO 2 DE 3 — PAINEL DO FUNIL: FEITO E MERGEADO** (`main`, merge `e7145ed`).
+  6 tarefas em TDD, a suíte foi de 13 para **19 arquivos** de teste (o runner passou a
+  rodar também os `test-*.mjs`, que existiam e nunca rodavam). Arquivos novos:
+  `painel/{clientes,funil,conversa}.js`. **Nada foi para produção** (deploy é FTP manual).
+  - **Aba Clientes:** lista **pessoas**, não interesses avulsos. A ficha agrega por
+    telefone (spec 7.1), sem tabela nova. O KPI "já viajaram" existe porque é a lista
+    que a transmissão do plano 3 vai querer.
+  - **Aba Funil:** kanban de 5 colunas. Arrastar no desktop, menu de etapas no celular
+    (HTML puro não tem arrastar por toque e o projeto não carrega biblioteca de front).
+  - **Conversa** do WhatsApp numa aba dentro da gaveta do lead.
+  - **Regras permanentes deste subsistema:**
+    - **`semresposta` NÃO é legado.** É o `DEFAULT` de `po_leads.status`, então todo lead
+      do formulário do site nasce assim. Cai em "Contato feito" junto com os do WhatsApp.
+    - **Cada tela tem seu recorte de filtro:** o Funil ignora o filtro de status (as
+      colunas *são* os status) e a aba Clientes ignora o de mês (base de clientes não é
+      recorte mensal). A aba Leads segue como sempre foi.
+    - **Somatório de venda filtra por `status === 'venda'`**, nos relatórios e na ficha.
+      Sem isso, tirar um card de "Contrato assinado" deixava o valor inflando o
+      faturamento e o ROAS para sempre, em silêncio.
+    - **A gaveta só força `status='venda'` quando o valor acabou de mudar.** Antes,
+      salvar uma nota recarimbava `venda_at` com a data de hoje e apagava a data real do
+      fechamento, que alimenta o ciclo de venda.
+    - **A consulta da conversa filtra por `wa_id` e isso é travado por teste.** O filtro
+      já sumiu uma vez num commit que prometia outra coisa, e a tela passou a mostrar as
+      mensagens de todos os contatos. Ver as pendências.
+  - **Pendências:** `docs/superpowers/reviews/2026-09-11-painel-funil-pendencias.md`.
+    A primeira (duas linhas de teste) fecha o gatilho do vazamento acima.
+- **Falta:** plano 3 (importador de contatos + transmissão), a conexão real com a Meta,
+  a homologação, e a **conferência visual do painel com login real** — seis tarefas
+  mexeram em `painel/app.js`, `index.html` e `painel.css`, que estão em produção, e
+  nenhum agente conseguiu passar do login do Supabase.
 - **Aberto:** se o Embedded Signup da coexistência exige revisão de app da Meta. Se exigir,
   entra uma etapa a mais antes de conectar.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
