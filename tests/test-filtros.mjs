@@ -103,4 +103,18 @@ assert.ok(funilSrc.includes('filtradosFunil()'), 'o quadro le de filtradosFunil'
 const cliSrc = readFileSync(new URL('../painel/clientes.js', import.meta.url), 'utf8');
 assert.ok(cliSrc.includes('filtradasPessoas()'), 'a aba Clientes le de filtradasPessoas');
 
+// Os relatorios nao podem contar a base importada no denominador: as 775 fichas
+// do CRM entraram com created_at=hoje e derrubariam a conversao do mes para ~0.
+assert.ok(/function rowsForReports\(\)\{[\s\S]*?origemImport/.test(src),
+  'rowsForReports leva origemImport em conta');
+assert.ok(/F\.importados/.test(src),
+  'existe um estado de filtro para incluir ou nao os importados');
+
+// E a aba Leads NAO muda: ela sempre mostrou tudo, e continuar mostrando e o
+// que permite a cliente achar a ficha de um cliente antigo.
+const leads = src.match(/function renderLeads\(\)[\s\S]*?\n\}/);
+assert.ok(leads, 'renderLeads encontrada');
+assert.ok(!/origemImport/.test(leads[0]),
+  'a aba Leads segue mostrando todo mundo, inclusive os importados');
+
 console.log('test-filtros OK');

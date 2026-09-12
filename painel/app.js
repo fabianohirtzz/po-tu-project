@@ -65,7 +65,7 @@ let toastT;function toast(msg,err){const t=$('#toast');t.textContent=msg;t.class
 
 /* ---------- estado ---------- */
 let LEADS=[], spend={}, ROTEIROS=[];
-let F={orig:'todos',status:'todos',q:'',month:''};
+let F={orig:'todos',status:'todos',q:'',month:'',importados:false};
 let openId=null, editRot=null;
 
 /* ============================================================ AUTH */
@@ -400,10 +400,22 @@ $('#spend-input').onchange=async e=>{
   if(error){toast('Erro ao salvar investimento: '+error.message,true);return;}
   renderReports();toast('Investimento salvo.');
 };
+$('#rep-importados').onchange=e=>{F.importados=e.target.checked;renderReports();};
 function curSpend(){return F.month==='all'?Object.values(spend).reduce((a,b)=>a+b,0):(spend[F.month]||0);}
-function rowsForReports(){return LEADS.filter(inMonth).filter(l=>F.orig==='todos'||l.origem===F.orig);}
+/* A base importada fica FORA do relatorio por padrao. As 775 fichas do CRM
+   entraram com created_at=hoje e status=semresposta: contadas no denominador,
+   derrubam a conversao do mes para perto de zero e medem a coisa errada — elas
+   nao sao leads captados este mes, sao clientes antigos de outro sistema.
+   O controle deixa ver o total quando a pergunta for essa. */
+function rowsForReports(){
+  return LEADS.filter(inMonth)
+              .filter(l=>F.importados||!l.origemImport)
+              .filter(l=>F.orig==='todos'||l.origem===F.orig);
+}
 function renderReports(){
   const rows=rowsForReports();const total=rows.length;
+  const nImp=LEADS.filter(inMonth).filter(l=>l.origemImport).length;
+  const elImp=$('#rep-imp-n'); if(elImp)elImp.textContent=nImp;
   const vendas=rows.filter(l=>l.status==='venda');
   // Mesma regra do KPI da aba Leads: so soma ven de quem esta em status
   // 'venda'. O ven do lead nao e zerado ao sair de venda (o poMoveLead do

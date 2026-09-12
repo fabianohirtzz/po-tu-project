@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="painel.css?v=5">
+<link rel="stylesheet" href="painel.css?v=6">
 </head>
 <body>
 
@@ -174,6 +174,8 @@
         </div>
         <div class="spend-input"><span>R$</span><input type="number" id="spend-input" value="0" step="100"></div>
       </div>
+      <label class="rep-opt"><input type="checkbox" id="rep-importados">
+        Incluir a base importada (<span id="rep-imp-n">0</span> contatos)</label>
       <div class="kpis" id="rep-kpis"></div>
       <div class="rep-grid">
         <div class="card">
@@ -519,7 +521,7 @@
 <script src="config.js"></script>
 <script src="video-encode.js"></script>
 <script src="fone.js?v=1"></script>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 <script src="clientes.js?v=2"></script>
 <script src="funil.js?v=1"></script>
 <script src="conversa.js?v=1"></script>
