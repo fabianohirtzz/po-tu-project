@@ -40,6 +40,41 @@ function poBolha(m) {
     '<div class="cv-t">' + corpo + '</div></div>';
 }
 
+/* A consulta da conversa descrita como dado, e nao escrita direto na
+   chamada. Existe para ser testavel sem rede e sem navegador: o filtro
+   por wa_id ja desapareceu uma vez numa mexida na ordenacao, e sem ele a
+   gaveta de um lead mostra a conversa de todos os contatos misturada. */
+function poFiltroConversa(waId) {
+  return {
+    tabela: 'po_wa_mensagens',
+    colunas: 'autor,tipo,texto,ts',
+    // O filtro por contato E a regra desta tela: sem ele a consulta
+    // continua funcionando (a RLS libera a tabela toda para quem esta
+    // logado) e devolve as mensagens de outras pessoas como se fossem
+    // deste lead.
+    filtro: {coluna: 'wa_id', valor: waId},
+    // Descendente, nao ascendente: com limite de 300, ascendente cortaria
+    // do lado errado, trazendo as 300 mensagens MAIS ANTIGAS e escondendo
+    // o fim da conversa. Numa venda de viagem, consultiva e longa, isso
+    // mostra a apresentacao do roteiro e esconde a negociacao. Pedimos as
+    // mais recentes e revertemos no render para ficar em ordem
+    // cronologica.
+    ordem: {coluna: 'ts', ascendente: false},
+    limite: 300,
+  };
+}
+
+/* Aplica o descritor acima num cliente Supabase. O cliente entra por
+   parametro para o teste poder passar um duble que so anota o que foi
+   chamado, sem tocar a rede. */
+function poMontaConsulta(cliente, f) {
+  return cliente.from(f.tabela)
+    .select(f.colunas)
+    .eq(f.filtro.coluna, f.filtro.valor)
+    .order(f.ordem.coluna, {ascending: f.ordem.ascendente})
+    .limit(f.limite);
+}
+
 async function poRenderConversa(waId) {
   const alvo = document.querySelector('#dr-conversa');
   if (!alvo) return;
@@ -56,16 +91,7 @@ async function poRenderConversa(waId) {
   }
   alvo.innerHTML = '<div class="empty">Carregando...</div>';
 
-  const {data, error} = await sb.from('po_wa_mensagens')
-    .select('autor,direcao,tipo,texto,ts')
-    // Descendente, nao ascendente: com limit(300), ascendente cortaria do
-    // lado errado, trazendo as 300 mensagens MAIS ANTIGAS e escondendo o
-    // fim da conversa — numa venda de viagem, consultiva e longa, isso
-    // mostra a apresentacao do roteiro e esconde a negociacao. Pedimos as
-    // mais recentes e revertemos abaixo pro render ficar em ordem
-    // cronologica.
-    .order('ts', {ascending: false})
-    .limit(300);
+  const {data, error} = await poMontaConsulta(sb, poFiltroConversa(waId));
 
   if (pedidoPara !== openId) return; // usuario ja abriu outro lead
 
@@ -73,5 +99,16 @@ async function poRenderConversa(waId) {
   if (!data || !data.length) { alvo.innerHTML = '<div class="empty">Nenhuma mensagem ainda.</div>'; return; }
 
   alvo.innerHTML = data.reverse().map(poBolha).join('');
-  alvo.scrollTop = alvo.scrollHeight;
+  poRolaConversaFim();
+}
+
+/* Rolar para a ultima mensagem so funciona com a aba visivel: elemento em
+   display:none nao tem caixa, entao scrollHeight vale 0 e a atribuicao nao
+   faz nada. Como o openDrawer abre sempre na aba Dados, a chamada de
+   dentro do render e no-op na pratica; quem rola de verdade e o handler
+   que troca de aba, no app.js. Fica nos dois lugares porque a funcao ja se
+   protege sozinha e assim um render futuro com a aba aberta tambem acerta. */
+function poRolaConversaFim() {
+  const alvo = document.querySelector('#dr-conversa');
+  if (alvo) alvo.scrollTop = alvo.scrollHeight;
 }

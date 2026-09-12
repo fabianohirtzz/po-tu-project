@@ -42,3 +42,43 @@ const audio = poBolha({autor:'cliente', texto:'', tipo:'audio', ts:'2026-09-01T1
 assert.ok(audio.includes('udio') || audio.includes('nexo'), 'mensagem nao textual e descrita');
 
 console.log('test-conversa OK');
+
+/* ---------- a forma da consulta ----------
+   Este bloco existe por causa de um defeito real: o .eq('wa_id', ...)
+   estava na consulta, foi removido sem querer numa mexida na ordenacao e
+   passou por seis revisoes, porque nenhum teste olhava a consulta. Com o
+   filtro fora, a gaveta de um lead mostrava as mensagens de todos os
+   contatos. */
+const consulta = new Function(
+  pega('poFiltroConversa') + pega('poMontaConsulta') +
+  '; return {poFiltroConversa, poMontaConsulta};'
+)();
+
+const f = consulta.poFiltroConversa('+5548996048882');
+assert.equal(f.tabela, 'po_wa_mensagens', 'le a tabela de mensagens');
+assert.equal(f.filtro.coluna, 'wa_id', 'o filtro e por contato');
+assert.equal(f.filtro.valor, '+5548996048882', 'filtra pelo wa_id do lead aberto');
+assert.equal(f.ordem.ascendente, false, 'pede as mensagens mais recentes');
+assert.equal(f.limite, 300, 'limite de 300');
+assert.ok(!f.colunas.includes('direcao'), 'direcao nao e selecionada: ninguem usa');
+
+// Duble do cliente Supabase: nao toca a rede, so anota o que foi chamado.
+// Se alguem tirar o .eq da cadeia, este teste fica vermelho na hora.
+const chamadas = [];
+const duble = {
+  from(t) { chamadas.push(['from', t]); return this; },
+  select(c) { chamadas.push(['select', c]); return this; },
+  eq(col, val) { chamadas.push(['eq', col, val]); return this; },
+  order(col, o) { chamadas.push(['order', col, o.ascending]); return this; },
+  limit(n) { chamadas.push(['limit', n]); return this; },
+};
+consulta.poMontaConsulta(duble, consulta.poFiltroConversa('+5548996048882'));
+
+const eq = chamadas.find(c => c[0] === 'eq');
+assert.ok(eq, 'a consulta filtra (chama .eq) — sem isso vaza conversa entre clientes');
+assert.equal(eq[1], 'wa_id', 'filtra pela coluna wa_id');
+assert.equal(eq[2], '+5548996048882', 'com o wa_id do lead aberto');
+assert.deepEqual(chamadas.map(c => c[0]), ['from','select','eq','order','limit'],
+  'cadeia completa: tabela, colunas, filtro, ordem e limite');
+
+console.log('test-conversa (consulta) OK');
