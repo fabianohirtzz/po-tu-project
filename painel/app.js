@@ -200,11 +200,15 @@ function openDrawer(id){
   $('#e-status').value=l.status;$('#e-orig').value=l.origem;
   $('#e-orc').value=l.orc||'';$('#e-ven').value=l.ven||'';
   $('#n-txt').value='';renderNotes(l);
-  // A conversa carrega junto com a gaveta, mas o telefone do lead e a
-  // chave: quem veio pelo formulario do site nao tem conversa.
+  // A conversa carrega junto com a gaveta. So l.waId, sem fallback pro
+  // telefone: o enviar.php nao normaliza o telefone do site pro formato
+  // E.164, entao ele nunca bate com um wa_id de verdade — usa-lo so
+  // gastaria uma consulta que sempre volta vazia. O motor do WhatsApp
+  // sempre grava wa_id no lead que ele cria; quem nao tem o campo e
+  // porque nao veio pelo WhatsApp mesmo.
   $$('.dr-tab').forEach(t=>t.classList.toggle('on',t.dataset.tab==='dados'));
   $('#pane-dados').classList.add('on');$('#pane-conversa').classList.remove('on');
-  if(typeof poRenderConversa==='function')poRenderConversa(l.waId||l.tel);
+  if(typeof poRenderConversa==='function')poRenderConversa(l.waId);
   $('#scrim').classList.add('on');$('#drawer').classList.add('on');
 }
 $$('.dr-tab').forEach(t=>t.onclick=()=>{

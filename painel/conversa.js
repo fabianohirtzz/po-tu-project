@@ -44,6 +44,12 @@ async function poRenderConversa(waId) {
   const alvo = document.querySelector('#dr-conversa');
   if (!alvo) return;
 
+  // Guarda contra a corrida de trocar de lead rapido: se a resposta desta
+  // consulta chegar depois de o usuario ja ter aberto outro lead, o
+  // openId global (mantido pelo app.js) ja mudou, e descartamos a
+  // resposta velha em vez de sobrescrever a conversa que esta na tela.
+  const pedidoPara = openId;
+
   if (!waId || waId === '—') {
     alvo.innerHTML = '<div class="empty">Este lead nao veio pelo WhatsApp.</div>';
     return;
@@ -52,13 +58,20 @@ async function poRenderConversa(waId) {
 
   const {data, error} = await sb.from('po_wa_mensagens')
     .select('autor,direcao,tipo,texto,ts')
-    .eq('wa_id', waId)
-    .order('ts', {ascending: true})
+    // Descendente, nao ascendente: com limit(300), ascendente cortaria do
+    // lado errado, trazendo as 300 mensagens MAIS ANTIGAS e escondendo o
+    // fim da conversa — numa venda de viagem, consultiva e longa, isso
+    // mostra a apresentacao do roteiro e esconde a negociacao. Pedimos as
+    // mais recentes e revertemos abaixo pro render ficar em ordem
+    // cronologica.
+    .order('ts', {ascending: false})
     .limit(300);
+
+  if (pedidoPara !== openId) return; // usuario ja abriu outro lead
 
   if (error) { alvo.innerHTML = '<div class="empty">Nao consegui carregar a conversa.</div>'; return; }
   if (!data || !data.length) { alvo.innerHTML = '<div class="empty">Nenhuma mensagem ainda.</div>'; return; }
 
-  alvo.innerHTML = data.map(poBolha).join('');
+  alvo.innerHTML = data.reverse().map(poBolha).join('');
   alvo.scrollTop = alvo.scrollHeight;
 }
