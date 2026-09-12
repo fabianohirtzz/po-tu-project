@@ -544,7 +544,47 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     `{clientes,funil,conversa}.js?v=1`. **Toda mexida nesses arquivos exige subir o número.**
   - **Ordem do upload importa:** os JS novos primeiro, o `index.html` por último. Ao
     contrário, existe uma janela em que a página já pede arquivos que ainda dão 404.
-- **Falta:** plano 3 (importador de contatos + transmissão), a conexão real com a Meta,
+- **PLANO 3 DE 3 — IMPORTADOR E AUDITORIA DE FUSÃO: FEITO E REVISADO** (branch
+  `plano3-importador`, 24 commits, **ainda não mergeada nem empurrada**). 9 tarefas em TDD,
+  a suíte foi de 19 para **31 arquivos**. Arquivos novos: `lib/wa-{import,vcard,import-carga}.php`,
+  `lib/po-auth.php`, `contatos-importar.php`, `painel/{fone,importar-contatos}.js`,
+  `scripts/importa-crm.php`, migrations `2026-09-12-ficha-cliente.sql` e
+  `2026-09-12-pos-carga-crm.sql` (**as duas já rodadas**).
+  - **A base do CRM antigo já está carregada:** 775 fichas (de 778, 3 eram a própria
+    agência repetida), com 423 CPFs e 289 passaportes. `po_leads` foi de 11 para **786**.
+  - **O número que decide o plano 4:** dessas 775, só **22 têm celular**. 138 têm só fixo
+    e **615 não têm telefone nenhum**. A base do CRM é ficha de cliente, **não lista de
+    disparo** — quem vai encher a transmissão são as duas agendas de celular.
+  - **Regras permanentes deste subsistema:**
+    - **As três regras do Armando (dono), que são critério de aceitação:** (1) o registro
+      com histórico é o dono e nunca é sobrescrito; (2) a fusão **só soma, nunca zera**;
+      (3) **nunca duplicar**.
+    - **Identidade por camadas, a primeira que bate vence:** CPF → celular E.164 →
+      nome + data de nascimento. **Fusão automática só por CPF ou celular**; nome+nascimento
+      apenas **sugere** (vira `revisar`).
+    - **Fixo nunca casa identidade.** Há fixo de empresa repetido em 3 fichas; se casasse,
+      três clientes virariam um.
+    - **`WA_IMPORT_CAMPOS_PREENCHIVEIS` é a trava estrutural da regra 1.** Se `status`,
+      `venda`, `venda_at`, `notas` ou `qualif_*` entrarem em `preenche`, uma importação de
+      agenda apaga o funil e o faturamento. A escrita leva **exatamente** as chaves de
+      `preenche`, nada mais.
+    - **Da agenda, só entra quem tem o marcador "PO"** no nome. O regex precisa do
+      modificador `/u`: sem ele, `PO` casa dentro de `Poá`/`Poços` e come o nome.
+    - **Leitura de banco tem que distinguir erro de vazio** (`wa_db_select_estrito`). Com
+      `wa_db_select`, um Supabase fora do ar faz a base ler como vazia e **todo contato do
+      arquivo entra como novo**, duplicando tudo com a tela dizendo sucesso.
+    - **Revogar privilégio por COLUNA não restringe nada no Supabase** — os grants são no
+      nível da TABELA e quem restringe é a **RLS**. Foi assim que se fechou o buraco de
+      `anon` poder plantar contato já `revisado=true`.
+    - **Nunca usar dado real de cliente em fixture de teste.** Aconteceu duas vezes nesta
+      branch (CPF válido e ID do CRM); o repositório é **público**.
+  - **Pendências que bloqueiam o uso real do importador** (viraram o plano 3.1): não existe
+    **nenhuma** UI de `revisado`/`cliente` no painel, então contato de agenda entra
+    `revisado=false` e **não há caminho para virar `true`**; o preview calcula `preenche` e
+    nunca o mostra; as 775 entraram no denominador dos relatórios do mês sem filtro; e
+    reaplicar o mesmo arquivo duplica as fichas sem CPF nem celular.
+- **Falta:** mergear e empurrar o plano 3 (ver aviso de PII abaixo), o plano 4 (transmissão),
+  a conexão real com a Meta,
   a homologação, e a **conferência visual do painel com login real** — seis tarefas
   mexeram em `painel/app.js`, `index.html` e `painel.css`, e nenhum agente conseguiu
   passar do login do Supabase. O deploy foi validado por sintaxe, testes (19 arquivos),

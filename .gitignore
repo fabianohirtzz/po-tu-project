@@ -18,3 +18,8 @@ cache/
 # sistema
 .DS_Store
 Thumbs.db
+
+# exports de contatos: PII real, NUNCA no Git
+po-export.json
+crm-clients*.json
+scratchpad/

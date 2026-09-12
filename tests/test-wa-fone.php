@@ -3,33 +3,33 @@ require __DIR__ . '/../lib/wa-fone.php';
 
 function ok($cond, $msg) { if (!$cond) { fwrite(STDERR, "ASSERT: $msg\n"); exit(1); } }
 
-// --- formatos que a agenda do celular realmente produz
-ok(wa_e164('(48) 99604-8882')    === '+5548996048882', 'formato com parenteses e traco');
-ok(wa_e164('48 99604 8882')      === '+5548996048882', 'formato com espacos');
-ok(wa_e164('+55 48 99604-8882')  === '+5548996048882', 'ja com DDI');
-ok(wa_e164('5548996048882')      === '+5548996048882', 'so digitos com DDI');
-ok(wa_e164('48996048882')        === '+5548996048882', 'so digitos sem DDI');
+/* ============================================================
+   Os casos de entrada/saida vivem em tests/fixtures/fone.json e sao os
+   MESMOS que tests/test-fone.mjs le para o poE164 do painel. Antes cada
+   teste tinha a sua lista escrita a mao, e elas ja tinham divergido (o
+   lado JS nao testava DDI + celular de 8 digitos nem texto puro): uma
+   correcao so no PHP nao deixava o teste do JS vermelho, e os dois
+   normalizadores podiam separar em silencio - o que faz a mesma pessoa
+   virar duas fichas conforme quem gravou.
+============================================================ */
+$fx = json_decode(file_get_contents(__DIR__ . '/fixtures/fone.json'), true);
+ok(is_array($fx) && !empty($fx['casos']), 'fixture de telefone carregada');
 
-// --- o nono digito: celular antigo de 8 digitos ganha o 9 na frente
-ok(wa_e164('4896048882')         === '+5548996048882', 'celular antigo de 8 digitos ganha o nono');
-ok(wa_e164('554896048882')       === '+5548996048882', 'celular antigo com DDI ganha o nono');
+foreach ($fx['casos'] as $i => $caso) {
+    list($entrada, $esperado) = $caso;
+    $got = wa_e164($entrada);
+    ok($got === $esperado,
+       "caso $i da fixture: " . var_export($entrada, true) .
+       ' -> esperado ' . var_export($esperado, true) . ', veio ' . var_export($got, true));
+}
 
-// --- fixo NAO ganha nono digito (comeca com 2..5)
-ok(wa_e164('4832220000')         === '+554832220000',  'fixo de 8 digitos fica como esta');
-
-// --- lixo da agenda
-ok(wa_e164('')                   === null, 'vazio');
-ok(wa_e164('123')                === null, 'curto demais');
-ok(wa_e164('0800 123 4567')      === null, '0800 nao e telefone de pessoa');
-ok(wa_e164('(01) 99999-9999')    === null, 'DDD 01 nao existe');
-ok(wa_e164('+1 415 555 2671')    === null, 'numero estrangeiro fica de fora');
-ok(wa_e164('nao tem telefone')   === null, 'texto puro');
-
-// --- idempotencia: normalizar duas vezes da o mesmo
+// --- asserções que nao cabem em par entrada/saida
+// idempotencia: normalizar o que ja esta normalizado nao estraga
 ok(wa_e164(wa_e164('(48) 99604-8882')) === '+5548996048882', 'normalizar de novo nao estraga');
 
-// --- celular x fixo
+// --- celular x fixo (o fixo nunca entra na transmissao, secao 8 da spec)
 ok(wa_e_celular('+5548996048882') === true,  'celular de 9 digitos');
 ok(wa_e_celular('+554832220000')  === false, 'fixo nao e celular');
+ok(wa_e_celular(null)             === false, 'null nao e celular');
 
 echo "test-wa-fone OK\n";
