@@ -20,10 +20,10 @@ const ESC = 'function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,' +
             'c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c]));}';
 
 const ctx = new Function(
-  ESC + pega('poRevFiltra') + pega('poLinhaRevisaoContato') +
-  '; return {poRevFiltra, poLinhaRevisaoContato};'
+  ESC + pega('poRevFiltra') + pega('poLinhaRevisaoContato') + pega('poRevConfirmaTexto') +
+  '; return {poRevFiltra, poLinhaRevisaoContato, poRevConfirmaTexto};'
 )();
-const { poRevFiltra, poLinhaRevisaoContato } = ctx;
+const { poRevFiltra, poLinhaRevisaoContato, poRevConfirmaTexto } = ctx;
 
 const base = [
   {id:'1', nome:'Ana',   origemImport:'agenda-esposa', revisado:false, cliente:false, tel:'+5548999990001'},
@@ -55,6 +55,28 @@ assert.deepEqual(
   poRevFiltra([{id:'5', nome:'Dentista', origemImport:'agenda-marido', revisado:true, cliente:false}]),
   [], 'revisado como nao-cliente sai da fila de vez');
 
+// Caminho de volta: com o segundo argumento a fila inclui os ja revisados,
+// que e a UNICA forma de a cliente corrigir um clique errado. Nenhuma outra
+// tela do painel escreve 'revisado'/'cliente'; sem isto a marcacao seria de
+// mao unica e so teria conserto por SQL no banco.
+const comRevisados = poRevFiltra(base, true);
+assert.equal(comRevisados.length, 3, 'ver revisados traz os tres contatos importados');
+assert.deepEqual(comRevisados.map(p => p.nome), ['Ana', 'Bruno', 'Carla'], 'na ordem da lista');
+assert.ok(!comRevisados.some(p => p.nome === 'Davi'), 'e o lead do site continua fora, mesmo assim');
+// So 'true' liga o modo de correcao: um argumento solto (um evento de clique,
+// por exemplo) nao pode escancarar a fila sem querer.
+assert.equal(poRevFiltra(base, 'sim').length, 1, 'so o booleano true inclui os revisados');
+assert.equal(poRevFiltra(base, false).length, 1, 'false mantem so os pendentes');
+
+// A situacao aparece na linha: sem ela a cliente nao ve o que marcou e nao
+// tem como corrigir.
+assert.ok(poLinhaRevisaoContato({id:'1', origemImport:'agenda-esposa', revisado:false}).includes('Aguardando revisão'),
+  'pendente aparece como aguardando');
+assert.ok(poLinhaRevisaoContato({id:'2', origemImport:'agenda-esposa', revisado:true, cliente:true}).includes('Cliente'),
+  'revisado como cliente aparece assim');
+assert.ok(poLinhaRevisaoContato({id:'3', origemImport:'agenda-esposa', revisado:true, cliente:false}).includes('Não é cliente'),
+  'revisado como nao-cliente aparece assim');
+
 // Entradas degeneradas nao derrubam a tela.
 assert.deepEqual(poRevFiltra([]), [], 'lista vazia');
 assert.deepEqual(poRevFiltra([null, undefined, 'lixo', 42]), [], 'lixo e ignorado');
@@ -75,25 +97,56 @@ assert.ok(htmlAspas.includes('&quot;'), 'aspas do id saem escapadas');
 // Contato degenerado (sem nada) nao pode estourar a montagem da linha.
 assert.ok(poLinhaRevisaoContato(null).includes('<tr>'), 'linha de contato nulo nao estoura');
 
+// TODOS os campos da linha vem da agenda de outra pessoa, nao so o nome: um
+// vCard e texto livre e o telefone e a origem tambem chegam como o contato
+// (ou o arquivo) mandou. Os tres vetores ficam trancados aqui.
+const htmlTel = poLinhaRevisaoContato({id:'t1', nome:'Ana',
+  tel:'<img src=x onerror=alert(1)>', origemImport:'agenda-esposa'});
+assert.ok(!htmlTel.includes('<img src=x'), 'telefone de terceiro escapado');
+assert.ok(htmlTel.includes('&lt;img'), 'telefone aparece escapado, nao sumido');
+const htmlOrig = poLinhaRevisaoContato({id:'o1', nome:'Ana', tel:'+5548999990001',
+  origemImport:'<img src=x onerror=alert(1)>'});
+assert.ok(!htmlOrig.includes('<img src=x'), 'origem escapada');
+assert.ok(htmlOrig.includes('&lt;img'), 'origem aparece escapada, nao sumida');
+
+/* ---------- a confirmacao antes de gravar ---------- */
+// O "marcar todos" faz um clique valer por centenas de contatos, e o erro e
+// caro nos dois sentidos: cliente=true torna o dentista elegivel a
+// transmissao PAGA por destinatario; cliente=false tira cliente real das
+// campanhas em silencio. A frase precisa dizer a CONTAGEM e a consequencia.
+const conf40 = poRevConfirmaTexto(40, true);
+assert.ok(conf40.includes('40'), 'a confirmacao diz quantos contatos');
+assert.ok(/transmiss/i.test(conf40), 'e diz o que "cliente" libera');
+assert.ok(poRevConfirmaTexto(1, true).includes('1 contato?') ||
+          /\b1 contato\b/.test(poRevConfirmaTexto(1, true)), 'singular no singular');
+const confNao = poRevConfirmaTexto(40, false);
+assert.ok(confNao.includes('40'), 'a confirmacao de "nao e cliente" tambem conta');
+assert.ok(/apagad|continuam na base/i.test(confNao), 'e deixa claro que ninguem e apagado');
+
 /* ---------- acao em massa: o que sobe para o banco ---------- */
 
-function montaAcao(leads) {
+function montaAcao(leads, opts) {
+  const o = opts || {};
   const chamadas = [];
   const avisos = [];
+  const perguntas = [];
+  const renders = [];
   const caixas = { querySelectorAll: () => leads.map(l => ({ value: l.id })) };
+  const janela = { confirm(msg) { perguntas.push(msg); return o.confirma !== false; } };
+  const erro = o.erro || null;
   return {
-    chamadas, avisos, leads,
+    chamadas, avisos, perguntas, renders, leads,
     rodar: new Function(
-      'chamadas', 'avisos', 'caixas', 'LEADS',
+      'chamadas', 'avisos', 'perguntas', 'renders', 'caixas', 'LEADS', 'window', 'erro',
       'const document = { querySelector: () => caixas };' +
       'const sb = { from(tabela){ return { update(campos){ return {' +
-      '  in(coluna, ids){ chamadas.push({tabela, campos, coluna, ids}); return Promise.resolve({error:null}); }' +
+      '  in(coluna, ids){ chamadas.push({tabela, campos, coluna, ids}); return Promise.resolve({error: erro}); }' +
       '}; } }; } };' +
       'function toast(msg, err){ avisos.push({msg, err: !!err}); }' +
-      'function poRenderRevisao(){}' +
-      pega('poRevSelecionados') + pegaAsync('poRevMarcar') +
+      'function poRenderRevisao(){ renders.push(1); }' +
+      pega('poRevConfirmaTexto') + pega('poRevSelecionados') + pegaAsync('poRevMarcar') +
       '; return poRevMarcar;'
-    )(chamadas, avisos, caixas, leads),
+    )(chamadas, avisos, perguntas, renders, caixas, leads, janela, erro),
   };
 }
 
@@ -149,5 +202,36 @@ await vazio.rodar(true);
 assert.equal(vazio.chamadas.length, 0, 'nada selecionado, nada escrito');
 assert.equal(vazio.avisos.length, 1, 'avisa a cliente');
 assert.equal(vazio.avisos[0].err, true, 'o aviso e de erro');
+assert.equal(vazio.perguntas.length, 0, 'e nem pergunta nada');
+
+// A confirmacao acontece ANTES de escrever, e diz a contagem.
+const perguntou = montaAcao([{id:'1'}, {id:'2'}, {id:'3'}]);
+await perguntou.rodar(true);
+assert.equal(perguntou.perguntas.length, 1, 'pergunta uma vez');
+assert.ok(perguntou.perguntas[0].includes('3'), 'a pergunta traz a contagem do lote');
+
+// Cancelar no "tem certeza?" nao escreve nada. Sem isto a confirmacao seria
+// enfeite, e o clique errado com o "marcar todos" ligado continuaria caro.
+const cancelou = montaAcao([{id:'1'}, {id:'2'}], { confirma: false });
+await cancelou.rodar(true);
+assert.equal(cancelou.perguntas.length, 1, 'perguntou');
+assert.equal(cancelou.chamadas.length, 0, 'cancelou: nada foi escrito no banco');
+assert.equal(cancelou.avisos.length, 0, 'e nao finge que salvou');
+
+// Banco falhou: avisa o erro e NAO mente dizendo que revisou. A lista em
+// memoria nao pode andar sozinha, senao o contato sai da fila na tela e
+// continua revisado=false no banco - sumido da defesa obrigatoria sem nunca
+// ter sido revisado de verdade.
+const falhou = montaAcao(
+  [{id:'1', nome:'Ana', origemImport:'agenda-esposa', revisado:false, cliente:false}],
+  { erro: { message: 'permission denied' } });
+await falhou.rodar(true);
+assert.equal(falhou.chamadas.length, 1, 'tentou escrever');
+assert.equal(falhou.leads[0].revisado, false, 'o lead em memoria NAO fica revisado quando o banco falha');
+assert.equal(falhou.renders.length, 0, 'nem redesenha a fila como se tivesse dado certo');
+assert.equal(falhou.avisos.length, 1, 'avisa uma vez');
+assert.equal(falhou.avisos[0].err, true, 'e o aviso e de erro');
+assert.ok(falhou.avisos[0].msg.includes('permission denied'), 'repassa a mensagem do banco');
+assert.ok(!/revisad[oa]s?\./.test(falhou.avisos[0].msg), 'nao diz "contato revisado" depois de falhar');
 
 console.log('test-revisao OK');

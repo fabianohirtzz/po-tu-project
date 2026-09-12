@@ -324,6 +324,13 @@
           <button class="btn btn-primary" id="rev-cliente" type="button">Marcar como cliente</button>
           <button class="btn btn-ghost" id="rev-naocliente" type="button">Não é cliente</button>
         </div>
+        <!-- Caminho de volta: nenhuma outra tela do painel escreve 'revisado'
+             ou 'cliente'. Sem esta caixa, um clique errado com o "marcar
+             todos" ligado só teria conserto por SQL no banco. -->
+        <label class="imp-ct-forcar">
+          <input type="checkbox" id="rev-revisados">
+          Mostrar também os contatos que você já revisou (para corrigir)
+        </label>
       </div>
 
       <div class="table-wrap">
@@ -331,7 +338,7 @@
           <table>
             <thead><tr>
               <th class="rev-chk-col"><input type="checkbox" id="rev-todos" title="Marcar todos"></th>
-              <th>Nome</th><th>Telefone</th><th>Origem</th>
+              <th>Nome</th><th>Telefone</th><th>Origem</th><th>Situação</th>
             </tr></thead>
             <tbody id="rev-rows"></tbody>
           </table>
@@ -516,7 +523,7 @@
 <script src="clientes.js?v=2"></script>
 <script src="funil.js?v=1"></script>
 <script src="conversa.js?v=1"></script>
-<script src="importar-contatos.js?v=3"></script>
+<script src="importar-contatos.js?v=4"></script>
 <script src="revisao.js?v=1"></script>
 </body>
 </html>

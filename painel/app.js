@@ -173,6 +173,7 @@ $('#status-filter').onchange=e=>{F.status=e.target.value;renderLeads();if($('#vi
 $('#rev-cliente').onclick=()=>poRevMarcar(true);
 $('#rev-naocliente').onclick=()=>poRevMarcar(false);
 $('#rev-todos').onchange=e=>$$('#rev-rows .rev-chk').forEach(c=>{c.checked=e.target.checked;});
+$('#rev-revisados').onchange=()=>poRenderRevisao();
 
 $$('#orig-filter .chip').forEach(c=>c.onclick=()=>{$$('#orig-filter .chip').forEach(x=>x.classList.remove('active'));c.classList.add('active');F.orig=c.dataset.orig;renderLeads();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();});
 

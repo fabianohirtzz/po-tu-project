@@ -480,3 +480,10 @@ tbody tr:last-child td{border-bottom:none}
 #view-revisao .rev-chk-col{width:40px}
 #view-revisao tbody tr{cursor:default}
 .rev-chk,#rev-todos{width:16px;height:16px;cursor:pointer;accent-color:var(--azul)}
+/* A situacao e o que torna a marcacao reversivel: com a caixa "mostrar ja
+   revisados" ligada, e por esta coluna que a cliente acha o que marcou
+   errado. Cor so de sinalizacao - quem diz o que e esta escrito por extenso. */
+.rev-sit{font-size:.72rem;font-weight:600;letter-spacing:.02em}
+.rev-sit--pend{color:var(--st-aberto)}
+.rev-sit--cli{color:var(--st-venda)}
+.rev-sit--nao{color:var(--muted)}

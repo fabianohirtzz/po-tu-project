@@ -264,13 +264,22 @@ function poIcCamposEnvio(modo, auditado, atual) {
     // gravados, mas o registro do lote nao fechou. Nao e erro, e aviso.
     var aviso = poIcAvisoLote(resp);
     box.hidden = false;
+    // 'revisar' aqui e o balde de FUSAO AMBIGUA do importador: contato que
+    // NAO foi gravado porque casou por nome+nascimento e a decisao e humana.
+    // Nao confundir com a fila da aba Revisao, que e dos contatos que JA
+    // entraram e esperam o "e cliente / nao e cliente". A frase antiga dizia
+    // "ainda para voce revisar" e mandava a cliente para uma aba onde aqueles
+    // contatos nunca estariam.
     box.innerHTML = '<div class="lbl">Importacao concluida</div>' +
       '<div class="hint">' +
       (ap.novos || 0) + ' contato(s) novo(s) · ' +
       (ap.preenchidos || 0) + ' ficha(s) completada(s) · ' +
-      (ap.revisar || 0) + ' ainda para voce revisar' +
+      (ap.revisar || 0) + ' fora da importacao (duplicidade a resolver)' +
       ((ap.falhas) ? ' · ' + ap.falhas + ' falha(s)' : '') +
       '</div>' +
+      ((ap.novos || 0) ? '<div class="hint">Os contatos novos foram para a aba ' +
+        '<b>Revisao</b>: nenhum deles recebe transmissao antes de voce dizer ' +
+        'quem e cliente.</div>' : '') +
       (aviso ? '<div class="imp-ct-aviso">' + esc(aviso) + '</div>' : '');
   }
 
@@ -377,6 +386,19 @@ function poIcCamposEnvio(modo, auditado, atual) {
         poIcRenderResultado(j);
         toast('Importacao concluida.');
         btnAplicar.hidden = true;
+        // Recarrega a base: os contatos acabaram de nascer revisado=false e a
+        // fila da aba Revisao le a LEADS em memoria. Sem isto o contador
+        // continua em 0 e a aba diz "nenhum contato aguardando revisao" logo
+        // depois da importacao - o beco sem saida que a fila existe para
+        // fechar, so que agora com duas telas se contradizendo.
+        // Em try proprio: a importacao JA deu certo, e uma falha ao recarregar
+        // nao pode virar "Erro ao importar" (mentira que manda a cliente
+        // importar de novo).
+        try {
+          if (typeof loadData === 'function') await loadData();
+        } catch (e2) {
+          toast('Contatos importados. Recarregue a página para ver a fila de revisão.', true);
+        }
       } catch (err) {
         toast('Erro ao importar: ' + err.message, true);
       } finally {
