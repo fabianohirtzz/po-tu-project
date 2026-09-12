@@ -138,10 +138,10 @@ $$('.nav-item').forEach(b=>b.onclick=()=>{
   else if(v==='clientes'){$('#view-clientes').classList.add('on');$('#top-title').innerHTML='Clientes<span>.</span>';if(typeof poRenderClientes==='function')poRenderClientes();}
   else{$('#view-roteiros').classList.add('on');$('#top-title').innerHTML='Roteiros<span>.</span>';renderRoteiros();}
 });
-$('#month-sel').onchange=e=>{F.month=e.target.value;syncSpendInput();renderLeads();if($('#view-reports').classList.contains('on'))renderReports();};
-$('#q').oninput=e=>{F.q=e.target.value;renderLeads();};
-$('#status-filter').onchange=e=>{F.status=e.target.value;renderLeads();};
-$$('#orig-filter .chip').forEach(c=>c.onclick=()=>{$$('#orig-filter .chip').forEach(x=>x.classList.remove('active'));c.classList.add('active');F.orig=c.dataset.orig;renderLeads();});
+$('#month-sel').onchange=e=>{F.month=e.target.value;syncSpendInput();renderLeads();if($('#view-reports').classList.contains('on'))renderReports();if($('#view-clientes').classList.contains('on'))poRenderClientes();};
+$('#q').oninput=e=>{F.q=e.target.value;renderLeads();if($('#view-clientes').classList.contains('on'))poRenderClientes();};
+$('#status-filter').onchange=e=>{F.status=e.target.value;renderLeads();if($('#view-clientes').classList.contains('on'))poRenderClientes();};
+$$('#orig-filter .chip').forEach(c=>c.onclick=()=>{$$('#orig-filter .chip').forEach(x=>x.classList.remove('active'));c.classList.add('active');F.orig=c.dataset.orig;renderLeads();if($('#view-clientes').classList.contains('on'))poRenderClientes();});
 
 /* ============================================================ LEADS */
 function inMonth(l){return F.month==='all'||monthKey(l.data)===F.month;}
@@ -235,7 +235,7 @@ $('#dr-notes').addEventListener('click',async e=>{
 function closeDrawer(){$('#scrim').classList.remove('on');$('#drawer').classList.remove('on');openId=null;}
 $('#dr-close').onclick=closeDrawer;$('#dr-cancel').onclick=closeDrawer;
 $('#fi-close').onclick=()=>poFechaFicha();
-$('#scrim').onclick=()=>{closeDrawer();closeRot();closeNewLead();};
+$('#scrim').onclick=()=>{closeDrawer();closeRot();closeNewLead();poFechaFicha();};
 $('#dr-save').onclick=async()=>{
   const l=LEADS.find(x=>x.id===openId);if(!l)return;
   const btn=$('#dr-save');btn.disabled=true;btn.textContent='Salvando…';

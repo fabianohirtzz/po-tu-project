@@ -322,7 +322,7 @@ tbody tr:last-child td{border-bottom:none}
 
 /* A ficha usa a mesma caixa da gaveta de lead, para nao inventar um
    segundo vocabulario visual no painel. */
-.ficha{position:fixed;top:0;right:0;height:100%;width:min(520px,100%);z-index:60;
+.ficha{position:fixed;top:0;right:0;height:100%;width:min(520px,100%);z-index:70;
   background:var(--surface);border-left:1px solid var(--border);box-shadow:var(--shadow-pop);
   transform:translateX(100%);transition:transform .28s ease;overflow-y:auto}
 .ficha.on{transform:none}
