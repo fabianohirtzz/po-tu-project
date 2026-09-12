@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="painel.css?v=3">
+<link rel="stylesheet" href="painel.css?v=4">
 </head>
 <body>
 
@@ -268,6 +268,14 @@
           <button class="btn-add" id="ic-btn-preview" type="button" disabled>Ver auditoria (preview)</button>
           <button class="btn-add" id="ic-btn-aplicar" type="button" disabled hidden>Confirmar e importar</button>
         </div>
+        <!-- Escape hatch, nao fluxo normal: a guarda de 409 do servidor (arquivo
+             ja importado, ou lease de 10min de uma importacao que morreu no
+             meio) so libera de novo por aqui. Por isso fica discreta, abaixo
+             dos botoes principais, e desmarcada por padrao. -->
+        <label class="imp-ct-forcar">
+          <input type="checkbox" id="ic-forcar">
+          Importar novamente (este arquivo já foi importado)
+        </label>
       </div>
 
       <div class="imp-ct-resumo" id="ic-resumo" hidden></div>
@@ -277,6 +285,18 @@
           <table>
             <thead><tr><th>Nome</th><th>Casou por</th><th>Por que precisa de revisão</th></tr></thead>
             <tbody id="ic-revisar-rows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <h3 class="ic-h3">Fichas que vão ser completadas</h3>
+      <p class="ic-sub">Estes contatos já existem no painel. A importação só preenche o
+        que está em branco: nada que já tem valor é substituído.</p>
+      <div class="table-wrap">
+        <div class="tscroll">
+          <table>
+            <thead><tr><th>Contato</th><th>Casou por</th><th>Vai preencher</th></tr></thead>
+            <tbody id="ic-fusoes"></tbody>
           </table>
         </div>
       </div>
@@ -461,6 +481,6 @@
 <script src="clientes.js?v=2"></script>
 <script src="funil.js?v=1"></script>
 <script src="conversa.js?v=1"></script>
-<script src="importar-contatos.js?v=2"></script>
+<script src="importar-contatos.js?v=3"></script>
 </body>
 </html>
