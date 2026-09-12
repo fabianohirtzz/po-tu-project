@@ -68,8 +68,16 @@ function poAgrupaPessoas(leads) {
     p.cidade = melhor(p.cidade, l.cidade);
 
     p.total += 1;
-    if (l.status === 'venda') { p.vendas += 1; p.temVenda = true; }
-    p.valorVendido += Number(l.ven) || 0;
+    // O valor so entra no faturamento se o lead esta EM status venda, a
+    // mesma regra dos KPIs e dos relatorios. O quadro do funil tira o card
+    // de "Contrato assinado" mantendo o valor no lead de proposito; sem o
+    // filtro, a pessoa aparecia com "0 viagens" e "R$ 22.900 faturado" na
+    // mesma linha, e o KPI "Faturado" da aba ficava inflado para sempre.
+    if (l.status === 'venda') {
+      p.vendas += 1;
+      p.temVenda = true;
+      p.valorVendido += Number(l.ven) || 0;
+    }
     if (l.data && (!p.ultimaData || l.data > p.ultimaData)) p.ultimaData = l.data;
   });
 

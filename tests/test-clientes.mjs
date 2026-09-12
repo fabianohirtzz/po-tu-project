@@ -63,6 +63,32 @@ assert.equal(maria.ultimaData, '2026-09-01T12:00:00Z', 'ultima atividade da pess
 assert.equal(maria.leads[0].roteiro, 'Turquia', 'lead mais recente primeiro');
 assert.equal(pessoas[0].nome, 'Maria Aparecida', 'pessoa com atividade mais recente primeiro');
 
+// --- faturamento so conta quem esta EM status venda.
+// O quadro do funil tira o card de "Contrato assinado" mantendo o valor
+// no lead de proposito (um engano de arrasto nao pode destruir o numero).
+// Se a ficha somasse o valor mesmo assim, a pessoa apareceria com
+// "0 viagens" e "R$ 22.900 faturado" na mesma linha, e o KPI "Faturado"
+// da aba ficaria inflado para sempre. Mesma regra ja aplicada nos KPIs
+// de leads e nos relatorios.
+const saiuDeVenda = poAgrupaPessoas([
+  {id:1, tel:'(48) 99604-8882', nome:'Maria', status:'negociacao', orc:0, ven:22900,
+   data:'2026-03-10T12:00:00Z', vendaAt:null, notas:[]},
+]);
+assert.equal(saiuDeVenda[0].vendas, 0, 'lead fora de venda nao conta viagem');
+assert.equal(saiuDeVenda[0].valorVendido, 0, 'e nao entra no faturamento');
+assert.equal(saiuDeVenda[0].temVenda, false, 'segue como lead, nao cliente');
+
+// A mesma pessoa com uma venda de verdade e um interesse que saiu de
+// venda: soma so a venda.
+const mistura = poAgrupaPessoas([
+  {id:1, tel:'(48) 99604-8882', nome:'Maria', status:'venda',      orc:0, ven:22900,
+   data:'2026-03-10T12:00:00Z', vendaAt:'2026-03-20T12:00:00Z', notas:[]},
+  {id:2, tel:'(48) 99604-8882', nome:'Maria', status:'negociacao', orc:0, ven:31000,
+   data:'2026-09-01T12:00:00Z', vendaAt:null, notas:[]},
+]);
+assert.equal(mistura[0].vendas, 1, 'uma viagem feita');
+assert.equal(mistura[0].valorVendido, 22900, 'so o valor do lead que esta em venda');
+
 // --- entradas degeneradas nao podem derrubar o painel
 assert.deepEqual(poAgrupaPessoas([]), [], 'lista vazia');
 assert.equal(poAgrupaPessoas([{id:9, tel:'—', nome:'(sem nome)', status:'novo', orc:0, ven:0, data:null}]).length,
