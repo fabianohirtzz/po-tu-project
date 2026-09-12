@@ -562,6 +562,10 @@ function wa_import_linha_nova($c) {
     $linha = array_merge([
         'nome'                => $c['nome'] ?? '',
         'telefone'            => $c['wa_id'] ?? null,
+        // O motor do WhatsApp casa lead por wa_id (wa_lead() consulta wa_id=eq.
+        // e INSERE quando nao acha). Sem isto, a ficha rica duplicaria na
+        // primeira mensagem. So celular vira wa_id: fixo nao tem WhatsApp.
+        'wa_id'          => $c['wa_id'] ?? null,
         // Contato so com fixo (a Task 6 deixa passar de proposito): o numero
         // vai para ca, senao o lead nasce sem telefone nenhum e inalcancavel.
         'telefone_secundario' => $c['fixos'][0] ?? null,
