@@ -105,7 +105,14 @@ assert.ok(cliSrc.includes('filtradasPessoas()'), 'a aba Clientes le de filtradas
 
 // Os relatorios nao podem contar a base importada no denominador: as 775 fichas
 // do CRM entraram com created_at=hoje e derrubariam a conversao do mes para ~0.
-assert.ok(/function rowsForReports\(\)\{[\s\S]*?origemImport/.test(src),
+// A extracao tem que fechar no \n} da propria funcao (o mesmo padrao usado
+// abaixo para renderLeads): sem ancora de fechamento, a regex casa com
+// qualquer origemImport depois do nome da funcao em qualquer ponto do
+// arquivo, e renderReports() logo abaixo ja usa l.origemImport no calculo
+// do contador — o teste ficava verde mesmo com o filtro removido.
+const rowsForReportsFn = src.match(/function rowsForReports\(\)[\s\S]*?\n\}/);
+assert.ok(rowsForReportsFn, 'rowsForReports encontrada');
+assert.ok(/origemImport/.test(rowsForReportsFn[0]),
   'rowsForReports leva origemImport em conta');
 assert.ok(/F\.importados/.test(src),
   'existe um estado de filtro para incluir ou nao os importados');
@@ -116,5 +123,15 @@ const leads = src.match(/function renderLeads\(\)[\s\S]*?\n\}/);
 assert.ok(leads, 'renderLeads encontrada');
 assert.ok(!/origemImport/.test(leads[0]),
   'a aba Leads segue mostrando todo mundo, inclusive os importados');
+
+/* ---------- o controle "incluir a base importada" comeca desmarcado.
+   Mesmo padrao do checkbox #ic-forcar em test-importar-contatos.mjs: se um
+   dia nascer marcado, os relatorios abrem contando as 775 fichas do CRM e a
+   conversao do mes despenca de novo, em silencio. ---------- */
+const painel = readFileSync(new URL('../painel/index.html', import.meta.url), 'utf8');
+const repImportadosTag = (painel.match(/<input[^>]*id="rep-importados"[^>]*>/) || [''])[0];
+assert.ok(repImportadosTag, 'existe o checkbox #rep-importados');
+assert.ok(!/checked/.test(repImportadosTag),
+  'a caixa "incluir a base importada" comeca desmarcada');
 
 console.log('test-filtros OK');
