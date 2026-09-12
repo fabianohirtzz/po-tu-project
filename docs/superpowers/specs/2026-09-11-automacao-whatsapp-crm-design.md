@@ -33,7 +33,7 @@ dia vai acontecer. O funil tem que se alimentar da conversa que já existe.
 | IA | **Nenhuma** | O roteiro é identificado por anúncio, por link ou por casamento de palavra no catálogo. Isso zera custo variável de IA e remove uma peça que pode falhar. |
 | Etapas manuais | **Atalho no WhatsApp + kanban arrastável** | Proposta e fechamento são atos dela. Adivinhar por texto livre erra, e funil errado é pior que funil vazio. |
 | Transmissão | **Pelo painel, via template** | A coexistência desativa a lista de transmissão do app. Ver seção 8. |
-| Base de contatos | **Importada da agenda do celular** | É onde as listas dela vivem hoje. Ver seção 9. |
+| Base de contatos | **Três fontes: CRM antigo + duas agendas de celular** | O CRM tem 778 fichas com documento; as agendas (dela e do marido) têm os telefones dos clientes, marcados no nome. Ver seção 9. |
 
 ### 2.1 O que a coexistência custa
 
@@ -97,6 +97,26 @@ funcionando sem alteração.
 | `qualif_grupo` | boolean | Já viajou em grupo. |
 | `qualif_at` | timestamptz | Quando completou a qualificação. |
 | `proposta_at` | timestamptz | Quando a proposta foi enviada (atalho ou PDF). |
+
+**Bloco de ficha do cliente** (adotado do CRM antigo em 12/09/2026 — ver seção 9). Todas
+opcionais, todas `text` salvo indicação. O importador preenche; o painel exibe e edita na
+ficha. Nenhuma quebra os relatórios existentes.
+
+| Coluna | Tipo | Para quê |
+|---|---|---|
+| `cpf` | text | Documento. **Chave de identidade mais confiável** na deduplicação (ver 9.2). |
+| `rg` | text | Documento. |
+| `data_nascimento` | date | Ficha + fallback de identidade (nome + nascimento). |
+| `nacionalidade` | text | Ficha. |
+| `estado_civil` | text | Ficha. |
+| `profissao` | text | Ficha. |
+| `cep` · `endereco` · `numero` · `complemento` · `bairro` · `estado` | text | Endereço completo (`cidade` já existe). |
+| `passaporte_numero` · `passaporte_orgao_emissor` · `passaporte_emissao` · `passaporte_validade` | text/date | Documento de viagem. `validade` alimenta alerta futuro de passaporte vencendo. |
+| `contato_emergencia_nome` · `contato_emergencia_telefone` · `contato_emergencia_parentesco` | text | Exigido pela operadora no embarque. |
+| `telefone_secundario` | text | Segundo número da ficha. |
+| `observacoes` | text | Nota permanente do cliente (distinta de `notas`, que é a linha do tempo do funil). |
+| `origem_import` | text | De qual fonte veio: `crm-toninho`, `agenda-esposa`, `agenda-marido`, `formulario`, `whatsapp`. |
+| `payload_import` | jsonb | O registro original da fonte, íntegro. **Rede de segurança: nada da origem se perde**, mesmo o que não vira coluna. |
 
 ### 4.2 Tabelas novas
 
@@ -268,7 +288,10 @@ número dela na agenda, e o app não avisa quando não entrega. Com 800 na lista
 salvaram, 500 pessoas nunca souberam do roteiro. Pelo painel, chega em todos, sem o teto de
 256, com segmentação e com relatório.
 
-**O que passa a custar:** ~R$ 0,31 por destinatário. 800 contatos = ~R$ 250 por disparo.
+**O que passa a custar:** ~R$ 0,31 por destinatário. O número real de destinatários só se
+conhece depois de importar as agendas — o CRM sozinho tem só 172 telefones, e a transmissão
+manda **só para celular** (fixo e internacional entram na ficha mas não no disparo). A tela
+mostra a contagem e o custo antes de confirmar (8.2).
 
 ### 8.1 Defesas obrigatórias
 
@@ -291,20 +314,93 @@ aviso. Custo invisível em fatura de terceiro é como projeto assim perde a conf
 
 ---
 
-## 9. Importador de contatos
+## 9. Importador de contatos e auditoria de base
 
-Entrada: `.vcf` (vCard) ou `.csv` exportado da agenda do celular ou do Google Contatos.
+> Reescrito em 12/09/2026 depois de auditar as três fontes reais. A versão anterior
+> assumia uma fonte só (agenda) e identidade só por telefone. As duas premissas caíram.
 
-Rotina de limpeza, nesta ordem:
+São **três fontes**, e elas se completam em vez de se repetir:
 
-1. Normaliza para E.164: acrescenta `+55`, valida DDD, resolve o nono dígito de celular.
-2. Descarta o que não é celular válido, fixos e números internacionais.
-3. Deduplica por `wa_id`, mantendo o nome mais completo.
-4. Limpa o nome ("Maria Grécia 2" vira "Maria"), preservando o original em `payload`.
-5. Entra como `revisado = false`. **Nada é enviado antes da revisão.**
+| Fonte | O que traz | O que falta |
+|---|---|---|
+| **CRM antigo** (sistema do Netlify) | 778 fichas com CPF (423), passaporte (289), endereço (567), nascimento (445) | **Telefone: só 172 de 778.** 606 sem nenhum. |
+| **Agenda da cliente** (`.vcf`) | Telefones de clientes | Sem documento. Misturada com não-clientes. |
+| **Agenda do marido** (`.vcf`) | Telefones de clientes | Idem. |
 
-A tela de revisão lista em lotes, com ação em massa para marcar cliente, e cruza com
-`po_leads` para pré-marcar quem já é lead conhecido.
+O CRM é rico em documento e pobre em telefone; as agendas são o inverso. Por isso **o
+telefone não pode ser a chave de identidade** (78% do CRM não tem), e a importação não é
+uma carga: é uma **auditoria de fusão** entre as três.
+
+### 9.1 O marcador "PO" nas agendas
+
+Informação do Armando (dono, 12/09): todo cliente salvo nas agendas deles tem o nome
+marcado — `- Cliente PO`, `- PO` ou variantes. A agenda tem sujeira (família, médico,
+fornecedor); **o marcador é o filtro que separa cliente de ruído.** O CRM não tem esse
+marcador (conferido: 0 fichas), e não precisa — lá tudo já é cliente.
+
+Regra: da agenda, **só entra quem tem o marcador**. O resto é ignorado (não descartado com
+alarde: some da importação, silenciosamente). O padrão do marcador é configurável, porque a
+grafia varia entre os dois aparelhos.
+
+### 9.2 Identidade e deduplicação — as regras do Armando
+
+As três regras, ditas por ele, são critério de aceitação, não recomendação:
+
+1. **O registro com histórico é o dono.** Uma ficha que já tem histórico (veio do CRM, ou
+   já é lead com conversa/venda/nota) **nunca é sobrescrita nem substituída** por um contato
+   de agenda.
+2. **A fusão só soma, nunca zera.** Campo vazio na fonte nova jamais apaga campo preenchido
+   no registro existente. A agenda serve para **preencher o telefone que faltava** numa ficha
+   do CRM — não para mexer no resto.
+3. **Nunca duplicar.** Nenhum registro novo é criado sem antes tentar casar com um existente.
+
+**Casamento por camadas, nesta ordem** (a primeira que bater vence):
+
+1. **CPF** normalizado — chave limpa e única (0 duplicatas nas 778). Só existe entre fichas
+   de CRM, mas é o casamento de maior confiança.
+2. **Telefone** em E.164 (via `wa_e164()`, o normalizador único — ver pendência). Casa
+   agenda ↔ CRM, mas só alcança as 172 fichas que têm telefone. **Cuidado:** há telefones
+   fixos repetidos entre fichas (um fixo de SP em 3 fichas — número de empresa, não de
+   pessoa). Fixo nunca funde duas pessoas; só celular casa identidade.
+3. **Nome normalizado + data de nascimento** — rede final, e só quando os dois batem.
+
+O que **não casa em nenhuma camada** não é fundido nem inventado: entra como candidato novo
+na **tela de revisão**, com `revisado = false`. Fusão automática só acontece com casamento
+de CPF ou de celular; nome+nascimento sozinho **sugere**, não funde. Nada de criar ou
+sobrescrever no escuro.
+
+### 9.3 Ordem de importação (por que o CRM entra primeiro)
+
+O CRM é a semente: entra primeiro, íntegro, como base-mestra marcada `cliente = true`. As
+agendas entram depois, casando contra essa base já assentada. Assim, quando um telefone de
+agenda casa por celular com uma ficha de CRM, ele **completa** a ficha (regra 2) em vez de
+criar uma segunda. As duas agendas também se deduplicam entre si (o mesmo cliente pode estar
+nos dois aparelhos).
+
+### 9.4 Limpeza de cada registro
+
+1. Normaliza telefone para E.164 com `wa_e164()`: `+55`, valida DDD, resolve o nono dígito.
+   Fixo e internacional são preservados na ficha, mas **não entram na transmissão** (seção 8).
+2. Limpa o nome: tira o marcador e a poluição de busca ("Maria Grécia 2 - PO" vira "Maria"),
+   **preservando o original em `payload_import`**.
+3. Guarda a fonte em `origem_import` e o registro cru em `payload_import`.
+4. Entra com `revisado = false` quando veio de agenda. **Nada é transmitido antes da revisão.**
+
+### 9.5 Tela de revisão e auditoria
+
+Lista em lotes, com ação em massa para marcar cliente. Antes de qualquer escrita, mostra o
+**resultado da auditoria**: quantos casaram por CPF, quantos por celular, quantos são
+candidatos novos, e **quais fusões vão preencher campos** — para a decisão ser vista, não
+adivinhada. Casos ambíguos (só nome+nascimento) aparecem lado a lado para o humano confirmar.
+
+### 9.6 A fonte CRM e um alerta de segurança
+
+O CRM antigo (Netlify + Supabase próprio) **expõe os 778 cadastros sem autenticação**: a
+chave de acesso está no código público e a tela de login é decorativa. CPF, RG e passaporte
+de 778 pessoas ficam legíveis para qualquer um com o endereço — exposição de dado sensível,
+questão de LGPD. **Não é sistema nosso.** Registrado aqui para: (a) avisar o cliente que o
+link não deve circular; (b) quando reaproveitarmos a base, ela vai para o **nosso** Supabase,
+com login e RLS de verdade.
 
 ---
 
@@ -354,7 +450,9 @@ Cada etapa é entregável e testável sozinha. As três primeiras não dependem 
    regra de silêncio. Testado ponta a ponta contra o simulador.
 4. **Kanban no painel** — as cinco colunas, arrastável, sobre o `po_leads`.
 5. **Conversa dentro do lead** — a aba que lê `po_wa_mensagens`.
-6. **Importador e revisão de contatos** — seção 9.
+6. **Importador, auditoria de fusão e semente do CRM** — seção 9. Campos de ficha (4.1),
+   casamento por camadas, regras do Armando travadas por teste, carga das 778 do CRM como
+   base-mestra, depois o merge das agendas com revisão. **Este é o plano 3.**
 7. **Tela de transmissão** — seção 8, com custo estimado e as defesas.
 8. **`wa-cron.php`** — lembrete de 24h e encerramento de 48h.
 9. **Conexão real** — troca do simulador pela Graph API, templates submetidos, homologação
