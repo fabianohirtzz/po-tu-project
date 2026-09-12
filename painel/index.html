@@ -30,7 +30,7 @@
 
 <!-- ===== APP ===== -->
 <div class="app" id="app">
-  <aside class="side">
+  <aside class="side" id="side-nav">
     <div class="side-word">Pereira <b>Oliveira</b></div>
     <div class="side-tag">Painel</div>
     <nav class="nav">
@@ -64,6 +64,12 @@
 
   <div class="main">
     <header class="top">
+      <!-- Abaixo de 980px a barra lateral vira gaveta e este botao e a unica
+           porta de entrada das abas. Sem ele, Clientes e Funil ficavam
+           impossiveis de abrir no celular. -->
+      <button class="top-burger" id="nav-toggle" type="button" aria-label="Abrir o menu" aria-expanded="false" aria-controls="side-nav">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
       <div class="top-title" id="top-title">Leads<span>.</span></div>
       <div class="top-right">
         <div class="top-month" id="month-box">
@@ -141,7 +147,13 @@
 
     <!-- ===== FUNIL ===== -->
     <section class="view" id="view-funil">
-      <div class="fn-board" id="fn-board"></div>
+      <!-- Quem rola de lado e esta caixa, nao o quadro: overflow-x e
+           width:max-content na mesma caixa se anulam, e quem passava a rolar
+           era a pagina inteira, arrastando o cabecalho fixo junto. Mesmo
+           padrao de .table-wrap + .tscroll. -->
+      <div class="fn-scroll">
+        <div class="fn-board" id="fn-board"></div>
+      </div>
     </section>
 
     <!-- ===== RELATÓRIOS ===== -->

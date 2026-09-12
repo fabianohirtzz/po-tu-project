@@ -130,6 +130,19 @@ function buildMonths(){
 }
 
 /* ============================================================ NAV */
+/* Abaixo de 980px a barra lateral vira gaveta e o botao do cabecalho e a
+   unica porta de entrada das abas. Antes ela simplesmente sumia, e nao
+   havia nenhuma outra navegacao: Clientes e Funil ficavam inalcancaveis no
+   celular, que e onde o menu de etapas por toque do funil foi feito para
+   viver. */
+function abreSide(){$('#side-nav').classList.add('on');$('#nav-toggle').setAttribute('aria-expanded','true');$('#scrim').classList.add('on');}
+function fechaSide(){
+  $('#side-nav').classList.remove('on');$('#nav-toggle').setAttribute('aria-expanded','false');
+  // O scrim e compartilhado com as gavetas e a ficha: so sai se nenhuma
+  // delas estiver aberta. Mesma cautela do poFechaFicha.
+  if(!$$('.drawer.on, .ficha.on').length)$('#scrim').classList.remove('on');
+}
+$('#nav-toggle').onclick=()=>{$('#side-nav').classList.contains('on')?fechaSide():abreSide();};
 $$('.nav-item').forEach(b=>b.onclick=()=>{
   $$('.nav-item').forEach(x=>x.classList.remove('active'));b.classList.add('active');
   const v=b.dataset.view;$$('.view').forEach(x=>x.classList.remove('on'));
@@ -139,6 +152,7 @@ $$('.nav-item').forEach(b=>b.onclick=()=>{
   else if(v==='clientes'){$('#view-clientes').classList.add('on');$('#top-title').innerHTML='Clientes<span>.</span>';if(typeof poRenderClientes==='function')poRenderClientes();}
   else if(v==='funil'){$('#view-funil').classList.add('on');$('#top-title').innerHTML='Funil<span>.</span>';if(typeof poRenderFunil==='function')poRenderFunil();}
   else{$('#view-roteiros').classList.add('on');$('#top-title').innerHTML='Roteiros<span>.</span>';renderRoteiros();}
+  fechaSide();
 });
 $('#month-sel').onchange=e=>{F.month=e.target.value;syncSpendInput();renderLeads();if($('#view-reports').classList.contains('on'))renderReports();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();};
 $('#q').oninput=e=>{F.q=e.target.value;renderLeads();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();};
@@ -282,7 +296,7 @@ $('#dr-notes').addEventListener('click',async e=>{
 function closeDrawer(){$('#scrim').classList.remove('on');$('#drawer').classList.remove('on');openId=null;}
 $('#dr-close').onclick=closeDrawer;$('#dr-cancel').onclick=closeDrawer;
 $('#fi-close').onclick=()=>poFechaFicha();
-$('#scrim').onclick=()=>{closeDrawer();closeRot();closeNewLead();poFechaFicha();};
+$('#scrim').onclick=()=>{closeDrawer();closeRot();closeNewLead();poFechaFicha();fechaSide();};
 /* O que a gaveta grava no banco quando a dona clica em Salvar. Mora fora
    do handler porque e regra de negocio, nao de interface, e porque e a
    unica parte deste arquivo que consegue perder dado em silencio.
