@@ -57,6 +57,10 @@ button{cursor:pointer;border:none;background:none}
 
 .main{display:flex;flex-direction:column;min-width:0}
 .top{display:flex;align-items:center;justify-content:space-between;padding:18px 30px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20}
+.top-burger{display:none;align-items:center;justify-content:center;width:38px;height:38px;
+  margin-right:12px;flex:0 0 38px;border:1px solid var(--border);border-radius:9px;
+  background:var(--surface);color:var(--text)}
+.top-burger svg{width:20px;height:20px}
 .top-title{font-family:var(--font-display);font-weight:700;font-size:1.4rem;letter-spacing:-.01em;line-height:1}
 .top-title span{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .top-right{display:flex;align-items:center;gap:14px}
@@ -310,7 +314,92 @@ tbody tr:last-child td{border-bottom:none}
 
 @media(max-width:980px){
   .app.on{grid-template-columns:1fr}
-  .side{display:none}
-  .rep-grid,.rep-grid{grid-template-columns:1fr}
+  /* A barra lateral vira gaveta em vez de sumir. Antes ela ficava em
+     display:none e o painel nao tinha nenhuma outra navegacao, entao as
+     abas Clientes e Funil eram impossiveis de abrir abaixo de 980px —
+     justamente onde o menu de etapas por toque foi feito para viver.
+     z-index acima do scrim (60) para ficar clicavel com ele ligado. */
+  .side{position:fixed;top:0;left:0;z-index:80;width:min(260px,82vw);
+    transform:translateX(-100%);transition:transform .25s ease;box-shadow:var(--shadow-pop)}
+  .side.on{transform:none}
+  .top-burger{display:inline-flex}
   .rep-grid{grid-template-columns:1fr}
 }
+
+/* ---------- aba Clientes e ficha ---------- */
+.cli-tag{display:inline-block;padding:3px 9px;border-radius:999px;font-size:.72rem;font-weight:600;
+  background:var(--surface3);color:var(--muted);border:1px solid var(--border2)}
+.cli-tag--cliente{background:rgba(37,211,102,.12);color:#128c46;border-color:rgba(37,211,102,.3)}
+
+/* A ficha usa a mesma caixa da gaveta de lead, para nao inventar um
+   segundo vocabulario visual no painel. */
+.ficha{position:fixed;top:0;right:0;height:100%;width:min(520px,100%);z-index:70;
+  background:var(--surface);border-left:1px solid var(--border);box-shadow:var(--shadow-pop);
+  transform:translateX(100%);transition:transform .28s ease;overflow-y:auto}
+.ficha.on{transform:none}
+.fi-leads{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.fi-lead{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;
+  width:100%;text-align:left;padding:11px 13px;border-radius:10px;cursor:pointer;
+  background:var(--surface3);border:1px solid var(--border);color:inherit;font:inherit}
+.fi-lead:hover{border-color:var(--azul)}
+.fi-lead-d{font-size:.76rem;color:var(--faint)}
+.fi-lead-r{font-size:.88rem;font-weight:500}
+@media(max-width:640px){.fi-lead{grid-template-columns:1fr auto}.fi-lead-d{grid-column:1/-1}}
+
+/* ---------- aba Funil ---------- */
+/* A rolagem horizontal fica na caixa de fora. Ela estava na mesma caixa do
+   width:max-content, e as duas se anulam: a caixa cresce ate caber o
+   conteudo, entao nunca rola, e quem transborda vira a .view — o painel
+   inteiro passava a andar de lado no celular, levando o cabecalho fixo
+   junto. E o mesmo par de .table-wrap + .tscroll usado nas tabelas. */
+.fn-scroll{overflow-x:auto;padding-bottom:8px}
+.fn-board{display:grid;grid-template-columns:repeat(5,minmax(190px,1fr));gap:12px}
+@media(max-width:1100px){.fn-board{grid-template-columns:repeat(5,minmax(180px,1fr));width:max-content;min-width:100%}}
+.fn-col{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 10px;
+  display:flex;flex-direction:column;gap:8px;min-height:180px}
+.fn-col.fn-col--alvo{border-color:var(--azul);background:rgba(31,168,221,.06)}
+.fn-col-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.fn-col-t{font-size:.84rem;font-weight:600}
+.fn-col-n{font-family:var(--font-mono);font-size:.78rem;color:var(--faint)}
+.fn-modo{font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;
+  border-radius:5px;align-self:flex-start}
+.fn-modo--auto{background:rgba(31,168,221,.1);color:#0e7fae}
+.fn-modo--atalho{background:rgba(224,138,0,.14);color:#b06f00}
+.fn-col-b{display:flex;flex-direction:column;gap:8px}
+.fn-card{background:var(--surface3);border:1px solid var(--border);border-radius:9px;padding:9px 10px;
+  cursor:pointer;display:flex;flex-direction:column;gap:3px}
+.fn-card:hover{border-color:var(--azul)}
+.fn-card.fn-card--arrastando{opacity:.45}
+.fn-card.fn-card--movendo{opacity:.55;pointer-events:none}
+.fn-card-n{font-size:.86rem;font-weight:600}
+.fn-card-r{font-size:.76rem;color:var(--muted)}
+.fn-card-f{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font-size:.72rem;color:var(--faint);margin-top:2px}
+.fn-vazio{font-size:.74rem;color:var(--faint);padding:6px 2px}
+
+/* Menu de etapas do celular. Vem de baixo, que e onde o polegar alcanca. */
+.fn-menu{position:fixed;left:0;right:0;bottom:0;z-index:70;background:var(--surface);
+  border-top:1px solid var(--border);border-radius:16px 16px 0 0;padding:16px 14px 22px;
+  transform:translateY(100%);transition:transform .25s ease}
+.fn-menu.on{transform:none}
+.fn-menu-h{font-size:.86rem;color:var(--muted);margin-bottom:12px}
+.fn-menu-o{display:flex;flex-direction:column;gap:7px}
+.fn-menu-b{width:100%;text-align:left;padding:13px 14px;border-radius:10px;cursor:pointer;
+  background:var(--surface3);border:1px solid var(--border);color:inherit;font:inherit;font-size:.9rem}
+.fn-menu-b.on{border-color:var(--azul);color:var(--azul)}
+.fn-menu-b--ver{margin-top:6px;background:transparent;color:var(--faint)}
+
+/* ---------- abas da gaveta e conversa ---------- */
+.dr-tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--border)}
+.dr-tab{background:none;border:none;color:var(--muted);font:inherit;font-size:.86rem;
+  padding:8px 12px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.dr-tab.on{color:var(--azul);border-bottom-color:var(--azul)}
+.dr-pane{display:none}
+.dr-pane.on{display:block}
+.cv-wrap{display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto;padding-right:4px}
+.cv{max-width:85%;padding:8px 11px;border-radius:11px;font-size:.84rem;line-height:1.45}
+.cv--in{align-self:flex-start;background:var(--surface3);border:1px solid var(--border)}
+.cv--out{align-self:flex-end;background:rgba(37,211,102,.12);color:#128c46;border:1px solid rgba(37,211,102,.3)}
+.cv--bot{align-self:flex-end;background:rgba(31,168,221,.1);color:#0e7fae;border:1px solid rgba(31,168,221,.28)}
+.cv-w{display:block;font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--faint);margin-bottom:4px}

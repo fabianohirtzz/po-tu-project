@@ -115,7 +115,8 @@ function mapRow(r){
     origemRaw:r.origem||'—',origemAuto:auto,origem:eff,
     camp:r.utm_campaign||r.origem||'—',land:r.landing_page||'—',
     status:r.status||'semresposta',orc:Number(r.orcamento)||0,ven:Number(r.venda)||0,
-    notas:Array.isArray(r.notas)?r.notas:[],vendaAt:r.venda_at||null};
+    notas:Array.isArray(r.notas)?r.notas:[],vendaAt:r.venda_at||null,
+    waId:r.wa_id||''};
 }
 function buildMonths(){
   const set=[...new Set(LEADS.map(l=>monthKey(l.data)).filter(Boolean))].sort().reverse();
@@ -129,27 +130,63 @@ function buildMonths(){
 }
 
 /* ============================================================ NAV */
+/* Abaixo de 980px a barra lateral vira gaveta e o botao do cabecalho e a
+   unica porta de entrada das abas. Antes ela simplesmente sumia, e nao
+   havia nenhuma outra navegacao: Clientes e Funil ficavam inalcancaveis no
+   celular, que e onde o menu de etapas por toque do funil foi feito para
+   viver. */
+function abreSide(){$('#side-nav').classList.add('on');$('#nav-toggle').setAttribute('aria-expanded','true');$('#scrim').classList.add('on');}
+function fechaSide(){
+  $('#side-nav').classList.remove('on');$('#nav-toggle').setAttribute('aria-expanded','false');
+  // O scrim e compartilhado com as gavetas e a ficha: so sai se nenhuma
+  // delas estiver aberta. Mesma cautela do poFechaFicha.
+  if(!$$('.drawer.on, .ficha.on').length)$('#scrim').classList.remove('on');
+}
+$('#nav-toggle').onclick=()=>{$('#side-nav').classList.contains('on')?fechaSide():abreSide();};
 $$('.nav-item').forEach(b=>b.onclick=()=>{
   $$('.nav-item').forEach(x=>x.classList.remove('active'));b.classList.add('active');
   const v=b.dataset.view;$$('.view').forEach(x=>x.classList.remove('on'));
   $('#month-box').style.visibility=(v==='roteiros')?'hidden':'visible';
   if(v==='leads'){$('#view-leads').classList.add('on');$('#top-title').innerHTML='Leads<span>.</span>';renderLeads();}
   else if(v==='reports'){$('#view-reports').classList.add('on');$('#top-title').innerHTML='Relatórios<span>.</span>';renderReports();}
+  else if(v==='clientes'){$('#view-clientes').classList.add('on');$('#top-title').innerHTML='Clientes<span>.</span>';if(typeof poRenderClientes==='function')poRenderClientes();}
+  else if(v==='funil'){$('#view-funil').classList.add('on');$('#top-title').innerHTML='Funil<span>.</span>';if(typeof poRenderFunil==='function')poRenderFunil();}
   else{$('#view-roteiros').classList.add('on');$('#top-title').innerHTML='Roteiros<span>.</span>';renderRoteiros();}
+  fechaSide();
 });
-$('#month-sel').onchange=e=>{F.month=e.target.value;syncSpendInput();renderLeads();if($('#view-reports').classList.contains('on'))renderReports();};
-$('#q').oninput=e=>{F.q=e.target.value;renderLeads();};
-$('#status-filter').onchange=e=>{F.status=e.target.value;renderLeads();};
-$$('#orig-filter .chip').forEach(c=>c.onclick=()=>{$$('#orig-filter .chip').forEach(x=>x.classList.remove('active'));c.classList.add('active');F.orig=c.dataset.orig;renderLeads();});
+$('#month-sel').onchange=e=>{F.month=e.target.value;syncSpendInput();renderLeads();if($('#view-reports').classList.contains('on'))renderReports();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();};
+$('#q').oninput=e=>{F.q=e.target.value;renderLeads();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();};
+$('#status-filter').onchange=e=>{F.status=e.target.value;renderLeads();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();};
+$$('#orig-filter .chip').forEach(c=>c.onclick=()=>{$$('#orig-filter .chip').forEach(x=>x.classList.remove('active'));c.classList.add('active');F.orig=c.dataset.orig;renderLeads();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();});
 
 /* ============================================================ LEADS */
 function inMonth(l){return F.month==='all'||monthKey(l.data)===F.month;}
-function filtered(){
-  return LEADS.filter(inMonth)
-    .filter(l=>F.orig==='todos'||l.origem===F.orig)
-    .filter(l=>F.status==='todos'||l.status===F.status)
-    .filter(l=>{if(!F.q)return true;const s=(l.nome+l.cidade+l.roteiro).toLowerCase();return s.includes(F.q.toLowerCase());});
+/* O recorte dos leads em pedacos, porque cada tela quer um recorte
+   diferente e reusar o mesmo em todas dava resultado errado em duas delas.
+   'usa' liga ou desliga cada filtro; a busca vale sempre. Os leads e o
+   filtro entram por parametro para a funcao poder ser testada sem o
+   painel. */
+function poFiltraLeads(leads,f,usa){
+  const q=(f.q||'').toLowerCase();
+  return (leads||[]).filter(l=>{
+    if(usa.mes&&!(f.month==='all'||monthKey(l.data)===f.month))return false;
+    if(usa.origem&&!(f.orig==='todos'||l.origem===f.orig))return false;
+    if(usa.status&&!(f.status==='todos'||l.status===f.status))return false;
+    if(q&&!(l.nome+l.cidade+l.roteiro).toLowerCase().includes(q))return false;
+    return true;
+  });
 }
+/* A aba Leads e a tabela do mes: usa os quatro filtros. */
+function filtered(){return poFiltraLeads(LEADS,F,{mes:true,origem:true,status:true});}
+/* O Funil ignora o filtro de status: as colunas do quadro JA sao o status.
+   Com ele ligado, mover um card para outra coluna fazia o card sumir do
+   quadro inteiro, restando so o toast dizendo que tinha sido movido. */
+function filtradosFunil(){return poFiltraLeads(LEADS,F,{mes:true,origem:true,status:false});}
+/* A aba Clientes ignora o filtro de mes: base de clientes nao e recorte
+   mensal. O seletor comeca no mes mais recente, entao a aba que existe
+   para responder "quem ja viajou com a gente" abria mostrando so quem deu
+   sinal neste mes, e os KPIs contavam so essas pessoas. */
+function filtradasPessoas(){return poFiltraLeads(LEADS,F,{mes:false,origem:true,status:true});}
 function origBadge(o){const x=ORIG[o]||ORIG.direto;return `<span class="orig ${x.cls}">${x.label}</span>`;}
 function renderLeads(){
   const rows=filtered();const tb=$('#lead-rows');
@@ -172,7 +209,12 @@ function renderLeads(){
 function renderLeadKpis(rows){
   const total=rows.length,vendas=rows.filter(l=>l.status==='venda');
   const conv=total?Math.round(vendas.length/total*100):0;
-  const valVen=rows.reduce((s,l)=>s+l.ven,0),valOrc=rows.reduce((s,l)=>s+l.orc,0);
+  // Em vendas soma so quem esta em status 'venda': arrastar o card pra
+  // fora de venda limpa o venda_at (regra de negocio), mas o valor (ven)
+  // continua no lead de proposito (mover de volta por engano nao pode
+  // destruir o numero). Sem o filtro por status o faturamento fica
+  // inflado em silencio pra sempre.
+  const valVen=vendas.reduce((s,l)=>s+l.ven,0),valOrc=rows.reduce((s,l)=>s+l.orc,0);
   $('#lead-kpis').innerHTML=`
     <div class="kpi"><div class="kpi-l">Leads no período</div><div class="kpi-n">${total}</div><div class="kpi-sub">${rows.filter(l=>isPago(l.origem)).length} pago · ${rows.filter(l=>!isPago(l.origem)).length} orgânico</div></div>
     <div class="kpi k-green"><div class="kpi-l">Vendas fechadas</div><div class="kpi-n">${vendas.length}</div><div class="kpi-sub"><b>${conv}%</b> de conversão</div></div>
@@ -192,8 +234,28 @@ function openDrawer(id){
   $('#e-status').value=l.status;$('#e-orig').value=l.origem;
   $('#e-orc').value=l.orc||'';$('#e-ven').value=l.ven||'';
   $('#n-txt').value='';renderNotes(l);
+  // A conversa carrega junto com a gaveta. So l.waId, sem fallback pro
+  // telefone: o enviar.php nao normaliza o telefone do site pro formato
+  // E.164, entao ele nunca bate com um wa_id de verdade — usa-lo so
+  // gastaria uma consulta que sempre volta vazia. O motor do WhatsApp
+  // sempre grava wa_id no lead que ele cria; quem nao tem o campo e
+  // porque nao veio pelo WhatsApp mesmo.
+  $$('.dr-tab').forEach(t=>t.classList.toggle('on',t.dataset.tab==='dados'));
+  $('#pane-dados').classList.add('on');$('#pane-conversa').classList.remove('on');
+  if(typeof poRenderConversa==='function')poRenderConversa(l.waId);
   $('#scrim').classList.add('on');$('#drawer').classList.add('on');
 }
+$$('.dr-tab').forEach(t=>t.onclick=()=>{
+  $$('.dr-tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');
+  $('#pane-dados').classList.toggle('on',t.dataset.tab==='dados');
+  $('#pane-conversa').classList.toggle('on',t.dataset.tab==='conversa');
+  // A rolagem para a ultima mensagem acontece aqui, e nao no render: a
+  // gaveta abre sempre na aba Dados, entao na hora de renderizar a aba
+  // Conversa ainda esta em display:none e um elemento sem caixa tem
+  // scrollHeight 0 — a rolagem simplesmente nao acontecia e a conversa
+  // abria na mensagem mais antiga das 300.
+  if(t.dataset.tab==='conversa'&&typeof poRolaConversaFim==='function')poRolaConversaFim();
+});
 
 /* ---------- observações em linha temporal ---------- */
 function fmtNota(ts){const d=new Date(ts);if(isNaN(d))return '—';
@@ -233,22 +295,37 @@ $('#dr-notes').addEventListener('click',async e=>{
 });
 function closeDrawer(){$('#scrim').classList.remove('on');$('#drawer').classList.remove('on');openId=null;}
 $('#dr-close').onclick=closeDrawer;$('#dr-cancel').onclick=closeDrawer;
-$('#scrim').onclick=()=>{closeDrawer();closeRot();closeNewLead();};
+$('#fi-close').onclick=()=>poFechaFicha();
+$('#scrim').onclick=()=>{closeDrawer();closeRot();closeNewLead();poFechaFicha();fechaSide();};
+/* O que a gaveta grava no banco quando a dona clica em Salvar. Mora fora
+   do handler porque e regra de negocio, nao de interface, e porque e a
+   unica parte deste arquivo que consegue perder dado em silencio.
+
+   "Preencher a venda conclui o lead" continua valendo, mas so quando o
+   valor foi preenchido AGORA. O quadro do funil tira o card de "Contrato
+   assinado" mantendo o valor de proposito (um engano de arrasto nao pode
+   destruir o numero); sem a comparacao com o valor anterior, abrir esse
+   lead depois para escrever uma anotacao e salvar empurrava o status de
+   volta para venda e recarimbava venda_at com a data de hoje, apagando a
+   data real do fechamento, que alimenta o ciclo de venda dos relatorios.
+
+   venda_at que ja existe nunca e reescrito: mesma regra do poPatchStatus
+   do funil. */
+function poPatchGaveta(campos,lead,agora){
+  const ven=Number(campos.ven)||0;
+  const venMudou=ven!==(Number(lead.ven)||0);
+  const status=(ven>0&&venMudou)?'venda':campos.status;
+  const vendaAt=status==='venda'?(lead.vendaAt||agora):null;
+  return {status,origem_manual:campos.origem,orcamento:Number(campos.orc)||0,venda:ven,venda_at:vendaAt};
+}
 $('#dr-save').onclick=async()=>{
   const l=LEADS.find(x=>x.id===openId);if(!l)return;
   const btn=$('#dr-save');btn.disabled=true;btn.textContent='Salvando…';
-  const ven=Number($('#e-ven').value)||0;
-  // Preencher a venda já conclui o lead; mudar o status na mão também fecha.
-  const status=ven>0?'venda':$('#e-status').value;
-  const fechado=ven>0||status==='venda';
-  // Carimba só na primeira vez — reeditar o valor não reinicia a contagem.
-  // Desfazer a venda (zerar o valor E tirar o status) limpa o carimbo.
-  const vendaAt=fechado?(l.vendaAt||new Date().toISOString()):null;
-  const patch={status,origem_manual:$('#e-orig').value,orcamento:Number($('#e-orc').value)||0,venda:ven,venda_at:vendaAt};
+  const patch=poPatchGaveta({ven:$('#e-ven').value,orc:$('#e-orc').value,status:$('#e-status').value,origem:$('#e-orig').value},l,new Date().toISOString());
   const {error}=await sb.from('po_leads').update(patch).eq('id',l.id);
   btn.disabled=false;btn.textContent='Salvar';
   if(error){toast('Erro ao salvar: '+error.message,true);return;}
-  l.status=patch.status;l.origem=patch.origem_manual;l.orc=patch.orcamento;l.ven=patch.venda;l.vendaAt=vendaAt;
+  l.status=patch.status;l.origem=patch.origem_manual;l.orc=patch.orcamento;l.ven=patch.venda;l.vendaAt=patch.venda_at;
   $('#e-status').value=l.status;$('#dr-ciclo').textContent=fmtCiclo(cicloDias(l));
   const f=$('#save-flash');f.classList.add('on');setTimeout(()=>f.classList.remove('on'),1600);
   renderLeads();toast('Lead atualizado.');
@@ -310,9 +387,13 @@ function rowsForReports(){return LEADS.filter(inMonth).filter(l=>F.orig==='todos
 function renderReports(){
   const rows=rowsForReports();const total=rows.length;
   const vendas=rows.filter(l=>l.status==='venda');
-  const valVen=rows.reduce((s,l)=>s+l.ven,0),valOrc=rows.reduce((s,l)=>s+l.orc,0);
+  // Mesma regra do KPI da aba Leads: so soma ven de quem esta em status
+  // 'venda'. O ven do lead nao e zerado ao sair de venda (o poMoveLead do
+  // funil so limpa o venda_at), entao sem este filtro o faturamento e o
+  // ROAS ficariam inflados pra sempre por um lead que saiu de venda.
+  const valVen=vendas.reduce((s,l)=>s+l.ven,0),valOrc=rows.reduce((s,l)=>s+l.orc,0);
   const conv=total?(vendas.length/total*100):0,ticket=vendas.length?valVen/vendas.length:0;
-  const sp=curSpend(),venPago=rows.filter(l=>isPago(l.origem)).reduce((s,l)=>s+l.ven,0),leadsPago=rows.filter(l=>isPago(l.origem)).length;
+  const sp=curSpend(),venPago=vendas.filter(l=>isPago(l.origem)).reduce((s,l)=>s+l.ven,0),leadsPago=rows.filter(l=>isPago(l.origem)).length;
   const roas=sp>0?venPago/sp:0,roi=sp>0?((venPago-sp)/sp*100):0,cpl=leadsPago>0?sp/leadsPago:0;
   // Ciclo: leads que ENTRARAM no período e já fecharam. Responde "quanto demorei
   // para fechar os leads deste mês" — não "o que fechou neste mês".
