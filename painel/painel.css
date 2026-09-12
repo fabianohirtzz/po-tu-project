@@ -371,3 +371,18 @@ tbody tr:last-child td{border-bottom:none}
   background:var(--surface3);border:1px solid var(--border);color:inherit;font:inherit;font-size:.9rem}
 .fn-menu-b.on{border-color:var(--azul);color:var(--azul)}
 .fn-menu-b--ver{margin-top:6px;background:transparent;color:var(--faint)}
+
+/* ---------- abas da gaveta e conversa ---------- */
+.dr-tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--border)}
+.dr-tab{background:none;border:none;color:var(--muted);font:inherit;font-size:.86rem;
+  padding:8px 12px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.dr-tab.on{color:var(--azul);border-bottom-color:var(--azul)}
+.dr-pane{display:none}
+.dr-pane.on{display:block}
+.cv-wrap{display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto;padding-right:4px}
+.cv{max-width:85%;padding:8px 11px;border-radius:11px;font-size:.84rem;line-height:1.45}
+.cv--in{align-self:flex-start;background:var(--surface3);border:1px solid var(--border)}
+.cv--out{align-self:flex-end;background:rgba(37,211,102,.12);color:#128c46;border:1px solid rgba(37,211,102,.3)}
+.cv--bot{align-self:flex-end;background:rgba(31,168,221,.1);color:#0e7fae;border:1px solid rgba(31,168,221,.28)}
+.cv-w{display:block;font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--faint);margin-bottom:4px}

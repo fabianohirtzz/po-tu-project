@@ -115,7 +115,8 @@ function mapRow(r){
     origemRaw:r.origem||'—',origemAuto:auto,origem:eff,
     camp:r.utm_campaign||r.origem||'—',land:r.landing_page||'—',
     status:r.status||'semresposta',orc:Number(r.orcamento)||0,ven:Number(r.venda)||0,
-    notas:Array.isArray(r.notas)?r.notas:[],vendaAt:r.venda_at||null};
+    notas:Array.isArray(r.notas)?r.notas:[],vendaAt:r.venda_at||null,
+    waId:r.wa_id||''};
 }
 function buildMonths(){
   const set=[...new Set(LEADS.map(l=>monthKey(l.data)).filter(Boolean))].sort().reverse();
@@ -194,8 +195,18 @@ function openDrawer(id){
   $('#e-status').value=l.status;$('#e-orig').value=l.origem;
   $('#e-orc').value=l.orc||'';$('#e-ven').value=l.ven||'';
   $('#n-txt').value='';renderNotes(l);
+  // A conversa carrega junto com a gaveta, mas o telefone do lead e a
+  // chave: quem veio pelo formulario do site nao tem conversa.
+  $$('.dr-tab').forEach(t=>t.classList.toggle('on',t.dataset.tab==='dados'));
+  $('#pane-dados').classList.add('on');$('#pane-conversa').classList.remove('on');
+  if(typeof poRenderConversa==='function')poRenderConversa(l.waId||l.tel);
   $('#scrim').classList.add('on');$('#drawer').classList.add('on');
 }
+$$('.dr-tab').forEach(t=>t.onclick=()=>{
+  $$('.dr-tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');
+  $('#pane-dados').classList.toggle('on',t.dataset.tab==='dados');
+  $('#pane-conversa').classList.toggle('on',t.dataset.tab==='conversa');
+});
 
 /* ---------- observações em linha temporal ---------- */
 function fmtNota(ts){const d=new Date(ts);if(isNaN(d))return '—';

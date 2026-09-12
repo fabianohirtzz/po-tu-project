@@ -233,6 +233,11 @@
     <div class="dr-comp" id="dr-comp"></div>
   </div>
   <div class="dr-body">
+    <div class="dr-tabs">
+      <button class="dr-tab on" data-tab="dados">Dados</button>
+      <button class="dr-tab" data-tab="conversa">Conversa</button>
+    </div>
+    <div class="dr-pane on" id="pane-dados">
     <div class="dr-section-l">Dados do contato</div>
     <div class="spec-row"><span class="spec-k">Telefone</span><span class="spec-v" id="dr-tel"></span></div>
     <div class="spec-row"><span class="spec-k">E-mail</span><span class="spec-v" id="dr-email"></span></div>
@@ -282,6 +287,10 @@
       <button class="btn btn-primary" id="n-add" type="button">Adicionar</button>
     </div>
     <div class="notes" id="dr-notes"></div>
+    </div>
+    <div class="dr-pane" id="pane-conversa">
+      <div class="cv-wrap" id="dr-conversa"></div>
+    </div>
   </div>
   <div class="dr-foot">
     <button class="btn btn-ghost" id="dr-cancel">Fechar</button>
@@ -387,5 +396,6 @@
 <script src="app.js"></script>
 <script src="clientes.js"></script>
 <script src="funil.js"></script>
+<script src="conversa.js"></script>
 </body>
 </html>
