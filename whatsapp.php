@@ -58,10 +58,16 @@ if (function_exists('fastcgi_finish_request')) {
 try {
     $json = json_decode($corpo, true);
     foreach (wa_parse_evento(is_array($json) ? $json : []) as $ev) {
-        // Idempotencia: o unique em wamid barra o reenvio da Meta. So o
-        // 'duplicado' (409 de verdade) pula o processamento; 'falha' (rede
-        // ou erro do banco) processa mesmo assim, ver wa_registra_evento().
-        if ($ev['wamid'] !== '' && $ev['tipo'] !== 'status') {
+        // Idempotencia por wamid, INCLUSIVE para eventos de status (entregue,
+        // lido, falhou): o relatorio de campanha do plano 4 conta entregues e
+        // lidos, e a Meta reenvia o mesmo evento quando nao recebe 200 rapido.
+        // Sem isto o alcance da transmissao vem inflado. 'duplicado' pula;
+        // 'falha' processa assim mesmo, porque perder mensagem de cliente e
+        // pior que duplicar. Deixar o robo falar com um evento de status nao
+        // e risco aqui: wa_processar (lib/wa-motor.php) devolve cedo para
+        // tipo==='status', antes de qualquer envio - travado por teste em
+        // tests/test-wa-motor.php.
+        if ($ev['wamid'] !== '') {
             if (wa_registra_evento($ev) === 'duplicado') continue;
         }
         wa_processar($ev);

@@ -117,4 +117,34 @@ ok(wa_registra_evento($evento) === 'falha', 'rede fora e falha, nao duplicado');
 wa_db_set_transport(function () { return ['status' => 500, 'body' => 'erro interno']; });
 ok(wa_registra_evento($evento) === 'falha', '5xx do banco e falha, nao duplicado');
 
+// --- evento de entrega tambem passa pela idempotencia: o relatorio de
+// campanha do plano 4 conta entregues e lidos, e a Meta reenvia o mesmo
+// evento quando nao recebe 200 rapido. Sem isto, o alcance da transmissao
+// vem inflado (whatsapp.php nao pode mais pular a idempotencia so porque
+// tipo === 'status').
+$gravados = [];
+wa_db_set_transport(function ($metodo, $url, $corpo, $h) use (&$gravados) {
+    if ($metodo === 'POST' && strpos($url, 'po_wa_mensagens') !== false) {
+        $linha = json_decode($corpo, true);
+        if (in_array($linha['wamid'] ?? '', $gravados, true)) {
+            return ['status' => 409, 'body' => '{}'];   // unique violation
+        }
+        $gravados[] = $linha['wamid'] ?? '';
+    }
+    return ['status' => 201, 'body' => '[{}]'];
+});
+
+$ev = ['wamid' => 'wamid.STATUS1', 'tipo' => 'status', 'wa_id' => '+5548999990001',
+       'status' => 'delivered', 'tipo_msg' => 'status', 'texto' => 'delivered', 'ts' => 1757548800];
+ok(wa_registra_evento($ev) === 'novo',      'primeiro evento de entrega e novo');
+ok(wa_registra_evento($ev) === 'duplicado', 'o reenvio da Meta e duplicado');
+ok(count($gravados) === 1,                  'so uma linha gravada para o mesmo wamid');
+
+// --- evento de entrega sem wamid nao pode quebrar nada (o `wamid !== ''`
+// que guarda a chamada em whatsapp.php continua valendo para status).
+$sem_wamid = ['wamid' => '', 'tipo' => 'status', 'wa_id' => '+5548999990002',
+              'status' => 'delivered', 'tipo_msg' => 'status', 'texto' => 'delivered', 'ts' => 1757548800];
+wa_db_set_transport(function () { return ['status' => 201, 'body' => '[{}]']; });
+ok(wa_registra_evento($sem_wamid) === 'novo', 'status sem wamid nao quebra wa_registra_evento');
+
 echo "test-wa-webhook OK\n";

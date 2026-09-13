@@ -370,4 +370,22 @@ $acao = wa_processar(ev('mensagem', 'sim'));
 ok($acao === 'qualificou', "sim solto qualifica (deu: $acao)");
 ok(!array_key_exists('qualif_grupo', $DB['po_leads'][0]), 'qualif_grupo nao e gravado sem evidencia');
 
+/* --- 19. evento de status (entregue/lido) nao pode virar conversa com o
+   robo. A task 4 tira o "pular idempotencia" que so existia para
+   tipo==='status' em whatsapp.php, entao esses eventos passam a chegar
+   aqui tambem - e um robo respondendo a um recibo de entrega seria o pior
+   desfecho possivel. wa_processar ja trata isto na primeira linha
+   (`if ($ev['tipo'] === 'status') return 'status';`), este teste trava
+   que ninguem remova essa guarda por engano. */
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $DB['po_wa_mensagens'] = []; $ENVIADAS = [];
+$acao = wa_processar([
+    'tipo' => 'status', 'wa_id' => $WA, 'wamid' => 'wamid.STATUS1',
+    'tipo_msg' => 'status', 'texto' => 'delivered', 'nome' => null,
+    'ad_id' => null, 'ctwa_clid' => null, 'ts' => time(),
+]);
+ok($acao === 'status', "evento de status devolve 'status' (deu: $acao)");
+ok(count($ENVIADAS) === 0, 'nenhum envio acontece para um evento de status');
+ok($DB['po_wa_conversas'] === [], 'evento de status nao cria nem altera conversa');
+ok($DB['po_leads'] === [], 'evento de status nao cria nem altera lead');
+
 echo "test-wa-motor OK\n";
