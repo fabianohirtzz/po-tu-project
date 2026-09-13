@@ -147,4 +147,20 @@ $sem_wamid = ['wamid' => '', 'tipo' => 'status', 'wa_id' => '+5548999990002',
 wa_db_set_transport(function () { return ['status' => 201, 'body' => '[{}]']; });
 ok(wa_registra_evento($sem_wamid) === 'novo', 'status sem wamid nao quebra wa_registra_evento');
 
+// --- o defeito desta task vivia no PONTO DE CHAMADA (whatsapp.php), nao em
+// wa_registra_evento() - que ja sabia tratar status antes de qualquer mudanca
+// (os testes acima passavam mesmo sem tocar whatsapp.php). Testar so a
+// biblioteca deixa passar quem restaura a excecao no arquivo que de fato
+// recebe o webhook; mesma forma de defeito que ja causou vazamento de dados
+// entre clientes neste projeto. Por isso uma asserção de fonte, no molde que
+// tests/test-filtros.mjs ja usa para o app.js.
+$src_webhook = file_get_contents(__DIR__ . '/../whatsapp.php');
+ok(strpos($src_webhook, "\$ev['wamid'] !== ''") !== false,
+   'whatsapp.php ainda condiciona a idempotencia ao wamid');
+$exclui_status = <<<'REGEX'
+/wamid'\]\s*!==\s*''\s*&&\s*\$ev\['tipo'\]\s*!==\s*'status'/
+REGEX;
+ok(!preg_match($exclui_status, $src_webhook),
+   'a idempotencia em whatsapp.php NAO volta a excluir eventos de status');
+
 echo "test-wa-webhook OK\n";
