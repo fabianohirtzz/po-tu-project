@@ -83,6 +83,16 @@ $viajantes = campo('viajantes');
 $roteiro   = campo('roteiro');
 $mensagem  = campo('mensagem');
 
+/* E.164 quando der; o que o visitante digitou quando nao der (ver
+   lib/po-fone-lead.php). Usado SO na gravacao do Supabase: o motor do
+   WhatsApp casa lead por telefone normalizado, e sem isso a mesma pessoa
+   que preenche o site e depois chama no WhatsApp vira duas fichas. O
+   e-mail que a cliente le continua com o $telefone como o visitante
+   digitou - "(48) 99999-0001" e mais facil de conferir/discar de cabeca
+   que "+5548999990001", e quem le o e-mail e gente, nao o motor. */
+require_once __DIR__ . '/lib/po-fone-lead.php';
+$telefoneSupabase = po_fone_lead($telefone);
+
 // heurística: links/BBCode num lead são sinal de spam
 $conteudo = "$nome $cidade $roteiro $mensagem";
 if (preg_match('~https?://|www\.\S|\[/?(?:url|link)|</?a\b~i', $conteudo)) {
@@ -148,7 +158,7 @@ function salvarSupabase($url, $key, array $dados) {
 
 salvarSupabase($SUPABASE_URL, $SUPABASE_SERVICE_KEY, [
     'nome'         => $nome,
-    'telefone'     => $telefone,
+    'telefone'     => $telefoneSupabase,
     'email'        => $email,
     'cidade'       => $cidade,
     'viajantes'    => $viajantes,
