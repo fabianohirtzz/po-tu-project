@@ -303,7 +303,11 @@
         <div class="tscroll">
           <table>
             <thead><tr><th>Contato</th><th>Casou por</th><th>Vai preencher</th></tr></thead>
-            <tbody id="ic-fusoes"></tbody>
+            <!-- Placeholder: esta tabela fica sempre visivel (nao tem wrapper
+                 escondivel), entao sem ele a aba abria com cabecalho e corpo
+                 vazio antes da primeira auditoria. O poIcReset repoe o mesmo
+                 texto ao invalidar o preview. -->
+            <tbody id="ic-fusoes"><tr><td colspan="3"><div class="empty">Suba um arquivo e peça a auditoria para ver quais fichas serão completadas.</div></td></tr></tbody>
           </table>
         </div>
       </div>
@@ -316,8 +320,9 @@
       <div class="imp-ct-box">
         <div class="lbl">Contatos aguardando revisão</div>
         <div class="hint">
-          Vieram das agendas de celular. A agenda tem médico, fornecedor e família
-          no meio, então ninguém entra em disparo antes de você conferir.
+          Vieram das agendas de celular (só entram os contatos com <b>PO</b> no nome)
+          e das fichas do CRM antigo. Mesmo marcado na agenda, um contato pode ser
+          fornecedor ou conhecido, então ninguém entra em disparo antes de você conferir.
           <b>Marcar como cliente</b> libera a pessoa para as campanhas.
           <b>Não é cliente</b> não apaga ninguém: o contato continua na base,
           só fica fora dos disparos.
@@ -521,11 +526,11 @@
 <script src="config.js"></script>
 <script src="video-encode.js"></script>
 <script src="fone.js?v=1"></script>
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 <script src="clientes.js?v=2"></script>
 <script src="funil.js?v=1"></script>
 <script src="conversa.js?v=1"></script>
-<script src="importar-contatos.js?v=4"></script>
-<script src="revisao.js?v=1"></script>
+<script src="importar-contatos.js?v=5"></script>
+<script src="revisao.js?v=2"></script>
 </body>
 </html>

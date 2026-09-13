@@ -19,11 +19,24 @@ function pegaAsync(nome) {
 const ESC = 'function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,' +
             'c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c]));}';
 
+// As funcoes puras da acao em massa, extraidas juntas: o poRevMarcar chama
+// todas, entao elas tambem entram na casca montada mais abaixo.
+// O tamanho do lote sai do fonte, nao e reescrito aqui: se ele subir para um
+// valor que estoura a URL de novo, o teste do limite abaixo reprova.
+const LOTE_SRC = (src.match(/var PO_REV_LOTE\s*=\s*\d+;/) || [])[0];
+assert.ok(LOTE_SRC, 'PO_REV_LOTE definido no revisao.js');
+
+const PURAS = ESC + LOTE_SRC + pega('poRevFiltra') + pega('poLinhaRevisaoContato') +
+  pega('poRevChkPendente') + pega('poRevAplicaTodos') + pega('poRevContaRevisados') +
+  pega('poRevConfirmaTexto') + pega('poRevLotes') + pega('poRevResultadoTexto');
+
 const ctx = new Function(
-  ESC + pega('poRevFiltra') + pega('poLinhaRevisaoContato') + pega('poRevConfirmaTexto') +
-  '; return {poRevFiltra, poLinhaRevisaoContato, poRevConfirmaTexto};'
+  PURAS +
+  '; return {poRevFiltra, poLinhaRevisaoContato, poRevChkPendente, poRevAplicaTodos,' +
+  ' poRevContaRevisados, poRevConfirmaTexto, poRevLotes, poRevResultadoTexto};'
 )();
-const { poRevFiltra, poLinhaRevisaoContato, poRevConfirmaTexto } = ctx;
+const { poRevFiltra, poLinhaRevisaoContato, poRevChkPendente, poRevAplicaTodos,
+        poRevContaRevisados, poRevConfirmaTexto, poRevLotes, poRevResultadoTexto } = ctx;
 
 const base = [
   {id:'1', nome:'Ana',   origemImport:'agenda-esposa', revisado:false, cliente:false, tel:'+5548999990001'},
@@ -139,12 +152,16 @@ function montaAcao(leads, opts) {
     rodar: new Function(
       'chamadas', 'avisos', 'perguntas', 'renders', 'caixas', 'LEADS', 'window', 'erro',
       'const document = { querySelector: () => caixas };' +
+      // 'erro' pode ser uma FUNCAO do indice da chamada: e o que permite
+      // simular uma fatia falhando no meio de um lote grande.
       'const sb = { from(tabela){ return { update(campos){ return {' +
-      '  in(coluna, ids){ chamadas.push({tabela, campos, coluna, ids}); return Promise.resolve({error: erro}); }' +
+      '  in(coluna, ids){ chamadas.push({tabela, campos, coluna, ids});' +
+      '    const e = typeof erro === "function" ? erro(chamadas.length - 1) : erro;' +
+      '    return Promise.resolve({error: e}); }' +
       '}; } }; } };' +
       'function toast(msg, err){ avisos.push({msg, err: !!err}); }' +
       'function poRenderRevisao(){ renders.push(1); }' +
-      pega('poRevConfirmaTexto') + pega('poRevSelecionados') + pegaAsync('poRevMarcar') +
+      PURAS + pega('poRevSelecionados') + pegaAsync('poRevMarcar') +
       '; return poRevMarcar;'
     )(chamadas, avisos, perguntas, renders, caixas, leads, janela, erro),
   };
@@ -233,5 +250,172 @@ assert.equal(falhou.avisos.length, 1, 'avisa uma vez');
 assert.equal(falhou.avisos[0].err, true, 'e o aviso e de erro');
 assert.ok(falhou.avisos[0].msg.includes('permission denied'), 'repassa a mensagem do banco');
 assert.ok(!/revisad[oa]s?\./.test(falhou.avisos[0].msg), 'nao diz "contato revisado" depois de falhar');
+
+/* ============================================================
+   O "MARCAR TODOS" SO ALCANCA OS PENDENTES.
+
+   REPRODUCAO do buraco: hoje a base tem 775 contatos importados JA revisados
+   (todos cliente=true, do CRM antigo) e ZERO pendentes. Com a caixa "mostrar
+   tambem os ja revisados" ligada, esses 775 vao para a tabela; o "marcar
+   todos" do cabecalho marcava TUDO o que estivesse na tela, sem distinguir
+   pendente de decidido; e um clique em "Nao e cliente" mandava cliente=false
+   para os 775 clientes reais - fora das campanhas de uma vez so, com a
+   confirmacao dizendo apenas "Marcar 775 contatos", sem dizer quais.
+============================================================ */
+
+// A linha carrega o data-pend que o "marcar todos" le. Sem ele, o botao nao
+// tem como distinguir pendente de ja revisado sem reler o LEADS.
+const linhaPend = poLinhaRevisaoContato({id:'p1', nome:'Ana', tel:'', origemImport:'agenda-esposa',
+                                         revisado:false});
+const linhaJa = poLinhaRevisaoContato({id:'j1', nome:'Bia', tel:'', origemImport:'crm-toninho',
+                                       revisado:true, cliente:true});
+assert.ok(/data-pend="1"/.test(linhaPend), 'a linha pendente vem marcada como pendente');
+assert.ok(!/data-pend/.test(linhaJa), 'a linha ja revisada nao');
+
+const chk = (pend) => ({ checked:false, dataset: pend ? {pend:'1'} : {} });
+assert.equal(poRevChkPendente(chk(true)), true, 'caixa de linha pendente');
+assert.equal(poRevChkPendente(chk(false)), false, 'caixa de linha ja revisada');
+assert.equal(poRevChkPendente(null), false, 'caixa ausente nao estoura');
+
+// MARCAR: so os pendentes, mesmo com os revisados na tela.
+const tela = [chk(true), chk(false), chk(false), chk(true)];
+poRevAplicaTodos(tela, true);
+assert.deepEqual(tela.map(c => c.checked), [true, false, false, true],
+  'marcar todos alcanca so as linhas pendentes');
+
+// Os 775 do CRM: todos ja revisados. "Marcar todos" nao seleciona nenhum.
+const so775 = Array.from({length: 775}, () => chk(false));
+poRevAplicaTodos(so775, true);
+assert.equal(so775.filter(c => c.checked).length, 0,
+  'a base ja revisada inteira nao pode ser selecionada de uma vez');
+
+// DESMARCAR limpa TUDO, inclusive o ja revisado que foi marcado a mao -
+// senao a caixa deixaria selecao presa sem caminho de volta.
+const presa = [chk(true), chk(false)];
+presa.forEach(c => { c.checked = true; });
+poRevAplicaTodos(presa, false);
+assert.deepEqual(presa.map(c => c.checked), [false, false], 'desmarcar todos limpa tudo');
+poRevAplicaTodos(null, true);   // nao estoura sem linha nenhuma
+poRevAplicaTodos([null, undefined], true);
+
+/* ---------- a confirmacao diz quantos JA estavam revisados ---------- */
+const baseMista = [
+  {id:'a', revisado:false}, {id:'b', revisado:true}, {id:'c', revisado:true}, {id:'d', revisado:false},
+];
+assert.equal(poRevContaRevisados(baseMista, ['a','b','c']), 2, 'conta os ja revisados do lote');
+assert.equal(poRevContaRevisados(baseMista, ['a','d']), 0, 'so pendentes: nenhum');
+assert.equal(poRevContaRevisados(baseMista, [1, 'a']), 0, 'id que nao existe nao conta');
+assert.equal(poRevContaRevisados(null, ['a']), 0, 'sem leads nao estoura');
+assert.equal(poRevContaRevisados(baseMista, null), 0, 'sem ids nao estoura');
+
+const conf775 = poRevConfirmaTexto(775, false, 775);
+assert.ok(conf775.includes('775'), 'a confirmacao segue dizendo a contagem');
+assert.ok(/já tinham sido revisados/.test(conf775),
+  'e avisa que eles JA estavam revisados e vao ser remarcados');
+assert.ok(/já tinha sido revisado\b/.test(poRevConfirmaTexto(2, true, 1)), 'singular no singular');
+assert.ok(!/já tinha/.test(poRevConfirmaTexto(3, true, 0)),
+  'sem nenhum ja revisado, a frase nao ganha ruido');
+assert.ok(!/já tinha/.test(poRevConfirmaTexto(3, true)), 'nem quando o argumento nem vem');
+
+/* ============================================================
+   LOTE. O .in('id',[...]) vira query string: cada UUID custa ~43 caracteres
+   depois do urlencode, e ~180 ids ja estouram o buffer de 8 KB do gateway -
+   a resposta volta 414 com a mensagem crua no toast. Com os 775 da base sao
+   ~33 KB: nunca sai. A spec 9.5 pede "lista em lotes, com acao em massa
+   para marcar cliente", e o lote nunca tinha sido implementado.
+============================================================ */
+const idsN = (n) => Array.from({length: n}, (_, i) => 'id-' + i);
+assert.deepEqual(poRevLotes(idsN(5), 2).map(l => l.length), [2, 2, 1], 'fatia pelo tamanho pedido');
+assert.deepEqual(poRevLotes(idsN(4), 2).map(l => l.length), [2, 2], 'divisao exata nao gera fatia vazia');
+assert.deepEqual(poRevLotes([], 2), [], 'lista vazia nao gera fatia');
+assert.deepEqual(poRevLotes(null, 2), [], 'lista ausente nao estoura');
+assert.deepEqual(poRevLotes(idsN(3)).map(l => l.length), [3], 'sem tamanho, usa o padrao');
+assert.deepEqual(poRevLotes(idsN(3), 0).map(l => l.length), [3], 'tamanho invalido cai no padrao');
+// Nenhum id se perde nem se repete no caminho.
+const fatiado = poRevLotes(idsN(250), 100).flat();
+assert.deepEqual(fatiado, idsN(250), 'as fatias remontam a lista original, na ordem');
+// E o limite que motivou tudo: a fatia tem que caber na URL.
+const tamLote = Number(LOTE_SRC.match(/\d+/)[0]);
+assert.ok(tamLote > 0 && tamLote <= 150,
+  'o lote cabe na URL de 8 KB (a ~43 caracteres por UUID, ~180 ja estouram)');
+
+// Na acao em massa: 250 selecionados viram 3 PATCH, e nenhum id se perde.
+const muitos = idsN(250).map(id => ({id, origemImport:'crm-toninho', revisado:false, cliente:false}));
+const emLote = montaAcao(muitos);
+await emLote.rodar(true);
+assert.equal(emLote.chamadas.length, 3, '250 selecionados saem em 3 requisicoes, nao em uma so');
+assert.deepEqual(emLote.chamadas.map(c => c.ids.length), [100, 100, 50], 'fatias de 100');
+assert.deepEqual(emLote.chamadas.flatMap(c => c.ids), idsN(250), 'todos os ids sobem, sem repetir');
+emLote.chamadas.forEach(c => assert.deepEqual(Object.keys(c.campos).sort(), ['cliente', 'revisado'],
+  'cada fatia manda so os dois campos'));
+assert.equal(muitos.every(l => l.revisado === true), true, 'os 250 ficam revisados em memoria');
+assert.equal(emLote.perguntas.length, 1, 'uma confirmacao so para o lote inteiro');
+
+/* Uma fatia falha no meio: as outras gravam, e o aviso NAO pode dizer
+   sucesso total. Os 100 da fatia que falhou continuam revisado=false no
+   banco; se a tela dissesse "250 contatos revisados" eles sumiriam da fila
+   sem nunca terem sido revisados - fora da defesa obrigatoria da spec 8.1. */
+const parcial = idsN(250).map(id => ({id, origemImport:'crm-toninho', revisado:false, cliente:false}));
+const meio = montaAcao(parcial, { erro: (i) => (i === 1 ? { message: 'timeout' } : null) });
+await meio.rodar(true);
+assert.equal(meio.chamadas.length, 3, 'a falha de uma fatia nao aborta as seguintes');
+assert.equal(parcial.filter(l => l.revisado).length, 150, 'so as fatias que gravaram andam na memoria');
+assert.equal(parcial.slice(100, 200).every(l => l.revisado === false), true,
+  'a fatia que falhou continua pendente na tela, como esta no banco');
+assert.equal(meio.avisos.length, 1, 'avisa uma vez');
+assert.equal(meio.avisos[0].err, true, 'e o aviso e de erro');
+assert.ok(meio.avisos[0].msg.includes('150') && meio.avisos[0].msg.includes('100'),
+  'o aviso diz quantos foram gravados e quantos nao');
+assert.ok(meio.avisos[0].msg.includes('timeout'), 'e repassa o motivo');
+assert.ok(!/^250 contatos revisados/.test(meio.avisos[0].msg), 'nao reporta sucesso total');
+
+// O texto do resultado, isolado.
+assert.equal(poRevResultadoTexto(3, 0, []), '3 contatos revisados.', 'tudo certo');
+assert.equal(poRevResultadoTexto(1, 0, []), '1 contato revisado.', 'singular');
+assert.ok(/Nada foi salvo/.test(poRevResultadoTexto(0, 5, ['boom'])), 'nada gravado e dito assim');
+assert.ok(!/revisad[oa]s?\./.test(poRevResultadoTexto(0, 5, ['boom'])),
+  'e nao diz "revisados" quando nada foi revisado');
+// Motivos repetidos (a mesma falha em tres fatias) aparecem uma vez so.
+assert.equal((poRevResultadoTexto(0, 300, ['boom','boom','boom']).match(/boom/g) || []).length, 1,
+  'o mesmo erro nao e repetido tres vezes no toast');
+
+/* ============================================================
+   A TELA: a ligacao dos botoes e o texto da aba.
+============================================================ */
+const app = readFileSync(new URL('../painel/app.js', import.meta.url), 'utf8');
+const painel = readFileSync(new URL('../painel/index.html', import.meta.url), 'utf8');
+
+// O "marcar todos" tem que passar por poRevAplicaTodos. A versao anterior
+// marcava '.rev-chk' inteiro na mao, e era ai que os 775 entravam.
+assert.ok(/#rev-todos'\)\.onchange=e=>poRevAplicaTodos\(\$\$\('#rev-rows \.rev-chk'\),e\.target\.checked\)/.test(app),
+  'o "marcar todos" passa pelo poRevAplicaTodos');
+assert.ok(!/#rev-rows \.rev-chk'\)\.forEach\(c=>\{c\.checked=/.test(app),
+  'e nao marca a tabela inteira na mao');
+
+/* Os quatro handlers da aba nova sao ligados COM GUARDA DE NULO. O deploy e
+   FTP manual, arquivo a arquivo: subir o app.js antes do index.html faria
+   $('#rev-cliente') devolver null, o .onclick estourar TypeError e o script
+   parar - matando o painel INTEIRO, nao so a aba nova. */
+for (const id of ['rev-cliente', 'rev-naocliente', 'rev-todos', 'rev-revisados']) {
+  assert.ok(new RegExp("if\\(\\$\\('#" + id + "'\\)\\)\\$\\('#" + id + "'\\)\\.on").test(app),
+    '#' + id + ' e ligado com guarda de nulo');
+}
+
+/* O texto da aba tem que descrever a regra REAL de entrada. Ele dizia que a
+   agenda "tem medico, fornecedor e familia no meio", mas o importador so
+   aceita contato com o marcador PO no nome (wa_import_tem_marcador) e recusa
+   o arquivo inteiro com 422 quando nao ha nenhum. As duas frases nao podiam
+   estar certas. */
+const hintRev = (painel.match(/id="view-revisao"[\s\S]*?<div class="hint">([\s\S]*?)<\/div>/) || ['', ''])[1];
+assert.ok(/<b>PO<\/b>/.test(hintRev), 'a aba diz que so entra quem tem PO no nome');
+assert.ok(!/A agenda tem médico, fornecedor e família/.test(painel),
+  'e nao promete mais importar a agenda inteira');
+
+// Cache-buster: deploy e FTP manual e o .htaccess cacheia JS por 1 mes.
+// Arquivo alterado sem ?v= novo chega velho no navegador da cliente.
+for (const [arq, v] of [['app.js', 6], ['revisao.js', 2], ['importar-contatos.js', 5]]) {
+  assert.ok(painel.includes('src="' + arq + '?v=' + v + '"'),
+    arq + ' subiu para ?v=' + v);
+}
 
 console.log('test-revisao OK');

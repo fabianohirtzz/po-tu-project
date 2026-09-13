@@ -247,6 +247,14 @@ function poIcCamposEnvio(modo, auditado, atual) {
   // Irma da poIcRenderRevisao: enquanto aquela mostra quem precisa de
   // decisao humana, esta mostra quem ja tem decisao tomada (fusao
   // automatica) e O QUE vai ser preenchido — spec 9.5, task 3.
+  // O corpo da tabela de fusoes quando nao ha preview nenhum. Mesmo texto do
+  // index.html, que ja nasce com ele: a tabela fica sempre visivel, entao
+  // cabecalho sobre corpo vazio era a cara da aba antes da primeira auditoria.
+  function poIcFusoesVazio() {
+    return '<tr><td colspan="3"><div class="empty">Suba um arquivo e peça a ' +
+           'auditoria para ver quais fichas serão completadas.</div></td></tr>';
+  }
+
   function poIcRenderFusoes(itens) {
     var rows = document.querySelector('#ic-fusoes');
     if (!rows) return;
@@ -299,8 +307,10 @@ function poIcCamposEnvio(modo, auditado, atual) {
     // A tabela de fusoes (diferente da de revisao) nao tem wrapper
     // escondivel: fica sempre visivel, mesmo vazia, porque "nenhuma ficha
     // sera completada" tambem e informacao do preview. So o conteudo e
-    // limpo, para nao sobrar fusao de uma auditoria anterior na tela.
-    if (fusoesRows) fusoesRows.innerHTML = '';
+    // limpo, para nao sobrar fusao de uma auditoria anterior na tela - e volta
+    // ao placeholder, nao a vazio, senao a tabela fica com cabecalho sobre
+    // corpo vazio de novo.
+    if (fusoesRows) fusoesRows.innerHTML = poIcFusoesVazio();
     if (resultado) resultado.hidden = true;
     if (btnAplicar) { btnAplicar.hidden = true; btnAplicar.disabled = true; }
     // Destrava os seletores: sem auditoria valida, origem/tipo voltam a

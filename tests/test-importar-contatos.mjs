@@ -191,4 +191,20 @@ const checkboxTag = (painel.match(/<input[^>]*id="ic-forcar"[^>]*>/) || [''])[0]
 assert.ok(!/checked/.test(checkboxTag), 'a caixa "importar novamente" comeca desmarcada');
 assert.ok(/importar novamente/i.test(painel), 'a tela tem o texto "importar novamente" (o erro 409 cita esta frase)');
 
+/* ---------- placeholder da tabela "Fichas que vao ser completadas".
+   Ela nao tem wrapper escondivel (fica sempre visivel, porque "nenhuma ficha
+   sera completada" tambem e informacao), entao sem placeholder a aba abria
+   com cabecalho sobre corpo vazio. ---------- */
+const tbodyFusoes = (painel.match(/<tbody id="ic-fusoes">[\s\S]*?<\/tbody>/) || [''])[0];
+assert.ok(tbodyFusoes, 'existe o tbody #ic-fusoes');
+assert.ok(/class="empty"/.test(tbodyFusoes),
+  'a tabela de fusoes nasce com o placeholder padrao do projeto, nao vazia');
+// E o reset repoe o placeholder em vez de esvaziar: invalidar o preview
+// (arquivo novo, origem trocada) devolvia o corpo vazio.
+const reset = (src.match(/function poIcReset\(\)[\s\S]*?\n  \}/) || [''])[0];
+assert.ok(reset, 'poIcReset encontrada');
+assert.ok(/fusoesRows\.innerHTML = poIcFusoesVazio\(\)/.test(reset),
+  'o reset volta ao placeholder, nao a corpo vazio');
+assert.ok(/class="empty"/.test(pega('poIcFusoesVazio')), 'e o placeholder e o <div class="empty">');
+
 console.log('test-importar-contatos OK');
