@@ -29,9 +29,13 @@ function poTextosCatalogo() {
     {chave:'envio_pdf', rotulo:'Envio do roteiro em PDF',
      ajuda:'Legenda do PDF do roteiro.',
      vars:['nome','roteiro'], obrigatorias:['roteiro']},
+    /* O motor passa nome, roteiro E data aqui (wa-motor.php:390-393). O
+       {roteiro} fica opcional: a mensagem faz sentido sem ele, porque o PDF
+       com o nome do roteiro acabou de sair - e torna-lo obrigatorio
+       recusaria o texto que ja esta no banco. */
     {chave:'perguntas', rotulo:'As duas perguntas de qualificação',
      ajuda:'Vai logo depois do PDF. {data} é a data de saída da viagem.',
-     vars:['nome','data'], obrigatorias:['data']},
+     vars:['nome','roteiro','data'], obrigatorias:['data']},
     {chave:'qualificado', rotulo:'Quando a pessoa se qualifica',
      ajuda:'Avisa que a equipe assume daqui.',
      vars:['nome'], obrigatorias:[]},

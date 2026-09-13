@@ -82,6 +82,21 @@ assert.ok(faltou.includes('{data}'), 'e a mensagem NOMEIA a variavel que falta')
 const faltouPdf = poTextoValida('envio_pdf', 'Oi {nome}, segue o material.');
 assert.ok(faltouPdf.includes('{roteiro}'), 'o mesmo vale no envio do PDF');
 
+/* O catalogo tem que declarar o que o MOTOR realmente passa, senao a tela
+   recusa uma variavel que funcionaria e a cliente le "nao existe" sobre algo
+   que existe. Conferido ponto a ponto em lib/wa-motor.php e lib/wa-timeout.php:
+   perguntas recebe nome, roteiro E data (wa-motor.php:390-393). */
+assert.equal(poTextoValida('perguntas', 'Oi {nome}, sobre o {roteiro}: da para viajar em {data}?'), null,
+  '{roteiro} e aceito em perguntas, porque o motor o passa');
+assert.equal(poTextoValida('perguntas', 'Da para viajar em {data}?'), null,
+  'e continua opcional: a mensagem vale sem ele (o PDF ja saiu com o nome do roteiro)');
+
+/* E continua recusado onde o motor NAO passa: qualificado e chamado so com
+   nome (wa-motor.php:535), entao ali o {roteiro} sairia apagado do texto. */
+const roteiroOndeNaoTem = poTextoValida('qualificado', 'Perfeito, {nome}! Vamos cuidar do {roteiro}.');
+assert.ok(roteiroOndeNaoTem, '{roteiro} e recusado em qualificado, que o motor chama so com nome');
+assert.ok(roteiroOndeNaoTem.includes('{roteiro}'), 'e a mensagem diz qual variavel nao existe ali');
+
 // A recusa da variavel inexistente tambem tem que ensinar quais existem.
 const naoExiste = poTextoValida('envio_pdf', 'Segue o {destino} completo do {roteiro}.');
 assert.ok(naoExiste.includes('{destino}'), 'a mensagem diz qual variavel nao existe');
