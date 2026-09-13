@@ -227,6 +227,47 @@ await perguntou.rodar(true);
 assert.equal(perguntou.perguntas.length, 1, 'pergunta uma vez');
 assert.ok(perguntou.perguntas[0].includes('3'), 'a pergunta traz a contagem do lote');
 
+/* E a pergunta tem que LER o LEADS para dizer quantos dos selecionados JA
+   estavam revisados. Sem uma asserção sobre o texto da pergunta, trocar o
+   poRevContaRevisados(...) por 0 dentro do poRevMarcar deixava a suite verde
+   e o aviso sumia - o mesmo gatilho que ja mordeu este projeto quando o
+   filtro de wa_id da conversa sumiu num commit sobre outro assunto e a tela
+   passou a mostrar as mensagens de todos os contatos.
+
+   Selecao MISTA e o caso real: com "mostrar tambem os ja revisados" ligada, a
+   tela tem pendente e decidido juntos, e remarcar o decidido e a parte cara. */
+const misto = [
+  {id:'m1', nome:'Pendente',  origemImport:'agenda-esposa', revisado:false, cliente:false},
+  {id:'m2', nome:'Decidido',  origemImport:'crm-toninho',   revisado:true,  cliente:true},
+  {id:'m3', nome:'Decidido2', origemImport:'crm-toninho',   revisado:true,  cliente:true},
+];
+const acaoMista = montaAcao(misto);
+await acaoMista.rodar(false);
+assert.equal(acaoMista.perguntas.length, 1, 'pergunta uma vez na selecao mista');
+assert.ok(acaoMista.perguntas[0].includes('3 contatos'), 'diz o tamanho da selecao');
+assert.ok(acaoMista.perguntas[0].includes('já tinham sido revisados'),
+  'e AVISA que parte da selecao ja estava revisada (a contagem vem do LEADS)');
+assert.ok(/Atenção: 2 deles/.test(acaoMista.perguntas[0]),
+  'com o numero certo: 2 dos 3 ja estavam revisados');
+
+// Um so ja revisado: singular, e o numero continua vindo do LEADS.
+const mistoUm = montaAcao([
+  {id:'u1', origemImport:'agenda-esposa', revisado:false, cliente:false},
+  {id:'u2', origemImport:'crm-toninho',   revisado:true,  cliente:true},
+]);
+await mistoUm.rodar(true);
+assert.ok(/Atenção: 1 dele[s]? já tinha sido revisado/.test(mistoUm.perguntas[0]),
+  'singular no singular, com a contagem real');
+
+// Selecao so de pendentes: a frase NAO ganha o aviso (nao ha o que avisar).
+const soPend = montaAcao([
+  {id:'p1', origemImport:'agenda-esposa', revisado:false, cliente:false},
+  {id:'p2', origemImport:'agenda-esposa', revisado:false, cliente:false},
+]);
+await soPend.rodar(true);
+assert.ok(!/já tinha/.test(soPend.perguntas[0]),
+  'sem nenhum ja revisado na selecao, a pergunta nao ganha ruido');
+
 // Cancelar no "tem certeza?" nao escreve nada. Sem isto a confirmacao seria
 // enfeite, e o clique errado com o "marcar todos" ligado continuaria caro.
 const cancelou = montaAcao([{id:'1'}, {id:'2'}], { confirma: false });
@@ -413,7 +454,7 @@ assert.ok(!/A agenda tem médico, fornecedor e família/.test(painel),
 
 // Cache-buster: deploy e FTP manual e o .htaccess cacheia JS por 1 mes.
 // Arquivo alterado sem ?v= novo chega velho no navegador da cliente.
-for (const [arq, v] of [['app.js', 6], ['revisao.js', 2], ['importar-contatos.js', 5]]) {
+for (const [arq, v] of [['app.js', 7], ['revisao.js', 2], ['importar-contatos.js', 5]]) {
   assert.ok(painel.includes('src="' + arq + '?v=' + v + '"'),
     arq + ' subiu para ?v=' + v);
 }

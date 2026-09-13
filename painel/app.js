@@ -243,10 +243,18 @@ function renderLeads(){
   $$('#lead-rows tr[data-id]').forEach(tr=>tr.onclick=()=>openDrawer(tr.dataset.id));
   // A tabela recebe 'rows' (tudo); o KPI recebe o mesmo recorte dos
   // Relatorios. Ver poCorteImportados: as duas telas diziam numeros
-  // incompativeis para o mesmo mes.
-  renderLeadKpis(poCorteImportados(rows,F));
+  // incompativeis para o mesmo mes. O segundo argumento e quantos ficaram
+  // de fora da conta — sem ele o KPI diria "0" logo acima de uma tabela com
+  // 775 linhas, e a contradicao so teria mudado de lugar.
+  const doKpi=poCorteImportados(rows,F);
+  renderLeadKpis(doKpi,rows.length-doKpi.length);
 }
-function renderLeadKpis(rows){
+/* 'fora' = contatos importados que a tabela mostra mas o KPI nao conta. A aba
+   Leads nao tem o controle #rep-importados (ele mora so em Relatorios), entao
+   a explicacao precisa estar no proprio numero: sem ela a cliente le "Leads
+   no periodo: 0" sobre uma tabela cheia e conclui que o painel quebrou.
+   Quando nao ha importado no recorte, o subtexto volta a ser o de sempre. */
+function renderLeadKpis(rows,fora){
   const total=rows.length,vendas=rows.filter(l=>l.status==='venda');
   const conv=total?Math.round(vendas.length/total*100):0;
   // Em vendas soma so quem esta em status 'venda': arrastar o card pra
@@ -255,8 +263,12 @@ function renderLeadKpis(rows){
   // destruir o numero). Sem o filtro por status o faturamento fica
   // inflado em silencio pra sempre.
   const valVen=vendas.reduce((s,l)=>s+l.ven,0),valOrc=rows.reduce((s,l)=>s+l.orc,0);
+  const nFora=Number(fora)||0;
+  const subTotal=nFora
+    ?`${nFora} contato${nFora===1?'':'s'} importado${nFora===1?'':'s'} fora da conta`
+    :`${rows.filter(l=>isPago(l.origem)).length} pago · ${rows.filter(l=>!isPago(l.origem)).length} orgânico`;
   $('#lead-kpis').innerHTML=`
-    <div class="kpi"><div class="kpi-l">Leads no período</div><div class="kpi-n">${total}</div><div class="kpi-sub">${rows.filter(l=>isPago(l.origem)).length} pago · ${rows.filter(l=>!isPago(l.origem)).length} orgânico</div></div>
+    <div class="kpi"><div class="kpi-l">Leads no período</div><div class="kpi-n">${total}</div><div class="kpi-sub">${subTotal}</div></div>
     <div class="kpi k-green"><div class="kpi-l">Vendas fechadas</div><div class="kpi-n">${vendas.length}</div><div class="kpi-sub"><b>${conv}%</b> de conversão</div></div>
     <div class="kpi k-orange"><div class="kpi-l">Em orçamentos</div><div class="kpi-n" style="font-size:1.7rem">${brl2(valOrc)}</div><div class="kpi-sub">valor total cotado</div></div>
     <div class="kpi k-green"><div class="kpi-l">Em vendas</div><div class="kpi-n" style="font-size:1.7rem">${brl2(valVen)}</div><div class="kpi-sub">faturamento fechado</div></div>`;

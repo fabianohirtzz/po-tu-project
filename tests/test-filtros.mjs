@@ -145,8 +145,43 @@ assert.ok(!/origemImport/.test(leads[0]),
   'a aba Leads nao filtra por origemImport na mao');
 assert.ok(/tb\.innerHTML=rows\.map/.test(leads[0]),
   'a TABELA da aba Leads recebe as linhas inteiras, sem corte');
-assert.ok(/renderLeadKpis\(poCorteImportados\(rows,F\)\)/.test(leads[0]),
-  'e o KPI recebe o mesmo corte dos Relatorios');
+assert.ok(/const doKpi=poCorteImportados\(rows,F\);/.test(leads[0]) &&
+          /renderLeadKpis\(doKpi,rows\.length-doKpi\.length\)/.test(leads[0]),
+  'e o KPI recebe o mesmo corte dos Relatorios, mais quantos ficaram de fora');
+
+/* O KPI explica o proprio numero. A aba Leads nao tem o controle
+   #rep-importados (ele mora so em Relatorios), entao "Leads no periodo: 0"
+   sobre uma tabela com 775 linhas precisa dizer por que - senao a correcao
+   so mudou a contradicao de lugar, de duas abas para a mesma tela. */
+const kpis = src.match(/function renderLeadKpis\([\s\S]*?\n\}/);
+assert.ok(kpis, 'renderLeadKpis encontrada');
+const { renderLeadKpis } = new Function(
+  'let alvo=null;' +
+  'const $=()=>({set innerHTML(v){alvo=v;}});' +
+  'function isPago(o){return o==="pago";}' +
+  'function brl2(v){return "R$ "+v;}' +
+  kpis[0] + '; return {renderLeadKpis:(r,f)=>{renderLeadKpis(r,f);return alvo;}};'
+)();
+const linha = (over) => Object.assign({status:'novo', origem:'organico', ven:0, orc:0}, over||{});
+
+const comFora = renderLeadKpis([], 775);
+assert.ok(/Leads no período/.test(comFora), 'o KPI e o de "Leads no periodo"');
+assert.ok(/775 contatos importados fora da conta/.test(comFora),
+  'o subtexto explica quantos a tabela mostra e o KPI nao conta');
+assert.ok(/<div class="kpi-n">0<\/div>/.test(comFora),
+  'e o total em si segue sendo o do recorte (0), nao os 775 da tabela');
+// O numero do subtexto vem do argumento, nao e fixo no fonte.
+assert.ok(/42 contatos importados fora da conta/.test(renderLeadKpis([], 42)),
+  'o numero do subtexto vem da conta');
+assert.ok(/1 contato importado fora da conta/.test(renderLeadKpis([], 1)),
+  'singular no singular');
+
+// Sem importado no recorte, o subtexto volta ao que sempre foi.
+const semFora = renderLeadKpis([linha({origem:'pago'}), linha()], 0);
+assert.ok(/1 pago · 1 orgânico/.test(semFora), 'caso normal nao ganha ruido');
+assert.ok(!/fora da conta/.test(semFora), 'e nao fala de importados quando nao ha nenhum');
+assert.ok(/1 pago · 1 orgânico/.test(renderLeadKpis([linha({origem:'pago'}), linha()])),
+  'sem o argumento (chamada antiga) tambem cai no caso normal');
 assert.ok(!/poCorteImportados/.test((src.match(/function filtered\(\)[^\n]*/) || [''])[0]),
   'filtered() — a fonte da tabela — segue sem o corte');
 
