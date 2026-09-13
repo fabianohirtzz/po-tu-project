@@ -153,13 +153,17 @@ $('#nav-toggle').onclick=()=>{$('#side-nav').classList.contains('on')?fechaSide(
 $$('.nav-item').forEach(b=>b.onclick=()=>{
   $$('.nav-item').forEach(x=>x.classList.remove('active'));b.classList.add('active');
   const v=b.dataset.view;$$('.view').forEach(x=>x.classList.remove('on'));
-  $('#month-box').style.visibility=(v==='roteiros'||v==='importar'||v==='revisao')?'hidden':'visible';
+  $('#month-box').style.visibility=(v==='roteiros'||v==='importar'||v==='revisao'||v==='textos')?'hidden':'visible';
   if(v==='leads'){$('#view-leads').classList.add('on');$('#top-title').innerHTML='Leads<span>.</span>';renderLeads();}
   else if(v==='reports'){$('#view-reports').classList.add('on');$('#top-title').innerHTML='Relatórios<span>.</span>';renderReports();}
   else if(v==='clientes'){$('#view-clientes').classList.add('on');$('#top-title').innerHTML='Clientes<span>.</span>';if(typeof poRenderClientes==='function')poRenderClientes();}
   else if(v==='funil'){$('#view-funil').classList.add('on');$('#top-title').innerHTML='Funil<span>.</span>';if(typeof poRenderFunil==='function')poRenderFunil();}
   else if(v==='importar'){$('#view-importar').classList.add('on');$('#top-title').innerHTML='Importar<span>.</span>';if(typeof poRenderImportar==='function')poRenderImportar();}
   else if(v==='revisao'){$('#view-revisao').classList.add('on');$('#top-title').innerHTML='Revisão<span>.</span>';if(typeof poRenderRevisao==='function')poRenderRevisao();}
+  /* Os textos sao lidos do banco toda vez que a aba abre, nao uma vez so:
+     sao 7 linhas curtas, e reler garante que a cliente nunca edite por cima
+     de uma versao velha se tiver duas abas do painel abertas. */
+  else if(v==='textos'){$('#view-textos').classList.add('on');$('#top-title').innerHTML='Textos do robô<span>.</span>';if(typeof poCarregaTextos==='function')poCarregaTextos();}
   else{$('#view-roteiros').classList.add('on');$('#top-title').innerHTML='Roteiros<span>.</span>';renderRoteiros();}
   fechaSide();
 });
@@ -184,6 +188,10 @@ if($('#rev-cliente'))$('#rev-cliente').onclick=()=>poRevMarcar(true);
 if($('#rev-naocliente'))$('#rev-naocliente').onclick=()=>poRevMarcar(false);
 if($('#rev-todos'))$('#rev-todos').onchange=e=>poRevAplicaTodos($$('#rev-rows .rev-chk'),e.target.checked);
 if($('#rev-revisados'))$('#rev-revisados').onchange=()=>poRenderRevisao();
+
+/* Textos do robo (o que ele manda no WhatsApp). Mesma guarda de nulo da aba
+   Revisao, pela mesma razao: o deploy e FTP manual, arquivo a arquivo. */
+if($('#txt-salvar'))$('#txt-salvar').onclick=()=>poSalvaTextos();
 
 $$('#orig-filter .chip').forEach(c=>c.onclick=()=>{$$('#orig-filter .chip').forEach(x=>x.classList.remove('active'));c.classList.add('active');F.orig=c.dataset.orig;renderLeads();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();});
 

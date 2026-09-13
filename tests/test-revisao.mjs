@@ -454,7 +454,9 @@ assert.ok(!/A agenda tem médico, fornecedor e família/.test(painel),
 
 // Cache-buster: deploy e FTP manual e o .htaccess cacheia JS por 1 mes.
 // Arquivo alterado sem ?v= novo chega velho no navegador da cliente.
-for (const [arq, v] of [['app.js', 7], ['revisao.js', 2], ['importar-contatos.js', 5]]) {
+// O numero do app.js anda a cada mudanca nele (a aba de textos do robo o
+// levou de 7 para 8): o que o teste tranca e que ele NAO fique parado.
+for (const [arq, v] of [['app.js', 8], ['revisao.js', 2], ['importar-contatos.js', 5]]) {
   assert.ok(painel.includes('src="' + arq + '?v=' + v + '"'),
     arq + ' subiu para ?v=' + v);
 }
