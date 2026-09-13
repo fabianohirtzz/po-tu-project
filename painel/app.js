@@ -65,7 +65,7 @@ let toastT;function toast(msg,err){const t=$('#toast');t.textContent=msg;t.class
 
 /* ---------- estado ---------- */
 let LEADS=[], spend={}, ROTEIROS=[];
-let F={orig:'todos',status:'todos',q:'',month:''};
+let F={orig:'todos',status:'todos',q:'',month:'',importados:false};
 let openId=null, editRot=null;
 
 /* ============================================================ AUTH */
@@ -97,6 +97,10 @@ async function loadData(){
   spend={};(spendData||[]).forEach(s=>{spend[s.month]=Number(s.amount)||0;});
   ROTEIROS=rotData||[];
   buildMonths();renderLeads();renderRoteiros();
+  /* O contador da fila de revisao vive na navegacao: precisa ser preenchido
+     na carga, senao a cliente so descobre que ha contato esperando se abrir
+     a aba por acaso — e o contato nao revisado nao entra em campanha. */
+  if(typeof poRenderRevisao==='function')poRenderRevisao();
 }
 function classifyChannel(r){
   if(r.gclid) return 'pago';
@@ -116,7 +120,10 @@ function mapRow(r){
     camp:r.utm_campaign||r.origem||'—',land:r.landing_page||'—',
     status:r.status||'semresposta',orc:Number(r.orcamento)||0,ven:Number(r.venda)||0,
     notas:Array.isArray(r.notas)?r.notas:[],vendaAt:r.venda_at||null,
-    waId:r.wa_id||''};
+    waId:r.wa_id||'',
+    /* Triagem dos contatos importados (spec 8.1). origemImport vazio = lead do
+       formulario do site, que nunca passa pela fila de revisao. */
+    origemImport:r.origem_import||'',revisado:r.revisado===true,cliente:r.cliente===true};
 }
 function buildMonths(){
   const set=[...new Set(LEADS.map(l=>monthKey(l.data)).filter(Boolean))].sort().reverse();
@@ -146,18 +153,38 @@ $('#nav-toggle').onclick=()=>{$('#side-nav').classList.contains('on')?fechaSide(
 $$('.nav-item').forEach(b=>b.onclick=()=>{
   $$('.nav-item').forEach(x=>x.classList.remove('active'));b.classList.add('active');
   const v=b.dataset.view;$$('.view').forEach(x=>x.classList.remove('on'));
-  $('#month-box').style.visibility=(v==='roteiros'||v==='importar')?'hidden':'visible';
+  $('#month-box').style.visibility=(v==='roteiros'||v==='importar'||v==='revisao')?'hidden':'visible';
   if(v==='leads'){$('#view-leads').classList.add('on');$('#top-title').innerHTML='Leads<span>.</span>';renderLeads();}
   else if(v==='reports'){$('#view-reports').classList.add('on');$('#top-title').innerHTML='Relatórios<span>.</span>';renderReports();}
   else if(v==='clientes'){$('#view-clientes').classList.add('on');$('#top-title').innerHTML='Clientes<span>.</span>';if(typeof poRenderClientes==='function')poRenderClientes();}
   else if(v==='funil'){$('#view-funil').classList.add('on');$('#top-title').innerHTML='Funil<span>.</span>';if(typeof poRenderFunil==='function')poRenderFunil();}
   else if(v==='importar'){$('#view-importar').classList.add('on');$('#top-title').innerHTML='Importar<span>.</span>';if(typeof poRenderImportar==='function')poRenderImportar();}
+  else if(v==='revisao'){$('#view-revisao').classList.add('on');$('#top-title').innerHTML='Revisão<span>.</span>';if(typeof poRenderRevisao==='function')poRenderRevisao();}
   else{$('#view-roteiros').classList.add('on');$('#top-title').innerHTML='Roteiros<span>.</span>';renderRoteiros();}
   fechaSide();
 });
 $('#month-sel').onchange=e=>{F.month=e.target.value;syncSpendInput();renderLeads();if($('#view-reports').classList.contains('on'))renderReports();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();};
 $('#q').oninput=e=>{F.q=e.target.value;renderLeads();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();};
 $('#status-filter').onchange=e=>{F.status=e.target.value;renderLeads();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();};
+/* Fila de revisao dos contatos importados (spec 8.1). Os dois botoes marcam
+   revisado=true — a revisao aconteceu com qualquer resposta; o que muda e se
+   a pessoa entra em campanha (cliente=true) ou fica na base fora de disparo
+   (cliente=false). Marcar "nao e cliente" nunca apaga ninguem.
+
+   Os quatro sao ligados COM GUARDA DE NULO, ao contrario do resto do arquivo:
+   deploy aqui e FTP manual, arquivo a arquivo, e subir o app.js antes do
+   index.html mataria o painel INTEIRO com TypeError nesta linha — o script
+   para de executar e nada abaixo daqui e ligado. A aba nova pode faltar; o
+   painel nao pode cair por causa dela.
+
+   O "marcar todos" marca SO os pendentes (poRevAplicaTodos): com a caixa
+   "mostrar ja revisados" ligada, a tela tem os 775 contatos ja revisados do
+   CRM, e um clique em "Nao e cliente" os tiraria todos das campanhas. */
+if($('#rev-cliente'))$('#rev-cliente').onclick=()=>poRevMarcar(true);
+if($('#rev-naocliente'))$('#rev-naocliente').onclick=()=>poRevMarcar(false);
+if($('#rev-todos'))$('#rev-todos').onchange=e=>poRevAplicaTodos($$('#rev-rows .rev-chk'),e.target.checked);
+if($('#rev-revisados'))$('#rev-revisados').onchange=()=>poRenderRevisao();
+
 $$('#orig-filter .chip').forEach(c=>c.onclick=()=>{$$('#orig-filter .chip').forEach(x=>x.classList.remove('active'));c.classList.add('active');F.orig=c.dataset.orig;renderLeads();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();});
 
 /* ============================================================ LEADS */
@@ -188,6 +215,15 @@ function filtradosFunil(){return poFiltraLeads(LEADS,F,{mes:true,origem:true,sta
    para responder "quem ja viajou com a gente" abria mostrando so quem deu
    sinal neste mes, e os KPIs contavam so essas pessoas. */
 function filtradasPessoas(){return poFiltraLeads(LEADS,F,{mes:false,origem:true,status:true});}
+/* Tira a base importada do recorte, a menos que o controle esteja ligado.
+   Vive aqui porque DUAS telas precisam do mesmo corte: os Relatorios e o KPI
+   da aba Leads. Sem isto as duas se contradiziam na tela de abertura — em
+   2026-09 ha 775 fichas do CRM e ZERO leads normais, entao Relatorios abria
+   com "0 leads" e a aba Leads, logo ao lado, com "Leads no periodo: 775" e 0%
+   de conversao. O KPI da aba Leads e o primeiro numero que a cliente le.
+   A TABELA da aba Leads nao passa por aqui de proposito: ela sempre mostrou
+   todo mundo, e e o que permite achar a ficha de um cliente antigo. */
+function poCorteImportados(rows,f){return (rows||[]).filter(l=>f.importados||!l.origemImport);}
 function origBadge(o){const x=ORIG[o]||ORIG.direto;return `<span class="orig ${x.cls}">${x.label}</span>`;}
 function renderLeads(){
   const rows=filtered();const tb=$('#lead-rows');
@@ -205,9 +241,20 @@ function renderLeads(){
     <td class="money ${l.ven?'':'zero'}">${brl(l.ven)}</td>
     <td class="mono ${cicloDias(l)==null?'zero':''}">${cicloDias(l)==null?'—':cicloDias(l)+'d'}</td></tr>`;}).join('');
   $$('#lead-rows tr[data-id]').forEach(tr=>tr.onclick=()=>openDrawer(tr.dataset.id));
-  renderLeadKpis(rows);
+  // A tabela recebe 'rows' (tudo); o KPI recebe o mesmo recorte dos
+  // Relatorios. Ver poCorteImportados: as duas telas diziam numeros
+  // incompativeis para o mesmo mes. O segundo argumento e quantos ficaram
+  // de fora da conta — sem ele o KPI diria "0" logo acima de uma tabela com
+  // 775 linhas, e a contradicao so teria mudado de lugar.
+  const doKpi=poCorteImportados(rows,F);
+  renderLeadKpis(doKpi,rows.length-doKpi.length);
 }
-function renderLeadKpis(rows){
+/* 'fora' = contatos importados que a tabela mostra mas o KPI nao conta. A aba
+   Leads nao tem o controle #rep-importados (ele mora so em Relatorios), entao
+   a explicacao precisa estar no proprio numero: sem ela a cliente le "Leads
+   no periodo: 0" sobre uma tabela cheia e conclui que o painel quebrou.
+   Quando nao ha importado no recorte, o subtexto volta a ser o de sempre. */
+function renderLeadKpis(rows,fora){
   const total=rows.length,vendas=rows.filter(l=>l.status==='venda');
   const conv=total?Math.round(vendas.length/total*100):0;
   // Em vendas soma so quem esta em status 'venda': arrastar o card pra
@@ -216,8 +263,12 @@ function renderLeadKpis(rows){
   // destruir o numero). Sem o filtro por status o faturamento fica
   // inflado em silencio pra sempre.
   const valVen=vendas.reduce((s,l)=>s+l.ven,0),valOrc=rows.reduce((s,l)=>s+l.orc,0);
+  const nFora=Number(fora)||0;
+  const subTotal=nFora
+    ?`${nFora} contato${nFora===1?'':'s'} importado${nFora===1?'':'s'} fora da conta`
+    :`${rows.filter(l=>isPago(l.origem)).length} pago · ${rows.filter(l=>!isPago(l.origem)).length} orgânico`;
   $('#lead-kpis').innerHTML=`
-    <div class="kpi"><div class="kpi-l">Leads no período</div><div class="kpi-n">${total}</div><div class="kpi-sub">${rows.filter(l=>isPago(l.origem)).length} pago · ${rows.filter(l=>!isPago(l.origem)).length} orgânico</div></div>
+    <div class="kpi"><div class="kpi-l">Leads no período</div><div class="kpi-n">${total}</div><div class="kpi-sub">${subTotal}</div></div>
     <div class="kpi k-green"><div class="kpi-l">Vendas fechadas</div><div class="kpi-n">${vendas.length}</div><div class="kpi-sub"><b>${conv}%</b> de conversão</div></div>
     <div class="kpi k-orange"><div class="kpi-l">Em orçamentos</div><div class="kpi-n" style="font-size:1.7rem">${brl2(valOrc)}</div><div class="kpi-sub">valor total cotado</div></div>
     <div class="kpi k-green"><div class="kpi-l">Em vendas</div><div class="kpi-n" style="font-size:1.7rem">${brl2(valVen)}</div><div class="kpi-sub">faturamento fechado</div></div>`;
@@ -383,10 +434,21 @@ $('#spend-input').onchange=async e=>{
   if(error){toast('Erro ao salvar investimento: '+error.message,true);return;}
   renderReports();toast('Investimento salvo.');
 };
+$('#rep-importados').onchange=e=>{F.importados=e.target.checked;renderReports();};
 function curSpend(){return F.month==='all'?Object.values(spend).reduce((a,b)=>a+b,0):(spend[F.month]||0);}
-function rowsForReports(){return LEADS.filter(inMonth).filter(l=>F.orig==='todos'||l.origem===F.orig);}
+/* A base importada fica FORA do relatorio por padrao. As 775 fichas do CRM
+   entraram com created_at=hoje e status=semresposta: contadas no denominador,
+   derrubam a conversao do mes para perto de zero e medem a coisa errada — elas
+   nao sao leads captados este mes, sao clientes antigos de outro sistema.
+   O controle deixa ver o total quando a pergunta for essa. */
+function rowsForReports(){
+  return poCorteImportados(LEADS.filter(inMonth),F)
+              .filter(l=>F.orig==='todos'||l.origem===F.orig);
+}
 function renderReports(){
   const rows=rowsForReports();const total=rows.length;
+  const nImp=LEADS.filter(inMonth).filter(l=>l.origemImport).length;
+  const elImp=$('#rep-imp-n'); if(elImp)elImp.textContent=nImp;
   const vendas=rows.filter(l=>l.status==='venda');
   // Mesma regra do KPI da aba Leads: so soma ven de quem esta em status
   // 'venda'. O ven do lead nao e zerado ao sair de venda (o poMoveLead do

@@ -218,6 +218,8 @@ tbody tr:last-child td{border-bottom:none}
 .spend-input{display:flex;align-items:center;gap:8px;background:#131922;border:1px solid #333e4a;border-radius:8px;padding:6px 14px}
 .spend-input span{color:var(--verde);font-family:var(--font-mono);font-weight:600}
 .spend-input input{width:120px;background:none;border:none;color:#fff;font-family:var(--font-mono);font-size:1.2rem;font-weight:600;outline:none;text-align:right}
+.rep-opt{display:flex;align-items:center;gap:8px;font-size:.76rem;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 14px;margin-bottom:18px;width:fit-content}
+.rep-opt input{accent-color:var(--ink)}
 .donut-wrap{display:flex;align-items:center;gap:26px}
 .donut{width:150px;height:150px;border-radius:50%;flex:0 0 auto;position:relative}
 .donut::after{content:'';position:absolute;inset:26px;background:var(--surface);border-radius:50%}
@@ -428,6 +430,26 @@ tbody tr:last-child td{border-bottom:none}
 .imp-ct-resultado .lbl{font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;color:var(--st-venda)}
 .imp-ct-resultado .hint{font-size:.86rem;color:var(--text);margin-top:6px}
 
+/* 'lote_registrado'===false (ruling B, Task 2): a importacao deu certo (os
+   contatos foram gravados), mas o registro do arquivo nao fechou — sem ele
+   uma reimportacao do mesmo arquivo duplicaria a base. Cor de aviso
+   (ambar), nao de erro: nao usar --st-perdido aqui. */
+.imp-ct-aviso{font-size:.8rem;color:#8a5a00;background:rgba(224,138,0,.1);
+  border:1px solid rgba(224,138,0,.35);border-radius:8px;padding:10px 12px;margin-top:10px}
+
+/* Caixa "importar novamente": escape hatch da guarda de 409 (arquivo ja
+   importado / lease de 10min), nao fluxo normal — por isso discreta,
+   pequena e cinza, abaixo dos botoes principais. */
+.imp-ct-forcar{display:flex;align-items:center;gap:7px;margin-top:12px;
+  font-size:.74rem;color:var(--muted);cursor:pointer;user-select:none}
+.imp-ct-forcar input{margin:0}
+
+/* Cabecalho da tabela de fusoes (task 3, spec 9.5): mesma hierarquia visual
+   do .lbl/.hint do resto da aba, sem caixa propria — e so mais uma secao
+   da mesma tela, nao um destaque a parte. */
+.ic-h3{font-size:.92rem;font-weight:700;color:var(--ink);margin:22px 0 4px}
+.ic-sub{font-size:.78rem;color:var(--muted);margin-bottom:10px;max-width:640px}
+
 /* Os TRES sabores de 'revisar' (spec 9, task 6->8): cor so de sinalizacao,
    quem explica a diferenca e o texto de .rv-motivo, nao a cor sozinha. */
 .rv-rotulo{font-weight:600;font-size:.82rem}
@@ -436,3 +458,34 @@ tbody tr:last-child td{border-bottom:none}
 .rv-disputa .rv-rotulo{color:var(--st-nego)}
 .rv-erro .rv-rotulo{color:var(--st-perdido)}
 #ic-revisar-rows td{vertical-align:top;white-space:normal}
+
+/* Fusoes (task 3, spec 9.5): cada campo que vai ser preenchido vira uma
+   pilula, para ficar escaneavel numa lista que pode ter varios campos. */
+.ic-campo{display:inline-block;padding:1px 7px;margin:1px 2px 1px 0;border-radius:10px;
+  background:var(--surface);border:1px solid var(--border);font-size:.78rem;color:var(--ink)}
+.ic-campo--vazio{color:var(--muted);font-style:italic}
+#ic-fusoes td{vertical-align:top;white-space:normal}
+
+/* ===== REVISAO DE CONTATOS IMPORTADOS (task 4, spec 8.1) ===== */
+/* O contador fica na propria navegacao porque a fila e uma pendencia, nao um
+   relatorio: sem ele, a cliente so descobre que ha contato esperando se abrir
+   a aba por acaso — e contato nao revisado nunca entra em campanha. */
+.nav-count{margin-left:auto;background:var(--azul);color:#fff;font-family:var(--font-mono);
+  font-size:.62rem;font-weight:500;line-height:1;padding:3px 7px;border-radius:9px}
+/* .btn-primary tem flex:1 para esticar no rodape da gaveta; aqui os dois
+   botoes ficam do tamanho do proprio texto. */
+.rev-acoes{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.rev-acoes .btn{flex:0 0 auto}
+/* A tabela geral tem min-width:900px por causa das 11 colunas dos leads.
+   Aqui sao 4: forcar 900px so criaria rolagem lateral a toa no celular. */
+#view-revisao table{min-width:520px}
+#view-revisao .rev-chk-col{width:40px}
+#view-revisao tbody tr{cursor:default}
+.rev-chk,#rev-todos{width:16px;height:16px;cursor:pointer;accent-color:var(--azul)}
+/* A situacao e o que torna a marcacao reversivel: com a caixa "mostrar ja
+   revisados" ligada, e por esta coluna que a cliente acha o que marcou
+   errado. Cor so de sinalizacao - quem diz o que e esta escrito por extenso. */
+.rev-sit{font-size:.72rem;font-weight:600;letter-spacing:.02em}
+.rev-sit--pend{color:var(--st-aberto)}
+.rev-sit--cli{color:var(--st-venda)}
+.rev-sit--nao{color:var(--muted)}

@@ -317,4 +317,22 @@ ok(wa_import_candidato(['nome'=>'Maria Silva','telefones'=>['48999990001']], 'cr
 ok(wa_import_candidato(['nome'=>'Maria Silva','telefones'=>['48999990001']], 'crm-toninho') !== null,
    'a ficha de CRM segue dispensando o marcador');
 
+// O motor casa lead por wa_id e INSERE quando nao acha. Sem gravar wa_id aqui,
+// a ficha rica duplica na primeira mensagem que a pessoa mandar.
+$comCel = wa_import_linha_nova([
+  'wa_id' => '+5548999990001', 'celulares' => ['+5548999990001'], 'fixos' => [],
+  'nome' => 'Ana', 'email' => null, 'cpf' => null, 'data_nascimento' => null,
+  'origem_import' => 'agenda-esposa', 'campos' => [], 'payload_import' => [],
+]);
+ok($comCel['wa_id'] === '+5548999990001', 'candidato com celular grava wa_id');
+ok($comCel['telefone'] === '+5548999990001', 'e o telefone continua preenchido');
+
+$soFixo = wa_import_linha_nova([
+  'wa_id' => null, 'celulares' => [], 'fixos' => ['+554832220000'],
+  'nome' => 'Loja', 'email' => null, 'cpf' => null, 'data_nascimento' => null,
+  'origem_import' => 'agenda-esposa', 'campos' => [], 'payload_import' => [],
+]);
+ok(!array_key_exists('wa_id', $soFixo) || $soFixo['wa_id'] === null,
+   'so com fixo NAO grava wa_id: fixo nao tem WhatsApp e nao casa identidade');
+
 echo "test-wa-import-aplica OK\n";

@@ -93,6 +93,63 @@ function poLinhaRevisao(item) {
     '</tr>';
 }
 
+/* A spec 9.5 exige que as fusoes sejam VISTAS, nao adivinhadas: a cliente
+   autoriza a escrita, entao ela precisa ver o que cada fusao vai preencher.
+   A resposta do preview ja traz 'preenche' (lista de nomes de coluna,
+   array_keys no PHP) para cada item com acao='funde' — ate esta task a
+   tela filtrava so 'revisar' e descartava todo 'funde' em silencio.
+   O rotulo legivel fica DENTRO da funcao de proposito — o teste extrai a
+   funcao do fonte por regex e uma constante de topo de arquivo daria
+   ReferenceError (ja aconteceu tres vezes neste projeto). */
+function poLinhaFusao(item) {
+  var it = item || {};
+  var rotulos = {
+    telefone: 'telefone', telefone_secundario: 'telefone fixo', email: 'e-mail',
+    nome: 'nome', cpf: 'CPF', rg: 'RG', data_nascimento: 'nascimento',
+    nacionalidade: 'nacionalidade', estado_civil: 'estado civil', profissao: 'profissao',
+    cep: 'CEP', endereco: 'endereco', numero: 'numero', complemento: 'complemento',
+    bairro: 'bairro', cidade: 'cidade', estado: 'estado',
+    passaporte_numero: 'passaporte', passaporte_orgao_emissor: 'orgao do passaporte',
+    passaporte_emissao: 'emissao do passaporte', passaporte_validade: 'validade do passaporte',
+    contato_emergencia_nome: 'contato de emergencia',
+    contato_emergencia_telefone: 'telefone de emergencia',
+    contato_emergencia_parentesco: 'parentesco de emergencia',
+    observacoes: 'observacoes', origem_manual: 'origem',
+  };
+  var campos = Array.isArray(it.preenche) ? it.preenche : [];
+  var por = it.match_por === 'cpf' ? 'CPF' : (it.match_por === 'celular' ? 'celular' : (it.match_por || ''));
+  var lista = campos.length
+    ? campos.map(function (c) { return '<span class="ic-campo">' + esc(rotulos[c] || c) + '</span>'; }).join(' ')
+    : '<span class="ic-campo ic-campo--vazio">nenhum campo a preencher</span>';
+  return '<tr>' +
+    '<td><div class="c-name">' + esc(it.nome) + '</div></td>' +
+    '<td class="mono">' + esc(por) + '</td>' +
+    '<td>' + lista + '</td>' +
+    '</tr>';
+}
+
+/* Decide se o POST de aplicar leva forcar=1 (ruling A da Task 2, sobre o
+   plano 3.1 desta branch). A guarda de 409 do contatos-importar.php tem
+   lease de 10 minutos e, sem esta caixa, uma importacao que morre no meio
+   bloqueava a cliente ate o lease expirar, SEM escapatoria pela interface.
+   A caixa "importar novamente" e escape hatch, nao fluxo normal: comeca
+   desmarcada, e so o aplicar pode mandar forcar — o preview NUNCA manda
+   (a guarda de servidor ja nao bloqueia preview de proposito, entao
+   mandar seria so ruido), mesmo que a caixa esteja marcada por acidente. */
+function poIcForcarEnvio(modo, marcado) {
+  return modo === 'aplicar' && marcado === true;
+}
+
+/* Interpreta 'lote_registrado' da resposta do aplicar (ruling B da Task 2).
+   Quando vem false, os contatos FORAM gravados mas o registro do lote nao
+   fechou — e sem esse registro uma segunda importacao do mesmo arquivo
+   passa pela guarda de novo e duplica a base. Nao e erro (a importacao deu
+   certo): e aviso, para a cliente conferir antes de tentar de novo. */
+function poIcAvisoLote(resp) {
+  if (!resp || resp.lote_registrado !== false) return '';
+  return 'Importado, mas nao consegui registrar este arquivo. Confira antes de importar de novo.';
+}
+
 /* Decide quais origem/tipo vao no POST (fix round 1, achado Critical): no
    preview, os que estao no formulario NESTE INSTANTE; no aplicar, os que
    foram AUDITADOS na ultima chamada de preview bem-sucedida, NUNCA os que
@@ -133,6 +190,7 @@ function poIcCamposEnvio(modo, auditado, atual) {
   async function poIcEnvia(modo) {
     var origemEl = document.querySelector('#ic-origem');
     var tipoEl = document.querySelector('#ic-tipo');
+    var forcarEl = document.querySelector('#ic-forcar');
     var atual = { origem: (origemEl && origemEl.value) || '', tipo: (tipoEl && tipoEl.value) || 'vcf' };
     // poIcCamposEnvio e o unico lugar que decide isto: em modo=aplicar ela
     // ignora `atual` e devolve icAuditado, entao um select trocado depois
@@ -143,6 +201,10 @@ function poIcCamposEnvio(modo, auditado, atual) {
     fd.append('tipo', campos.tipo);
     fd.append('origem', campos.origem);
     fd.append('modo', modo);
+    // poIcForcarEnvio e quem decide isto: so o aplicar manda forcar, e so
+    // quando a caixa "importar novamente" estiver marcada. O preview nunca
+    // manda, mesmo que a caixa esteja marcada por acidente.
+    if (poIcForcarEnvio(modo, !!(forcarEl && forcarEl.checked))) fd.append('forcar', '1');
     fd.append('sb_token', await poIcToken());
     var res = await fetch('../contatos-importar.php', { method: 'POST', body: fd });
     var j = null;
@@ -182,18 +244,51 @@ function poIcCamposEnvio(modo, auditado, atual) {
     rows.innerHTML = revisar.map(poLinhaRevisao).join('');
   }
 
+  // Irma da poIcRenderRevisao: enquanto aquela mostra quem precisa de
+  // decisao humana, esta mostra quem ja tem decisao tomada (fusao
+  // automatica) e O QUE vai ser preenchido — spec 9.5, task 3.
+  // O corpo da tabela de fusoes quando nao ha preview nenhum. Mesmo texto do
+  // index.html, que ja nasce com ele: a tabela fica sempre visivel, entao
+  // cabecalho sobre corpo vazio era a cara da aba antes da primeira auditoria.
+  function poIcFusoesVazio() {
+    return '<tr><td colspan="3"><div class="empty">Suba um arquivo e peça a ' +
+           'auditoria para ver quais fichas serão completadas.</div></td></tr>';
+  }
+
+  function poIcRenderFusoes(itens) {
+    var rows = document.querySelector('#ic-fusoes');
+    if (!rows) return;
+    var fusoes = (itens || []).filter(function (it) { return it && it.acao === 'funde'; });
+    rows.innerHTML = fusoes.length
+      ? fusoes.map(poLinhaFusao).join('')
+      : '<tr><td colspan="3"><div class="empty">Nenhuma ficha existente sera completada.</div></td></tr>';
+  }
+
   function poIcRenderResultado(resp) {
     var box = document.querySelector('#ic-resultado');
     if (!box) return;
     var ap = (resp && resp.aplicado) || {};
+    // 'lote_registrado'===false (ruling B, Task 2): os contatos foram
+    // gravados, mas o registro do lote nao fechou. Nao e erro, e aviso.
+    var aviso = poIcAvisoLote(resp);
     box.hidden = false;
+    // 'revisar' aqui e o balde de FUSAO AMBIGUA do importador: contato que
+    // NAO foi gravado porque casou por nome+nascimento e a decisao e humana.
+    // Nao confundir com a fila da aba Revisao, que e dos contatos que JA
+    // entraram e esperam o "e cliente / nao e cliente". A frase antiga dizia
+    // "ainda para voce revisar" e mandava a cliente para uma aba onde aqueles
+    // contatos nunca estariam.
     box.innerHTML = '<div class="lbl">Importacao concluida</div>' +
       '<div class="hint">' +
       (ap.novos || 0) + ' contato(s) novo(s) · ' +
       (ap.preenchidos || 0) + ' ficha(s) completada(s) · ' +
-      (ap.revisar || 0) + ' ainda para voce revisar' +
+      (ap.revisar || 0) + ' fora da importacao (duplicidade a resolver)' +
       ((ap.falhas) ? ' · ' + ap.falhas + ' falha(s)' : '') +
-      '</div>';
+      '</div>' +
+      ((ap.novos || 0) ? '<div class="hint">Os contatos novos foram para a aba ' +
+        '<b>Revisao</b>: nenhum deles recebe transmissao antes de voce dizer ' +
+        'quem e cliente.</div>' : '') +
+      (aviso ? '<div class="imp-ct-aviso">' + esc(aviso) + '</div>' : '');
   }
 
   function poIcReset() {
@@ -201,18 +296,32 @@ function poIcCamposEnvio(modo, auditado, atual) {
     icAuditado = null;
     var resumo = document.querySelector('#ic-resumo');
     var wrap = document.querySelector('#ic-revisar-wrap');
+    var fusoesRows = document.querySelector('#ic-fusoes');
     var resultado = document.querySelector('#ic-resultado');
     var btnAplicar = document.querySelector('#ic-btn-aplicar');
     var origemEl = document.querySelector('#ic-origem');
     var tipoEl = document.querySelector('#ic-tipo');
+    var forcarEl = document.querySelector('#ic-forcar');
     if (resumo) resumo.hidden = true;
     if (wrap) wrap.hidden = true;
+    // A tabela de fusoes (diferente da de revisao) nao tem wrapper
+    // escondivel: fica sempre visivel, mesmo vazia, porque "nenhuma ficha
+    // sera completada" tambem e informacao do preview. So o conteudo e
+    // limpo, para nao sobrar fusao de uma auditoria anterior na tela - e volta
+    // ao placeholder, nao a vazio, senao a tabela fica com cabecalho sobre
+    // corpo vazio de novo.
+    if (fusoesRows) fusoesRows.innerHTML = poIcFusoesVazio();
     if (resultado) resultado.hidden = true;
     if (btnAplicar) { btnAplicar.hidden = true; btnAplicar.disabled = true; }
     // Destrava os seletores: sem auditoria valida, origem/tipo voltam a
     // poder ser escolhidos livremente ate a proxima "Ver auditoria".
     if (origemEl) origemEl.disabled = false;
     if (tipoEl) tipoEl.disabled = false;
+    // "Importar novamente" e escape hatch, nao fluxo normal: qualquer
+    // invalidacao da auditoria (arquivo novo, origem/tipo trocados) volta
+    // a caixa para o padrao desmarcado, para nao sobreviver por engano a
+    // uma nova auditoria que nem precisa dela.
+    if (forcarEl) forcarEl.checked = false;
   }
 
   function poIcWire() {
@@ -262,6 +371,7 @@ function poIcCamposEnvio(modo, auditado, atual) {
         tipoEl.disabled = true;
         poIcRenderResumo(j.resumo);
         poIcRenderRevisao(j.itens || []);
+        poIcRenderFusoes(j.itens || []);
         var resultado = document.querySelector('#ic-resultado');
         if (resultado) resultado.hidden = true;
         btnAplicar.hidden = false;
@@ -286,6 +396,19 @@ function poIcCamposEnvio(modo, auditado, atual) {
         poIcRenderResultado(j);
         toast('Importacao concluida.');
         btnAplicar.hidden = true;
+        // Recarrega a base: os contatos acabaram de nascer revisado=false e a
+        // fila da aba Revisao le a LEADS em memoria. Sem isto o contador
+        // continua em 0 e a aba diz "nenhum contato aguardando revisao" logo
+        // depois da importacao - o beco sem saida que a fila existe para
+        // fechar, so que agora com duas telas se contradizendo.
+        // Em try proprio: a importacao JA deu certo, e uma falha ao recarregar
+        // nao pode virar "Erro ao importar" (mentira que manda a cliente
+        // importar de novo).
+        try {
+          if (typeof loadData === 'function') await loadData();
+        } catch (e2) {
+          toast('Contatos importados. Recarregue a página para ver a fila de revisão.', true);
+        }
       } catch (err) {
         toast('Erro ao importar: ' + err.message, true);
       } finally {

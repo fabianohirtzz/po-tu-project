@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="painel.css?v=3">
+<link rel="stylesheet" href="painel.css?v=6">
 </head>
 <body>
 
@@ -57,6 +57,11 @@
       <button class="nav-item" data-view="importar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
         Importar
+      </button>
+      <button class="nav-item" data-view="revisao">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>
+        Revisão
+        <span class="nav-count" id="rev-contagem" hidden>0</span>
       </button>
     </nav>
     <div class="side-foot">
@@ -169,6 +174,8 @@
         </div>
         <div class="spend-input"><span>R$</span><input type="number" id="spend-input" value="0" step="100"></div>
       </div>
+      <label class="rep-opt"><input type="checkbox" id="rep-importados">
+        Incluir a base importada (<span id="rep-imp-n">0</span> contatos)</label>
       <div class="kpis" id="rep-kpis"></div>
       <div class="rep-grid">
         <div class="card">
@@ -268,6 +275,14 @@
           <button class="btn-add" id="ic-btn-preview" type="button" disabled>Ver auditoria (preview)</button>
           <button class="btn-add" id="ic-btn-aplicar" type="button" disabled hidden>Confirmar e importar</button>
         </div>
+        <!-- Escape hatch, nao fluxo normal: a guarda de 409 do servidor (arquivo
+             ja importado, ou lease de 10min de uma importacao que morreu no
+             meio) so libera de novo por aqui. Por isso fica discreta, abaixo
+             dos botoes principais, e desmarcada por padrao. -->
+        <label class="imp-ct-forcar">
+          <input type="checkbox" id="ic-forcar">
+          Importar novamente (este arquivo já foi importado)
+        </label>
       </div>
 
       <div class="imp-ct-resumo" id="ic-resumo" hidden></div>
@@ -281,7 +296,61 @@
         </div>
       </div>
 
+      <h3 class="ic-h3">Fichas que vão ser completadas</h3>
+      <p class="ic-sub">Estes contatos já existem no painel. A importação só preenche o
+        que está em branco: nada que já tem valor é substituído.</p>
+      <div class="table-wrap">
+        <div class="tscroll">
+          <table>
+            <thead><tr><th>Contato</th><th>Casou por</th><th>Vai preencher</th></tr></thead>
+            <!-- Placeholder: esta tabela fica sempre visivel (nao tem wrapper
+                 escondivel), entao sem ele a aba abria com cabecalho e corpo
+                 vazio antes da primeira auditoria. O poIcReset repoe o mesmo
+                 texto ao invalidar o preview. -->
+            <tbody id="ic-fusoes"><tr><td colspan="3"><div class="empty">Suba um arquivo e peça a auditoria para ver quais fichas serão completadas.</div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="imp-ct-resultado" id="ic-resultado" hidden></div>
+    </section>
+
+    <!-- ===== REVISÃO DE CONTATOS IMPORTADOS ===== -->
+    <section class="view" id="view-revisao">
+      <div class="imp-ct-box">
+        <div class="lbl">Contatos aguardando revisão</div>
+        <div class="hint">
+          Vieram das agendas de celular (só entram os contatos com <b>PO</b> no nome)
+          e das fichas do CRM antigo. Mesmo marcado na agenda, um contato pode ser
+          fornecedor ou conhecido, então ninguém entra em disparo antes de você conferir.
+          <b>Marcar como cliente</b> libera a pessoa para as campanhas.
+          <b>Não é cliente</b> não apaga ninguém: o contato continua na base,
+          só fica fora dos disparos.
+        </div>
+        <div class="rev-acoes">
+          <button class="btn btn-primary" id="rev-cliente" type="button">Marcar como cliente</button>
+          <button class="btn btn-ghost" id="rev-naocliente" type="button">Não é cliente</button>
+        </div>
+        <!-- Caminho de volta: nenhuma outra tela do painel escreve 'revisado'
+             ou 'cliente'. Sem esta caixa, um clique errado com o "marcar
+             todos" ligado só teria conserto por SQL no banco. -->
+        <label class="imp-ct-forcar">
+          <input type="checkbox" id="rev-revisados">
+          Mostrar também os contatos que você já revisou (para corrigir)
+        </label>
+      </div>
+
+      <div class="table-wrap">
+        <div class="tscroll">
+          <table>
+            <thead><tr>
+              <th class="rev-chk-col"><input type="checkbox" id="rev-todos" title="Marcar todos"></th>
+              <th>Nome</th><th>Telefone</th><th>Origem</th><th>Situação</th>
+            </tr></thead>
+            <tbody id="rev-rows"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
   </div>
 </div>
@@ -457,10 +526,11 @@
 <script src="config.js"></script>
 <script src="video-encode.js"></script>
 <script src="fone.js?v=1"></script>
-<script src="app.js?v=3"></script>
+<script src="app.js?v=7"></script>
 <script src="clientes.js?v=2"></script>
 <script src="funil.js?v=1"></script>
 <script src="conversa.js?v=1"></script>
-<script src="importar-contatos.js?v=2"></script>
+<script src="importar-contatos.js?v=5"></script>
+<script src="revisao.js?v=2"></script>
 </body>
 </html>

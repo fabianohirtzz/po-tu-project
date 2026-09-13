@@ -300,9 +300,20 @@ function wa_import_mapa_crm($f) {
 /* As UNICAS colunas que uma fusao pode preencher. Fora daqui, nada e tocado:
    status, venda, venda_at, notas e qualif_* sao historico e sao do dono.
    Esta lista e a trava estrutural da regra 1: sem ela, uma importacao de
-   agenda apagaria o funil e o faturamento da cliente em silencio. */
+   agenda apagaria o funil e o faturamento da cliente em silencio.
+
+   'wa_id' esta aqui porque a FUSAO tambem precisa preenche-lo. A base tem
+   hoje 11 leads com telefone e wa_id nulo (os do formulario do site, que o
+   enviar.php nao normaliza para E.164, entao o backfill anterior nao os
+   pegou). Quando a agenda trouxer o mesmo celular, o caminho 'funde' casa por
+   celular e completa o que esta vazio - e sem wa_id na lista o campo ficava
+   nulo. Na primeira mensagem da pessoa, wa_lead() (lib/wa-motor.php) consulta
+   por wa_id, nao acha, e INSERE um lead novo: exatamente a duplicacao que o
+   insert ja fecha do outro lado. Continua valendo a regra "so preenche o que
+   esta vazio" (wa_id ja preenchido nunca e sobrescrito) e "so celular vira
+   wa_id" (fixo nao tem WhatsApp), garantida a montante pelo pipeline. */
 const WA_IMPORT_CAMPOS_PREENCHIVEIS = [
-    'telefone','nome','email','cpf','rg','data_nascimento','nacionalidade','estado_civil',
+    'telefone','wa_id','nome','email','cpf','rg','data_nascimento','nacionalidade','estado_civil',
     'profissao','cep','endereco','numero','complemento','bairro','cidade','estado',
     'passaporte_numero','passaporte_orgao_emissor','passaporte_emissao','passaporte_validade',
     'contato_emergencia_nome','contato_emergencia_telefone','contato_emergencia_parentesco',
@@ -443,6 +454,13 @@ function wa_import_preenche($base, $c) {
         'data_nascimento'     => $c['data_nascimento'] ?? null,
     ], is_array($c['campos'] ?? null) ? $c['campos'] : []);
 
+    /* Depois do merge, e nao dentro dele: 'campos' e texto de arquivo de
+       terceiro (vCard/CSV) e agora que 'wa_id' esta na whitelist, uma chave
+       'wa_id' vinda do arquivo sobrescreveria esta. So o celular que o
+       pipeline validou pode virar wa_id - fixo nao tem WhatsApp, e um wa_id
+       inventado faria o motor responder a pessoa errada. */
+    $doCandidato['wa_id'] = $c['wa_id'] ?? null;
+
     foreach ($doCandidato as $k => $v) {
         if (!in_array($k, WA_IMPORT_CAMPOS_PREENCHIVEIS, true)) continue;
         if ($v === null || !is_scalar($v) || trim((string) $v) === '') continue;
@@ -562,6 +580,10 @@ function wa_import_linha_nova($c) {
     $linha = array_merge([
         'nome'                => $c['nome'] ?? '',
         'telefone'            => $c['wa_id'] ?? null,
+        // O motor do WhatsApp casa lead por wa_id (wa_lead() consulta wa_id=eq.
+        // e INSERE quando nao acha). Sem isto, a ficha rica duplicaria na
+        // primeira mensagem. So celular vira wa_id: fixo nao tem WhatsApp.
+        'wa_id'          => $c['wa_id'] ?? null,
         // Contato so com fixo (a Task 6 deixa passar de proposito): o numero
         // vai para ca, senao o lead nasce sem telefone nenhum e inalcancavel.
         'telefone_secundario' => $c['fixos'][0] ?? null,
@@ -574,6 +596,11 @@ function wa_import_linha_nova($c) {
         'revisado'            => $ehCrm ? true : false,
         'cliente'             => $ehCrm ? true : false,
     ], $campos);
+
+    // Mesma razao do wa_import_preenche: 'wa_id' entrou na whitelist, entao
+    // $campos (texto de arquivo de terceiro) passaria por ela e venceria o
+    // array_merge. So o celular validado pelo pipeline vira wa_id.
+    $linha['wa_id'] = $c['wa_id'] ?? null;
 
     // null numa coluna date passa; texto torto derrubaria o insert inteiro.
     foreach (WA_IMPORT_COLUNAS_DATA as $k) {
@@ -651,4 +678,19 @@ function wa_import_resumo($plano) {
         }
     }
     return $r;
+}
+
+/* ============================================================
+   IDENTIDADE DO LOTE (idempotencia da importacao)
+============================================================ */
+
+/* Identidade de um lote de importacao. O CONTEUDO, nao o nome do arquivo: a
+   cliente vai exportar dois aparelhos e os dois podem se chamar contatos.vcf.
+   A origem entra no hash porque o MESMO arquivo aplicado como agenda-esposa e
+   depois como agenda-marido e engano do operador, nao segunda importacao.
+
+   O \0 separa os dois campos. Sem ele a concatenacao e ambigua: 'ag'+'endaX'
+   e 'age'+'ndaX' dariam o mesmo hash, e dois lotes diferentes se confundiriam. */
+function wa_import_hash_lote($texto, $origem) {
+    return hash('sha256', (string) $origem . "\0" . (string) $texto);
 }

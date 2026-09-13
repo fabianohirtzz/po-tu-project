@@ -16,9 +16,10 @@ function pega(nome) {
 const ctx = new Function(
   'function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c]));}' +
   pega('poResumoTexto') + pega('poLinhaRevisao') + pega('poIcCamposEnvio') +
-  '; return {poResumoTexto, poLinhaRevisao, poIcCamposEnvio};'
+  pega('poLinhaFusao') + pega('poIcForcarEnvio') + pega('poIcAvisoLote') +
+  '; return {poResumoTexto, poLinhaRevisao, poIcCamposEnvio, poLinhaFusao, poIcForcarEnvio, poIcAvisoLote};'
 )();
-const { poResumoTexto, poLinhaRevisao, poIcCamposEnvio } = ctx;
+const { poResumoTexto, poLinhaRevisao, poIcCamposEnvio, poLinhaFusao, poIcForcarEnvio, poIcAvisoLote } = ctx;
 
 /* ---------- poResumoTexto: a frase que diz o que vai acontecer ANTES de
    aplicar (spec 9.5) ---------- */
@@ -130,5 +131,80 @@ const ver = (arq) => {
   return Number(m[1]);
 };
 assert.ok(ver('clientes.js') >= 2, 'clientes.js subiu de versao junto com a mudanca de poChavePessoa');
+assert.ok(ver('importar-contatos.js') >= 3, 'importar-contatos.js subiu de versao (poLinhaFusao/forcar/aviso de lote)');
+
+/* ---------- poLinhaFusao: quais fusoes vao preencher quais campos (task 3,
+   spec 9.5) — o dado ja vinha na resposta do preview e a tela descartava
+   todo 'funde'. A cliente autoriza uma escrita sem ver o que ela preenche. ---------- */
+
+// a fusao diz QUAIS campos vai preencher, com nome legivel
+const h = poLinhaFusao({nome:'Maria', match_por:'cpf', match_id:'L1',
+                        preenche:['telefone','cidade','passaporte_numero']});
+assert.ok(h.includes('Maria'), 'mostra o nome');
+assert.ok(/cpf/i.test(h), 'diz por que casou');
+assert.ok(/telefone/i.test(h) && /cidade/i.test(h), 'lista os campos que vai preencher');
+assert.ok(/passaporte/i.test(h), 'inclusive os do bloco de ficha');
+
+// fusao sem campo nenhum precisa dizer isso, senao a cliente acha que vai mudar algo
+const vazio = poLinhaFusao({nome:'Joao', match_por:'celular', match_id:'L2', preenche:[]});
+assert.ok(/nada a preencher|nenhum campo/i.test(vazio),
+  'fusao sem campo diz que nao preenche nada');
+
+// dado de terceiro escapado: o nome vem da agenda de outra pessoa
+const mal = poLinhaFusao({nome:'<img src=x onerror=alert(1)>', match_por:'cpf',
+                          match_id:'L3', preenche:['cidade']});
+assert.ok(!mal.includes('<img src=x'), 'nome de terceiro escapado');
+assert.ok(mal.includes('&lt;img'), 'aparece escapado, nao sumido');
+
+// nome de coluna tambem e escapado: vem do servidor, mas nao custa
+const colMal = poLinhaFusao({nome:'Ana', match_por:'cpf', match_id:'L4',
+                             preenche:['<script>']});
+assert.ok(!colMal.includes('<script>'), 'nome de coluna escapado');
+
+/* ---------- poIcForcarEnvio: a caixa "importar novamente" (ruling A da
+   Task 2) — a guarda de 409 do servidor tem lease de 10min sem escape
+   pela interface. So o aplicar pode mandar forcar=1, e so quando a caixa
+   estiver marcada; o preview nunca manda (a guarda de servidor ja nao
+   bloqueia preview, e o codigo nao pode confiar so na UI escondendo o
+   campo). ---------- */
+assert.equal(poIcForcarEnvio('aplicar', true), true, 'aplicar com a caixa marcada manda forcar');
+assert.equal(poIcForcarEnvio('aplicar', false), false, 'aplicar com a caixa desmarcada nao manda forcar');
+assert.equal(poIcForcarEnvio('aplicar', undefined), false, 'aplicar sem checkbox no DOM nao manda forcar (defensivo)');
+assert.equal(poIcForcarEnvio('preview', true), false, 'preview NUNCA manda forcar, mesmo com a caixa marcada');
+
+/* ---------- poIcAvisoLote: 'lote_registrado'===false (ruling B da Task 2)
+   — os contatos foram gravados, mas o registro do lote nao fechou; sem
+   ele uma reimportacao do mesmo arquivo passaria pela guarda e duplicaria.
+   Nao e erro (a importacao deu certo): e aviso. ---------- */
+const avisoFalhou = poIcAvisoLote({ ok: true, aplicado: {}, lote_registrado: false });
+assert.ok(/nao consegui registrar|confira/i.test(avisoFalhou), 'lote_registrado=false avisa para conferir antes de importar de novo');
+
+assert.equal(poIcAvisoLote({ ok: true, aplicado: {}, lote_registrado: true }), '', 'lote_registrado=true nao gera aviso');
+assert.equal(poIcAvisoLote({ ok: true, aplicado: {} }), '', 'resposta sem lote_registrado (ex.: preview) nao gera aviso');
+assert.equal(poIcAvisoLote(null), '', 'resposta ausente nao explode e nao gera aviso');
+
+/* ---------- a tela tem a caixa "importar novamente", desmarcada por
+   padrao (e escape hatch, nao fluxo normal) ---------- */
+assert.ok(/<input[^>]*id="ic-forcar"[^>]*type="checkbox"/.test(painel) || /<input[^>]*type="checkbox"[^>]*id="ic-forcar"/.test(painel),
+  'existe checkbox #ic-forcar');
+const checkboxTag = (painel.match(/<input[^>]*id="ic-forcar"[^>]*>/) || [''])[0];
+assert.ok(!/checked/.test(checkboxTag), 'a caixa "importar novamente" comeca desmarcada');
+assert.ok(/importar novamente/i.test(painel), 'a tela tem o texto "importar novamente" (o erro 409 cita esta frase)');
+
+/* ---------- placeholder da tabela "Fichas que vao ser completadas".
+   Ela nao tem wrapper escondivel (fica sempre visivel, porque "nenhuma ficha
+   sera completada" tambem e informacao), entao sem placeholder a aba abria
+   com cabecalho sobre corpo vazio. ---------- */
+const tbodyFusoes = (painel.match(/<tbody id="ic-fusoes">[\s\S]*?<\/tbody>/) || [''])[0];
+assert.ok(tbodyFusoes, 'existe o tbody #ic-fusoes');
+assert.ok(/class="empty"/.test(tbodyFusoes),
+  'a tabela de fusoes nasce com o placeholder padrao do projeto, nao vazia');
+// E o reset repoe o placeholder em vez de esvaziar: invalidar o preview
+// (arquivo novo, origem trocada) devolvia o corpo vazio.
+const reset = (src.match(/function poIcReset\(\)[\s\S]*?\n  \}/) || [''])[0];
+assert.ok(reset, 'poIcReset encontrada');
+assert.ok(/fusoesRows\.innerHTML = poIcFusoesVazio\(\)/.test(reset),
+  'o reset volta ao placeholder, nao a corpo vazio');
+assert.ok(/class="empty"/.test(pega('poIcFusoesVazio')), 'e o placeholder e o <div class="empty">');
 
 console.log('test-importar-contatos OK');

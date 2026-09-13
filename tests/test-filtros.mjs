@@ -103,4 +103,96 @@ assert.ok(funilSrc.includes('filtradosFunil()'), 'o quadro le de filtradosFunil'
 const cliSrc = readFileSync(new URL('../painel/clientes.js', import.meta.url), 'utf8');
 assert.ok(cliSrc.includes('filtradasPessoas()'), 'a aba Clientes le de filtradasPessoas');
 
+// Os relatorios nao podem contar a base importada no denominador: as 775 fichas
+// do CRM entraram com created_at=hoje e derrubariam a conversao do mes para ~0.
+// A extracao tem que fechar no \n} da propria funcao (o mesmo padrao usado
+// abaixo para renderLeads): sem ancora de fechamento, a regex casa com
+// qualquer origemImport depois do nome da funcao em qualquer ponto do
+// arquivo, e renderReports() logo abaixo ja usa l.origemImport no calculo
+// do contador — o teste ficava verde mesmo com o filtro removido.
+const rowsForReportsFn = src.match(/function rowsForReports\(\)[\s\S]*?\n\}/);
+assert.ok(rowsForReportsFn, 'rowsForReports encontrada');
+assert.ok(/poCorteImportados\(/.test(rowsForReportsFn[0]),
+  'rowsForReports passa pelo corte da base importada');
+assert.ok(/F\.importados/.test(src),
+  'existe um estado de filtro para incluir ou nao os importados');
+
+/* O corte em si, exercitado como funcao: e o UNICO lugar onde origemImport
+   decide quem conta, e agora DUAS telas o usam (Relatorios e o KPI da aba
+   Leads). Testar o comportamento, e nao so a presenca da palavra no fonte. */
+const { poCorteImportados } = new Function(pega('poCorteImportados') + '; return {poCorteImportados};')();
+const MISTO = [
+  {id:1, origemImport:''},               // lead normal do site
+  {id:2, origemImport:null},             // idem, campo nulo do banco
+  {id:3, origemImport:'crm-toninho'},    // base importada
+  {id:4, origemImport:'agenda-esposa'},  // base importada
+];
+assert.deepEqual(poCorteImportados(MISTO, {importados:false}).map(l => l.id), [1, 2],
+  'por padrao a base importada fica fora da conta');
+assert.deepEqual(poCorteImportados(MISTO, {importados:true}).map(l => l.id), [1, 2, 3, 4],
+  'com o controle ligado, entra todo mundo');
+assert.deepEqual(poCorteImportados(null, {importados:false}), [], 'lista ausente nao estoura');
+
+/* E a TABELA da aba Leads NAO muda: ela sempre mostrou tudo, e continuar
+   mostrando e o que permite a cliente achar a ficha de um cliente antigo.
+   O que mudou foi so o KPI, que abria dizendo "Leads no periodo: 775" com 0%
+   de conversao enquanto os Relatorios, do mesmo mes, diziam 0 leads. As duas
+   asserceos abaixo separam as duas coisas: a tabela recebe 'rows' inteiro, o
+   KPI recebe o corte. */
+const leads = src.match(/function renderLeads\(\)[\s\S]*?\n\}/);
+assert.ok(leads, 'renderLeads encontrada');
+assert.ok(!/origemImport/.test(leads[0]),
+  'a aba Leads nao filtra por origemImport na mao');
+assert.ok(/tb\.innerHTML=rows\.map/.test(leads[0]),
+  'a TABELA da aba Leads recebe as linhas inteiras, sem corte');
+assert.ok(/const doKpi=poCorteImportados\(rows,F\);/.test(leads[0]) &&
+          /renderLeadKpis\(doKpi,rows\.length-doKpi\.length\)/.test(leads[0]),
+  'e o KPI recebe o mesmo corte dos Relatorios, mais quantos ficaram de fora');
+
+/* O KPI explica o proprio numero. A aba Leads nao tem o controle
+   #rep-importados (ele mora so em Relatorios), entao "Leads no periodo: 0"
+   sobre uma tabela com 775 linhas precisa dizer por que - senao a correcao
+   so mudou a contradicao de lugar, de duas abas para a mesma tela. */
+const kpis = src.match(/function renderLeadKpis\([\s\S]*?\n\}/);
+assert.ok(kpis, 'renderLeadKpis encontrada');
+const { renderLeadKpis } = new Function(
+  'let alvo=null;' +
+  'const $=()=>({set innerHTML(v){alvo=v;}});' +
+  'function isPago(o){return o==="pago";}' +
+  'function brl2(v){return "R$ "+v;}' +
+  kpis[0] + '; return {renderLeadKpis:(r,f)=>{renderLeadKpis(r,f);return alvo;}};'
+)();
+const linha = (over) => Object.assign({status:'novo', origem:'organico', ven:0, orc:0}, over||{});
+
+const comFora = renderLeadKpis([], 775);
+assert.ok(/Leads no período/.test(comFora), 'o KPI e o de "Leads no periodo"');
+assert.ok(/775 contatos importados fora da conta/.test(comFora),
+  'o subtexto explica quantos a tabela mostra e o KPI nao conta');
+assert.ok(/<div class="kpi-n">0<\/div>/.test(comFora),
+  'e o total em si segue sendo o do recorte (0), nao os 775 da tabela');
+// O numero do subtexto vem do argumento, nao e fixo no fonte.
+assert.ok(/42 contatos importados fora da conta/.test(renderLeadKpis([], 42)),
+  'o numero do subtexto vem da conta');
+assert.ok(/1 contato importado fora da conta/.test(renderLeadKpis([], 1)),
+  'singular no singular');
+
+// Sem importado no recorte, o subtexto volta ao que sempre foi.
+const semFora = renderLeadKpis([linha({origem:'pago'}), linha()], 0);
+assert.ok(/1 pago · 1 orgânico/.test(semFora), 'caso normal nao ganha ruido');
+assert.ok(!/fora da conta/.test(semFora), 'e nao fala de importados quando nao ha nenhum');
+assert.ok(/1 pago · 1 orgânico/.test(renderLeadKpis([linha({origem:'pago'}), linha()])),
+  'sem o argumento (chamada antiga) tambem cai no caso normal');
+assert.ok(!/poCorteImportados/.test((src.match(/function filtered\(\)[^\n]*/) || [''])[0]),
+  'filtered() — a fonte da tabela — segue sem o corte');
+
+/* ---------- o controle "incluir a base importada" comeca desmarcado.
+   Mesmo padrao do checkbox #ic-forcar em test-importar-contatos.mjs: se um
+   dia nascer marcado, os relatorios abrem contando as 775 fichas do CRM e a
+   conversao do mes despenca de novo, em silencio. ---------- */
+const painel = readFileSync(new URL('../painel/index.html', import.meta.url), 'utf8');
+const repImportadosTag = (painel.match(/<input[^>]*id="rep-importados"[^>]*>/) || [''])[0];
+assert.ok(repImportadosTag, 'existe o checkbox #rep-importados');
+assert.ok(!/checked/.test(repImportadosTag),
+  'a caixa "incluir a base importada" comeca desmarcada');
+
 console.log('test-filtros OK');
