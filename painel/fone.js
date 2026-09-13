@@ -22,13 +22,24 @@ function poE164(bruto) {
   let d = String(bruto == null ? '' : bruto).replace(/\D+/g, '');
   if (d === '') return null;
   // Prefixo internacional discado ("0048 ..."), que a agenda do celular
-  // exporta. So tira quando sobram 10 digitos ou mais.
-  if (d.length >= 12 && d.slice(0, 2) === '00') d = d.slice(2);
+  // exporta. So tira quando o que sobra vem com o DDI 55 ou ja e numero
+  // brasileiro completo - sem esse rigor "0053 7 838 1000" (Havana) virava
+  // +5553978381000. Ha um limite permanente aqui: Dinamarca, Noruega,
+  // Espanha, Belgica e Tailandia passam, porque a grafia 00+DDI deles e
+  // identica a 00+DDD daqui. Ver o comentario longo em lib/wa-fone.php.
+  // O "length >= 12" e redundante de proposito (ver o PHP).
+  if (d.length >= 12 && d.slice(0, 2) === '00') {
+    const sem = d.slice(2);
+    if (sem.slice(0, 2) === '55'
+      || (PO_DDDS.has(parseInt(sem.slice(0, 2), 10)) && PO_RE_LOCAL.test(sem.slice(2)))) d = sem;
+  }
   if (d.length >= 12 && d.slice(0, 2) === '55') d = d.slice(2);
   // Zero de operadora antes do DDD ("048 99999-0001"). So tira quando o que
   // sobra JA e um numero brasileiro completo - sem esse rigor "0800 123 4567"
   // viraria DDD 80 e "(01) 99999-9999" ganharia o nono digito e entraria como
-  // Campinas. Ver o comentario longo em lib/wa-fone.php.
+  // Campinas. Ver o comentario longo em lib/wa-fone.php. O "length >= 11" e o
+  // PO_DDDS.has daqui sao redundantes de proposito: nao sao trava, a trava e
+  // o PO_RE_LOCAL mais a validacao final.
   if (d.length >= 11 && d[0] === '0') {
     const sem = d.slice(1);
     if (PO_DDDS.has(parseInt(sem.slice(0, 2), 10)) && PO_RE_LOCAL.test(sem.slice(2))) d = sem;
