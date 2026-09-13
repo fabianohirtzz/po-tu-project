@@ -583,8 +583,27 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     `revisado=false` e **não há caminho para virar `true`**; o preview calcula `preenche` e
     nunca o mostra; as 775 entraram no denominador dos relatórios do mês sem filtro; e
     reaplicar o mesmo arquivo duplica as fichas sem CPF nem celular.
-- **Falta:** mergear e empurrar o plano 3 (ver aviso de PII abaixo), o plano 4 (transmissão),
-  a conexão real com a Meta,
+- **PLANO 3.1 — REVISÃO, PREVIEW E RELATÓRIOS: FEITO, MERGEADO E PUBLICADO.** 5 tarefas em
+  TDD; a suíte foi de 31 para **33 arquivos**. Novos: `painel/revisao.js`, migrations
+  `2026-09-12-import-lotes.sql` e `2026-09-12-import-lotes-estado.sql` (**as duas rodadas**).
+  - **Aba Revisão:** a fila de contatos importados, com ação em massa. Sem ela não existia
+    **nenhum** caminho para um contato virar `revisado=true`, e a importação de agenda era
+    um beco sem saída.
+  - **Regras permanentes deste subsistema:**
+    - **"Marcar todos" seleciona só os pendentes**, mesmo com "mostrar já revisados" ligado.
+      Sem isso, um clique em "Não é cliente" tirava os 775 clientes das campanhas de uma vez.
+    - **Ação em massa vai em lotes de 100.** `.in('id', ids)` com ~180 ids já estoura o
+      buffer de 8 KB do gateway (414). A spec 9.5 pede "lista em lotes" por esse motivo.
+    - **O lote de importação é RESERVADO antes da escrita** (o `unique` em `hash` é o lock),
+      com `concluido_at` marcando o fim. Registrar só no fim deixava passar o retry disparado
+      enquanto a primeira requisição ainda rodava — que é justamente o que o timeout produz.
+      Linha incompleta e mais velha que 10 min é órfã e libera nova tentativa.
+    - **`wa_id` está na whitelist da fusão.** Sem isso, uma ficha existente com telefone e
+      `wa_id` nulo fundia sem ganhar o `wa_id`, e o motor criava um lead novo na primeira
+      mensagem. São 11 fichas nessa situação hoje.
+    - **O KPI da aba Leads ignora a base importada; a TABELA mostra tudo.** A tabela é o que
+      permite achar a ficha de um cliente antigo; o KPI é o número que ela lê primeiro.
+- **Falta:** o plano 4 (transmissão), a conexão real com a Meta,
   a homologação, e a **conferência visual do painel com login real** — seis tarefas
   mexeram em `painel/app.js`, `index.html` e `painel.css`, e nenhum agente conseguiu
   passar do login do Supabase. O deploy foi validado por sintaxe, testes (19 arquivos),
