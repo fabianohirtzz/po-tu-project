@@ -603,6 +603,32 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
       mensagem. São 11 fichas nessa situação hoje.
     - **O KPI da aba Leads ignora a base importada; a TABELA mostra tudo.** A tabela é o que
       permite achar a ficha de um cliente antigo; o KPI é o número que ela lê primeiro.
+- **FAXINA + TELA DE TEXTOS (13/09): FEITA, MERGEADA E NO AR.** 5 tarefas; a suíte foi de
+  33 para **35 arquivos**. Novo: `painel/textos.js`, `lib/po-fone-lead.php`.
+  - **`wa_e164` aceita os formatos que export de agenda produz** (`0048…`, `048 …`), que
+    antes viravam `null` e faziam o contato entrar **sem telefone**. Medido sobre 96 mil
+    entradas: **zero telefones que funcionavam pararam de funcionar**.
+  - **Regras permanentes deste subsistema:**
+    - **O `wamid` de um evento `status` É o da mensagem original**, e `po_wa_mensagens.wamid`
+      é `unique`. Por isso status **não** passa pela idempotência de `po_wa_mensagens`: eles
+      competiriam pela mesma linha e o eco viraria `duplicado`, fazendo **o robô não se
+      calar**. A idempotência de entrega é do plano 4, em `po_wa_envios`.
+    - **Estrangeiro discado por `00` pode virar celular brasileiro plausível.** A regra não é
+      uma lista de países: é **todo DDI de dois dígitos que também é DDD válido**. Cuba,
+      Espanha, Peru e Coreia estão no catálogo de roteiros da casa. Conferir a lista
+      importada antes do primeiro disparo pago.
+    - **A ordem das perguntas é contrato:** `wa_respostas_numeradas` atribui sempre
+      `1 → data`, `2 → grupo`. Texto com as perguntas trocadas transforma o cliente-alvo em
+      lead perdido. A tela de textos valida isso.
+    - **Limite da Cloud API:** 1024 caracteres para legenda de documento e corpo de lista,
+      4096 para texto. `wa_send_text` e `wa_send_document` **não truncam** — acima disso a
+      Meta devolve 400 e o cliente não recebe nada, em silêncio.
+    - **Trava tem que ser no PONTO DE CHAMADA, não só na função pura.** Foi assim que o
+      filtro `wa_id` da conversa sumiu uma vez, e assim que a Task 4 passou verde reintroduzindo
+      o próprio bug.
+  - **A tela de Textos** deixa a cliente escrever as 7 mensagens do robô sem SQL. São elas
+    que viram os **templates submetidos à Meta**. A linha `saudacao` continua no banco e o
+    motor **nunca a lê** (resíduo do seed, decisão de não apagar).
 - **Falta:** o plano 4 (transmissão), a conexão real com a Meta,
   a homologação, e a **conferência visual do painel com login real** — seis tarefas
   mexeram em `painel/app.js`, `index.html` e `painel.css`, e nenhum agente conseguiu
