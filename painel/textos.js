@@ -55,6 +55,19 @@ function poTextosCatalogo() {
   ];
 }
 
+/* TETO DE CARACTERES POR MENSAGEM. A Cloud API recusa a mensagem INTEIRA
+   (400) quando o corpo estoura, e nem wa_send_text nem wa_send_document
+   truncam nada (lib/wa-send.php): legenda de PDF acima de 1024 faz
+   wa_envia_roteiro devolver 'falha_envio' e o cliente NUNCA recebe o
+   roteiro, em silencio. O menu passa por wa_send_list, que trunca em 1024
+   (wa-send.php:145) - cortar o texto da cliente pela metade tambem e
+   defeito, entao a recusa acontece aqui, onde da para consertar. Os demais
+   vao como texto simples, cujo teto e 4096. O 1024 vale em dobro porque
+   estes textos viram os templates da Meta, cujo corpo tambem para em 1024. */
+function poTextoLimite(chave) {
+  return (chave === 'envio_pdf' || chave === 'menu') ? 1024 : 4096;
+}
+
 /* Devolve null quando o texto pode ser salvo, ou a mensagem do problema.
    Quem le a mensagem e a cliente, nao um programador: ela diz QUAL variavel
    esta errada e quais existem naquela mensagem. */
@@ -63,6 +76,14 @@ function poTextoValida(chave, texto) {
   if (!cat) return 'Texto desconhecido.';
   const t = (texto == null ? '' : String(texto)).trim();
   if (t === '') return 'O texto não pode ficar vazio.';
+
+  // Tamanho antes de tudo: acima do teto a Cloud API recusa a mensagem
+  // inteira, e nesse caso nem adianta falar das variaveis.
+  const limite = poTextoLimite(chave);
+  if (t.length > limite) {
+    return 'Este texto tem ' + t.length + ' caracteres e o limite aqui é ' + limite + '. ' +
+           'Acima disso o WhatsApp recusa a mensagem inteira, e ela não chega ao cliente.';
+  }
 
   /* Casa QUALQUER coisa entre chaves, nao so /\{[a-z_]+\}/. O motor limpa o
      que sobrou com o regex estreito, entao toda grafia fora de [a-z_] escapa
@@ -120,7 +141,8 @@ function poLinhaTexto(item) {
     '<div class="txt-cab"><b>' + esc(it.rotulo) + '</b>' +
       '<span class="txt-vars">' + vars + '</span></div>' +
     '<div class="txt-ajuda">' + esc(it.ajuda) + '</div>' +
-    '<textarea class="txt-area" data-chave="' + esc(it.chave) + '" rows="3">' +
+    '<textarea class="txt-area" data-chave="' + esc(it.chave) + '" rows="3" ' +
+      'maxlength="' + poTextoLimite(it.chave) + '">' +
       esc(it.texto) + '</textarea>' +
     '<div class="txt-erro" hidden></div>' +
     '</div>';

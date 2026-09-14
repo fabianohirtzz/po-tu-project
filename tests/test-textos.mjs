@@ -19,10 +19,11 @@ function pegaAsync(nome) {
 const ESC = 'function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,' +
             'c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c]));}';
 
-const PURAS = ESC + pega('poTextosCatalogo') + pega('poLinhaTexto') + pega('poTextoValida');
+const PURAS = ESC + pega('poTextosCatalogo') + pega('poTextoLimite') +
+              pega('poLinhaTexto') + pega('poTextoValida');
 
-const { poTextosCatalogo, poLinhaTexto, poTextoValida } = new Function(
-  PURAS + '; return {poTextosCatalogo, poLinhaTexto, poTextoValida};'
+const { poTextosCatalogo, poTextoLimite, poLinhaTexto, poTextoValida } = new Function(
+  PURAS + '; return {poTextosCatalogo, poTextoLimite, poLinhaTexto, poTextoValida};'
 )();
 
 /* ============================================================
@@ -153,6 +154,41 @@ const naoExiste = poTextoValida('envio_pdf', 'Segue o {destino} completo do {rot
 assert.ok(naoExiste.includes('{destino}'), 'a mensagem diz qual variavel nao existe');
 assert.ok(naoExiste.includes('{roteiro}') && naoExiste.includes('{nome}'),
   'e lista as que existem naquela mensagem');
+
+/* TAMANHO. wa_send_list trunca em 1024 (lib/wa-send.php:145), mas
+   wa_send_text e wa_send_document NAO truncam nada: legenda de PDF acima de
+   1024 devolve 400, wa_envia_roteiro retorna 'falha_envio' e o cliente nunca
+   recebe o roteiro, em silencio. O menu e truncado - e cortar o texto da
+   cliente pela metade tambem e defeito. Os dois param em 1024; os demais vao
+   como texto simples, teto 4096. O 1024 vale em dobro porque estes textos
+   viram os templates da Meta, cujo corpo tambem para em 1024. */
+assert.equal(poTextoLimite('envio_pdf'), 1024, 'legenda de PDF para em 1024');
+assert.equal(poTextoLimite('menu'), 1024, 'corpo do menu de lista para em 1024');
+['perguntas', 'qualificado', 'sem_data', 'lembrete', 'lembrete_menu'].forEach(c =>
+  assert.equal(poTextoLimite(c), 4096, c + ' vai como texto simples, teto 4096'));
+
+const pdf1024 = '{roteiro}' + 'a'.repeat(1015);
+assert.equal(pdf1024.length, 1024, 'o caso de borda tem exatamente 1024');
+assert.equal(poTextoValida('envio_pdf', pdf1024), null, 'exatamente 1024 passa');
+const pdfEstourou = poTextoValida('envio_pdf', '{roteiro}' + 'a'.repeat(1016));
+assert.ok(pdfEstourou, '1025 caracteres na legenda do PDF e recusado');
+assert.ok(pdfEstourou.includes('1024'), 'e o erro diz qual e o limite');
+assert.ok(pdfEstourou.includes('1025'), 'e diz quanto o texto tem hoje');
+assert.ok(poTextoValida('menu', 'a'.repeat(1025)), 'o menu tambem para em 1024');
+
+assert.equal(poTextoValida('qualificado', 'a'.repeat(4096)), null, 'texto simples vai ate 4096');
+const simplesEstourou = poTextoValida('qualificado', 'a'.repeat(4097));
+assert.ok(simplesEstourou, 'acima de 4096 e recusado');
+assert.ok(simplesEstourou.includes('4096'), 'e o erro diz qual e o limite');
+
+// O teto tambem e o maxlength do textarea: a cliente esbarra enquanto
+// escreve, em vez de descobrir so ao salvar.
+assert.ok(poLinhaTexto({chave:'envio_pdf', rotulo:'x', texto:'', vars:[]}).includes('maxlength="1024"'),
+  'a caixa do envio_pdf limita em 1024');
+assert.ok(poLinhaTexto({chave:'menu', rotulo:'x', texto:'', vars:[]}).includes('maxlength="1024"'),
+  'a caixa do menu limita em 1024');
+assert.ok(poLinhaTexto({chave:'lembrete', rotulo:'x', texto:'', vars:[]}).includes('maxlength="4096"'),
+  'a caixa das demais limita em 4096');
 
 // Chave fora do catalogo nunca e aceita - inclusive a saudacao, que o motor
 // nao le: salvar um texto nela seria trabalho da cliente jogado fora.
