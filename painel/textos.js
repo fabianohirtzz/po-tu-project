@@ -60,7 +60,14 @@ function poTextoValida(chave, texto) {
   const t = (texto == null ? '' : String(texto)).trim();
   if (t === '') return 'O texto não pode ficar vazio.';
 
-  const usadas = (t.match(/\{[a-z_]+\}/g) || []).map(v => v.slice(1, -1));
+  /* Casa QUALQUER coisa entre chaves, nao so /\{[a-z_]+\}/. O motor limpa o
+     que sobrou com o regex estreito, entao toda grafia fora de [a-z_] escapa
+     das DUAS pontas e sai literal no WhatsApp do cliente: "{Nome}" (o que
+     qualquer pessoa escreve depois de ponto final, ou o que o corretor do
+     celular faz sozinho), "{ nome }" e "{nome2}". Aqui elas viram recusa com
+     o nome exato no erro, que e o unico lugar onde a cliente ve o problema
+     antes de o cliente ver. */
+  const usadas = (t.match(/\{[^}]*\}/g) || []).map(v => v.slice(1, -1));
   const desconhecida = usadas.find(v => cat.vars.indexOf(v) === -1);
   if (desconhecida) {
     return 'A variável {' + desconhecida + '} não existe aqui. Disponíveis: ' +

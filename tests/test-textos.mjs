@@ -67,6 +67,21 @@ assert.ok(poTextoValida('envio_pdf', 'Segue o {destino} completo.'),
 assert.ok(poTextoValida('menu', ''), 'texto vazio e recusado');
 assert.ok(poTextoValida('menu', '   '), 'so espaco e recusado');
 
+/* GRAFIA DA VARIAVEL. A validacao casava /\{[a-z_]+\}/ e o wa_texto limpa com
+   o MESMO regex, entao toda grafia fora de [a-z_] escapava das duas pontas e
+   saia literal no WhatsApp do cliente. "{Nome}" com maiuscula e o que qualquer
+   pessoa escreve depois de ponto final, ou o que o corretor do celular faz
+   sozinho. Tem que ser recusada, e com o nome certo no erro. */
+const maiuscula = poTextoValida('menu', 'Oi {Nome}, sobre qual viagem?');
+assert.ok(maiuscula, '{Nome} com maiuscula e recusada, nao sai literal no WhatsApp');
+assert.ok(maiuscula.includes('{Nome}'), 'e o erro mostra a grafia que a cliente escreveu');
+const comEspaco = poTextoValida('menu', 'Oi { nome }, sobre qual viagem?');
+assert.ok(comEspaco, '{ nome } com espaco e recusada');
+assert.ok(comEspaco.includes('{ nome }'), 'e o erro mostra a grafia com o espaco');
+const comDigito = poTextoValida('menu', 'Oi {nome2}, sobre qual viagem?');
+assert.ok(comDigito, '{nome2} e recusada');
+assert.ok(comDigito.includes('{nome2}'), 'e o erro nomeia a variavel inventada');
+
 // {nome} e opcional em todas: a cliente pode preferir nao usar o nome do perfil
 assert.equal(poTextoValida('menu', 'Sobre qual viagem voce quer saber?'), null,
   'nao usar {nome} e permitido');
