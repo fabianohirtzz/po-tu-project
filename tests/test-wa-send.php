@@ -131,6 +131,14 @@ $r = wa_send_template('+5548999990001', '');
 ok($r['ok'] === false,          'template sem nome nao e enviado');
 ok($capturado === $antes,       'template sem nome nao chega a chamar a Graph API');
 
+/* Telefone que nao normaliza nao pode virar chamada de rede: o payload sairia
+   com "to": null e a Meta devolveria erro por destinatario, um a um. As tres
+   funcoes irmas ja recusam antes; esta passou a recusar tambem. */
+$antes = $capturado;
+$r = wa_send_template('nao e telefone', 'roteiro_novo_2026', ['Marlene']);
+ok($r['ok'] === false,     'destinatario invalido nao envia template');
+ok($capturado === $antes,  'destinatario invalido nao chega a chamar a Graph API');
+
 wa_set_transport(null);
 
 echo "test-wa-send OK\n";

@@ -175,9 +175,14 @@ function wa_send_template($para, $template, $params = [], $idioma = 'pt_BR') {
         error_log('wa_send_template: nome de template vazio, nada enviado');
         return ['ok' => false, 'wamid' => null, 'erro' => 'template sem nome'];
     }
+    /* Mesma guarda das irmas (wa_send_text, wa_send_document, wa_send_list):
+       telefone que nao normaliza vira "to": null no payload, e a Graph API
+       recebe a chamada assim mesmo. Recusar aqui e mais barato e mais claro. */
+    $to = wa_destino($para);
+    if (!$to) return ['ok' => false, 'wamid' => null, 'erro' => 'telefone invalido: ' . $para];
     $msg = [
         'messaging_product' => 'whatsapp',
-        'to'                => wa_destino($para),
+        'to'                => $to,
         'type'              => 'template',
         'template'          => [
             'name'     => $template,
