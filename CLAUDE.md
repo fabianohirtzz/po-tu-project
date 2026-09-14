@@ -146,6 +146,28 @@ rm -f "$SCRATCH/.netrc"
 
 Depois do deploy, testar com **Ctrl+F5** (cache do navegador para JS/CSS).
 
+#### Conferir o deploy: `bash scripts/confere-deploy.sh`
+
+Compara o painel publicado com o repo **arquivo por arquivo**, montando a lista a
+partir do proprio `painel/index.html` (arquivo novo entra sozinho na conferencia).
+
+**A regra que ele encarna, e que custou um bug em producao:** conferir a **lista
+completa**, nunca a lista do que voce lembra de ter subido. Em 13/09/2026 o deploy
+subiu o `painel/index.html` (que passou a pedir `app.js?v=8`) e **nao** subiu o
+`painel/app.js` nem o `painel/painel.css`. A conferencia olhou so os arquivos
+enviados e deu tudo certo; a aba "Textos do robo" foi ao ar desenhando a tela de
+Roteiros, porque o `app.js` publicado nao conhecia a view.
+
+**O `?v=` nao muda o arquivo no servidor.** Ele so muda a URL que o navegador
+pede. Subir o `index.html` com versao nova sem subir o arquivo faz o cache-buster
+servir o conteudo velho — e pior, carimba o conteudo velho na versao nova por mais
+um mes. Quando isso acontecer, **suba o `?v=` de novo**: quem ja abriu o painel tem
+o par errado em cache.
+
+`tests/test-cache-buster.mjs` amarra cada `?v=` ao **SHA** do arquivo
+(`painel/assets-lock.json`): arquivo alterado sem bump fica vermelho. Pino no
+numero na mao nao protege nada — o que existia passou verde com o bug dentro.
+
 ## Regras de copy (Freela)
 
 Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e tradição
