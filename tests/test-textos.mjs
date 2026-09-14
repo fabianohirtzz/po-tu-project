@@ -365,10 +365,9 @@ for (const s of ['config.js', 'video-encode.js', 'fone.js', 'app.js', 'clientes.
     s + ' continua carregado no painel');
 }
 
-// Cache-buster: deploy e FTP manual e o .htaccess cacheia JS/CSS por 1 mes.
-// Arquivo alterado sem ?v= novo chega velho no navegador da cliente.
-for (const [arq, v] of [['app.js', 8], ['textos.js', 2], ['painel.css', 7]]) {
-  assert.ok(painel.includes(arq + '?v=' + v + '"'), arq + ' esta em ?v=' + v);
-}
+// O cache-buster e travado em tests/test-cache-buster.mjs, amarrado ao SHA do
+// arquivo. Aqui ficava um pino no numero (['app.js', 8]) que passou verde
+// enquanto o app.js ja estava alterado e o ?v= parado - que e exatamente como
+// a aba de textos foi ao ar mostrando a tela de Roteiros.
 
 console.log('test-textos OK');
