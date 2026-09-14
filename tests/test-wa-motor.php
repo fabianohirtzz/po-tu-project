@@ -389,4 +389,32 @@ ok(count($ENVIADAS) === 0, 'nenhum envio acontece para um evento de status');
 ok($DB['po_wa_conversas'] === [], 'evento de status nao cria nem altera conversa');
 ok($DB['po_leads'] === [], 'evento de status nao cria nem altera lead');
 
+/* ---------- pontuacao quando o nome vem vazio ----------
+   O {nome} sai do perfil do WhatsApp de quem escreve (contacts[0].profile.name
+   em lib/wa-webhook.php) e vem NULO quando a pessoa nao tem nome no perfil ou
+   quando o payload chega sem o bloco contacts. Nos lembretes o nome vem do
+   lead, que tambem pode estar vazio.
+
+   A limpeza so juntava pontuacao IGUAL, entao "Perfeito, {nome}." virava
+   "Perfeito,." e saia assim no WhatsApp do cliente. A unica forma que escapava
+   era "Oi {nome},", o que na pratica obrigava todo texto da tela a comecar por
+   saudacao. Os textos do seed tinham exatamente este defeito. */
+$casos = [
+    ['Perfeito, {nome}.',                     'Perfeito.'],
+    ['Entendo, {nome}. Vou registrar.',       'Entendo. Vou registrar.'],
+    ['Que boa noticia, {nome}!',              'Que boa noticia!'],
+    ['Fechado, {nome}?',                      'Fechado?'],
+    ['Aqui esta o roteiro do Japao, {nome}.', 'Aqui esta o roteiro do Japao.'],
+    ['Oi {nome}, tudo bem?',                  'Oi, tudo bem?'],
+];
+foreach ($casos as $c) {
+    $saiu = wa_limpa_pontuacao(preg_replace('/\{[a-z_]+\}/', '', $c[0]));
+    ok($saiu === $c[1], "nome vazio em [{$c[0]}] deve virar [{$c[1]}], saiu [$saiu]");
+}
+// Com o nome presente nada pode ser comido.
+ok(wa_limpa_pontuacao('Perfeito, Marlene.') === 'Perfeito, Marlene.',
+   'com nome presente a virgula do vocativo fica de pe');
+ok(wa_limpa_pontuacao('Leve documento, passagem e seguro.') === 'Leve documento, passagem e seguro.',
+   'virgula comum no meio da frase nao e tocada');
+
 echo "test-wa-motor OK\n";

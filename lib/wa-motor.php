@@ -76,6 +76,12 @@ function wa_limpa_pontuacao($t) {
     $t = preg_replace('/ {2,}/', ' ', $t);           // espaco duplo
     $t = preg_replace('/\s+([,.!?;:])/', '$1', $t);  // espaco antes de pontuacao
     $t = preg_replace('/([,.!?;:])\1+/', '$1', $t);  // pontuacao duplicada
+    /* Virgula orfa ANTES do placeholder. A regra acima so junta pontuacao
+       IGUAL, entao "Perfeito, {nome}." com nome vazio virava "Perfeito,." e
+       saia assim no WhatsApp do cliente. So a forma "Oi {nome}," escapava, o
+       que obrigava todo texto da tela a comecar por saudacao. Vale tambem
+       para os textos que estao no banco desde o seed. */
+    $t = preg_replace('/[,;:]\s*([.!?])/', '$1', $t);
     return trim($t);
 }
 
