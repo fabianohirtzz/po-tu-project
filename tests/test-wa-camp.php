@@ -106,6 +106,10 @@ ok(wa_camp_degrau(1, 20, 50)  === 50,
    'do primeiro degrau nao se desce mais');
 ok(wa_camp_degrau(2, 7, 150)  === 400,
    'exatamente 4,6% de falha ainda sobe: o corte e ACIMA de 5%');
+ok(wa_camp_degrau(2, 5, 100) === 400,
+   'exatamente 5,00% de falha ainda sobe de degrau: o corte e ACIMA de 5%');
+ok(wa_camp_degrau(0, 100, 100) === 50,
+   'degrau 0 com falha ruim continua em 50, nunca abaixo do primeiro');
 
 /* Divisao por zero: campanha anterior sem nenhum envio. */
 ok(wa_camp_degrau(3, 0, 0) === 1000, 'campanha anterior vazia nao derruba o degrau');
