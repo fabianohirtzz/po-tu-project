@@ -36,7 +36,21 @@ $ENVIADAS = [];
 $ESCRITAS_MENSAGENS = [];
 wa_db_set_transport(function ($metodo, $url, $corpo) use (&$ESCRITAS_MENSAGENS) {
     if (in_array($metodo, ['POST', 'PATCH'], true) && strpos($url, 'po_wa_mensagens') !== false) {
+        // Registra em vez de falhar direto: quem acusa isto e a assercao
+        // dedicada do teste 19 (`ok(!$ESCRITAS_MENSAGENS, ...)`), com
+        // mensagem propria explicando o porque.
         $ESCRITAS_MENSAGENS[] = [$metodo, $url, $corpo];
+        return ['status' => 200, 'body' => '[]'];
+    }
+    /* So po_wa_envios e esperado aqui, pelo recibo de entrega (Task 7): no
+       fluxo correto e a UNICA tabela que chega pela camada crua neste
+       arquivo. Um simulador que responde "200, vazio" para QUALQUER tabela
+       transforma toda chamada direta futura a wa_db_* em sucesso silencioso
+       - foi assim que o vazamento de rede real para o Supabase de producao
+       passou despercebido da primeira vez (ver task-7-report.md). */
+    if (strpos($url, 'po_wa_envios') === false) {
+        fwrite(STDERR, "ASSERT: chamada de banco nao simulada no teste do motor: $metodo $url\n");
+        exit(1);
     }
     return ['status' => 200, 'body' => '[]'];
 });
@@ -424,6 +438,11 @@ ok($DB['po_leads'] === [], 'evento de status nao cria nem altera lead');
    defeito por dentro. Esta assercao impede. */
 ok(!$ESCRITAS_MENSAGENS,
    'evento de status nao escreve em po_wa_mensagens, nem pelo motor');
+/* A assercao acima olha o transporte cru. Mas o idioma do motor para escrever nesta
+   tabela e wa_call (injecao de dependencia), que no teste grava direto em $DB e nunca
+   passa pelo transporte. Sem esta segunda linha, injetar o defeito real no ramo de
+   status deixa a suite inteira VERDE - foi medido. */
+ok($DB['po_wa_mensagens'] === [], 'nem pela injecao de dependencia');
 
 /* ---------- pontuacao quando o nome vem vazio ----------
    O {nome} sai do perfil do WhatsApp de quem escreve (contacts[0].profile.name

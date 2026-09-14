@@ -64,6 +64,41 @@ ok($DB['po_wa_envios'][0]['lido_at'] === $antes['lido_at'],
 $DB['po_wa_envios'][0]['status'] = 'enviado';
 ok(wa_camp_recibo('wamid.AAA', 'failed') === 'falha', 'failed vira falha');
 
+/* --- falha e terminal: nem um "delivered" reentregue nem um "read"
+   posterior tiram o envio da falha. A Meta reentrega webhook fora de
+   ordem (regra 1), e o caso mais caro de errar e exatamente este: sem
+   posto proprio na escada, `falha` cairia no degrau mais baixo e um
+   `delivered` reentregue DEPOIS do `failed` ressuscitaria o envio - o
+   relatorio de uma campanha paga esconderia a falha, com a coluna `erro`
+   (que este arquivo nao escreve, mas o painel le) contradizendo o status. */
+$DB['po_wa_envios'][] = ['id'=>'E2', 'campanha_id'=>'C1', 'lead_id'=>'L2', 'wa_id'=>'+5548999990002',
+    'wamid'=>'wamid.BBB', 'status'=>'enviado', 'entregue_at'=>null, 'lido_at'=>null];
+
+function linha_bbb($DB) {
+    foreach ($DB['po_wa_envios'] as $e) if ($e['wamid'] === 'wamid.BBB') return $e;
+    return null;
+}
+
+ok(wa_camp_recibo('wamid.BBB', 'delivered') === 'entregue', 'BBB: delivered vira entregue');
+$entregue_at_original = linha_bbb($DB)['entregue_at'];
+ok(!empty($entregue_at_original), 'BBB: entregue_at carimbado na primeira entrega');
+
+ok(wa_camp_recibo('wamid.BBB', 'failed') === 'falha', 'BBB: failed vira falha mesmo depois de entregue');
+
+ok(wa_camp_recibo('wamid.BBB', 'delivered') === 'falha',
+   'BBB: delivered reentregue DEPOIS do failed nao ressuscita o envio');
+ok(linha_bbb($DB)['status'] === 'falha', 'BBB: status continua falha apos o delivered reentregue');
+// m3: o cenario que de fato exercita o carimbo condicional de entregue_at e
+// este vaivem, nao um recibo repetido isolado - o original tem que
+// sobreviver ao delivered reentregue que a escada barrou.
+ok(linha_bbb($DB)['entregue_at'] === $entregue_at_original,
+   'BBB: entregue_at original sobrevive ao vaivem');
+
+ok(wa_camp_recibo('wamid.BBB', 'read') === 'falha',
+   'BBB: read depois do failed tambem nao tira da falha');
+ok(linha_bbb($DB)['status'] === 'falha', 'BBB: status continua falha apos o read');
+ok(empty(linha_bbb($DB)['lido_at']), 'BBB: lido_at nunca e carimbado, a falha bloqueou a entrada');
+
 /* wamid que nao e de campanha (o PDF do roteiro, a pergunta do motor) devolve
    null e nao escreve nada. E o caso mais comum de todos. */
 ok(wa_camp_recibo('wamid.NAOEXISTE', 'delivered') === null,

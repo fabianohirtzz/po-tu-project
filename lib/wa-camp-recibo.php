@@ -11,10 +11,23 @@
 
 require_once __DIR__ . '/wa-db.php';
 
-/* A escada de status. So se anda PARA FRENTE: a Meta reentrega webhook fora
-   de ordem, e um `delivered` que chega depois de um `read` nao pode rebaixar
-   o envio - o relatorio de leitura encolheria sozinho. */
-const WA_RECIBO_ORDEM = ['reservado' => 0, 'enviado' => 1, 'entregue' => 2, 'lido' => 3];
+/* A escada completa, com os seis status que o check de po_wa_envios aceita.
+   `falha` fica no TOPO e e terminal: a Meta reenvia webhook fora de ordem, e
+   sem posto proprio ela caia no degrau zero (`?? 0`), onde um `delivered`
+   reentregue depois de um `failed` RESSUSCITAVA o envio - o relatorio
+   escondia a falha e a coluna `erro` ficava contradizendo o status.
+   `enviando` entra por completude: ele so sobe.
+
+   Com falha no topo, a comparacao generica la embaixo ja garante sozinha o
+   "falha entra de qualquer lugar, e nao sai de lugar nenhum": entrar sempre
+   tem $para=5, maior que qualquer $de abaixo; sair sempre tem $para<=5, que
+   e o proprio $de quando $atual='falha'. Por isso o tratamento especial que
+   existia antes (pular a escada quando $novo==='falha') foi removido: ele
+   so era necessario porque falha nao tinha posto. */
+const WA_RECIBO_ORDEM = [
+    'reservado' => 0, 'enviando' => 1, 'enviado' => 2,
+    'entregue'  => 3, 'lido'     => 4, 'falha'   => 5,
+];
 
 const WA_RECIBO_MAPA = [
     'delivered' => 'entregue',
@@ -31,21 +44,27 @@ function wa_camp_recibo($wamid, $status_meta) {
     if ($novo === null) return null;
 
     $linhas = wa_db_select_estrito('po_wa_envios', 'wamid=eq.' . rawurlencode($wamid));
-    // null = erro de leitura; [] = nao e wamid de campanha (o caso mais comum
-    // de todos: o PDF do roteiro e as perguntas do motor tambem geram status).
+    if ($linhas === null) {
+        // Erro de leitura, nao ausencia. A Meta ja recebeu 200 e NAO
+        // reenvia este recibo, entao o rastro no log e a unica chance de
+        // reconciliar depois.
+        error_log('wa_camp_recibo: leitura de po_wa_envios falhou | wamid ' . $wamid);
+        return null;
+    }
+    // Lista vazia e o caso mais comum de todos: o PDF do roteiro e as
+    // perguntas do motor tambem geram status, e nenhum deles e de campanha.
     if (!$linhas) return null;
 
     $e     = $linhas[0];
     $atual = $e['status'] ?? 'enviado';
 
-    /* 'falha' e a excecao a escada: a Meta pode recusar DEPOIS de aceitar
-       (numero invalido, bloqueio), e isso e informacao nova em qualquer
-       ponto. Os demais so avancam. */
-    if ($novo !== 'falha') {
-        $de   = WA_RECIBO_ORDEM[$atual] ?? 0;
-        $para = WA_RECIBO_ORDEM[$novo]  ?? 0;
-        if ($para <= $de) return $atual;         // ja estava igual ou adiante
-    }
+    // SO PARA FRENTE. Com falha no topo da escada (WA_RECIBO_ORDEM), esta
+    // unica comparacao ja cobre a regra 1 (a Meta reentrega fora de ordem,
+    // ninguem rebaixa) e a regra 2 (falha entra de qualquer ponto abaixo e
+    // nunca sai).
+    $de   = WA_RECIBO_ORDEM[$atual] ?? 0;
+    $para = WA_RECIBO_ORDEM[$novo]  ?? 0;
+    if ($para <= $de) return $atual;         // ja estava igual ou adiante
 
     $campos = ['status' => $novo];
     // O carimbo so e escrito se ainda nao existe: recibo repetido e o caso
