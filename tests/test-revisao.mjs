@@ -454,7 +454,16 @@ assert.ok(!/A agenda tem médico, fornecedor e família/.test(painel),
 
 // Cache-buster: deploy e FTP manual e o .htaccess cacheia JS por 1 mes.
 // Arquivo alterado sem ?v= novo chega velho no navegador da cliente.
-for (const [arq, v] of [['app.js', 7], ['revisao.js', 2], ['importar-contatos.js', 5]]) {
+// O numero do app.js anda a cada mudanca nele (a aba de textos do robo o
+// levou de 7 para 8): o que o teste tranca e que ele NAO fique parado.
+// O fone.js entra nesta lista porque ja escapou uma vez: ganhou 26 linhas
+// e o pino ficou em ?v=1, e o painel JA esta em producao - o navegador da
+// cliente rodaria o poE164 antigo enquanto o PHP roda o novo, que e
+// exatamente a divergencia que a regra "porte 1:1" existe para impedir,
+// entrando pelo cache. Consumidor real: painel/clientes.js, a chave de
+// agrupamento da ficha de pessoa.
+for (const [arq, v] of [['app.js', 8], ['revisao.js', 2], ['importar-contatos.js', 5],
+                        ['fone.js', 2]]) {
   assert.ok(painel.includes('src="' + arq + '?v=' + v + '"'),
     arq + ' subiu para ?v=' + v);
 }

@@ -489,3 +489,26 @@ tbody tr:last-child td{border-bottom:none}
 .rev-sit--pend{color:var(--st-aberto)}
 .rev-sit--cli{color:var(--st-venda)}
 .rev-sit--nao{color:var(--muted)}
+
+/* ===== TEXTOS DO ROBO =====
+   O que o robo manda no WhatsApp, editavel sem SQL. Cada mensagem e um
+   cartao: rotulo, as variaveis que aquela mensagem aceita, a explicacao de
+   quando ela sai, a caixa de edicao e o lugar do erro logo abaixo dela -
+   quem le e a cliente, entao o problema tem que aparecer colado no campo
+   que o causou, nao so no toast. */
+.txt-h2{margin-top:0}
+.txt-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:16px 18px;margin-bottom:12px;box-shadow:var(--shadow)}
+.txt-cab{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.txt-cab b{font-size:.92rem;color:var(--ink)}
+.txt-vars{display:flex;gap:6px;flex-wrap:wrap}
+.txt-vars code,.ic-sub code{font-family:var(--font-mono);font-size:.68rem;color:var(--muted);
+  border:1px solid var(--border);border-radius:5px;padding:2px 6px}
+.txt-ajuda{font-size:.76rem;color:var(--muted);margin:4px 0 10px;max-width:640px}
+.txt-area{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  padding:10px 12px;color:var(--ink);font-size:.86rem;line-height:1.55;resize:vertical;
+  outline:none;transition:border-color .18s}
+.txt-area:focus{border-color:var(--azul)}
+.txt-area.erro{border-color:var(--st-perdido)}
+.txt-erro{margin-top:6px;font-size:.76rem;font-weight:600;color:var(--st-perdido)}
+#txt-salvar{margin-top:4px}

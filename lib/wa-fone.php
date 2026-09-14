@@ -18,13 +18,72 @@ const WA_DDDS = [
     91,92,93,94,95,96,97,98,99,
 ];
 
+/* Numero local brasileiro COMPLETO, do jeito que veio: celular de 9 digitos
+   comecando em 9, ou fixo de 8 comecando entre 2 e 5. E a mesma dupla de
+   formatos que a validacao final cobra; virou constante porque a limpeza do
+   zero de operadora (abaixo) precisa do MESMO rigor, e duas copias da regra
+   sairiam do lugar uma da outra. */
+const WA_RE_LOCAL = '/^(9\d{8}|[2-5]\d{7})$/';
+
 function wa_e164($bruto) {
     $d = preg_replace('/\D+/', '', (string) $bruto);
     if ($d === '') return null;
 
+    // Prefixo internacional discado: a agenda do celular exporta "0048 ..."
+    // quando o contato foi salvo a partir de uma ligacao internacional. So
+    // tira quando o que sobra e reconhecivel como brasileiro: ou vem com o
+    // DDI 55, ou ja e um numero COMPLETO (o MESMO rigor do zero de operadora,
+    // logo abaixo). Sem esse rigor, "0053 7 838 1000" - um hotel em Havana,
+    // destino que a casa vende - virava +5553978381000, porque 53 e DDD de
+    // Pelotas e o resto de 8 digitos ganhava o nono. Numero estrangeiro dentro
+    // da base de disparo pago e a cliente pagando por destinatario.
+    //
+    // LIMITE PERMANENTE, sem saida possivel: enquanto a fixture exigir
+    // "0048 3222-0000" -> +554832220000, a grafia 00+DDI da Dinamarca (+45),
+    // Noruega (+47), Espanha (+34), Belgica (+32) e Tailandia (+66) fica
+    // indistinguivel de 00+DDD brasileiro. "0045 3314-1414" e Copenhague E E
+    // fixo de Cascavel na mesma string, digito por digito. Esses cinco paises
+    // passam, e passam de proposito - nao ha informacao no numero que separe.
+    // A primeira guarda (>= 12) e redundante de proposito: para o corte
+    // acontecer, o que sobra tem de ter 10 ou 11 digitos (e o que o regex
+    // local aceita), entao a entrada ja teria 12 ou 13. Mutacao confirmada.
+    if (strlen($d) >= 12 && substr($d, 0, 2) === '00') {
+        $sem = substr($d, 2);
+        if (substr($sem, 0, 2) === '55'
+            || (in_array((int) substr($sem, 0, 2), WA_DDDS, true)
+                && preg_match(WA_RE_LOCAL, substr($sem, 2)))) {
+            $d = $sem;
+        }
+    }
+
     // DDI do Brasil, quando veio. 13 digitos = 55 + DDD + 9 digitos.
     if (strlen($d) >= 12 && substr($d, 0, 2) === '55') {
         $d = substr($d, 2);
+    }
+
+    // Zero de operadora antes do DDD ("048 99999-0001"). So tira quando o que
+    // sobra JA e um numero brasileiro completo: DDD que existe de fato mais
+    // celular de 9 digitos ou fixo de 8. O rigor e o que separa esta regra de
+    // uma ingenua: sem ele, "0800 123 4567" viraria DDD 80 e "(01) 99999-9999"
+    // (DDD 01, que nao existe) viraria 19 + 99999999, ganharia o nono digito
+    // no passo seguinte e entraria como Campinas. Numero de empresa ou lixo de
+    // agenda dentro da base de disparo pago e o erro caro deste arquivo.
+    // O preco desse rigor: "0 48 9604-8882" (zero de operadora + celular
+    // ANTIGO de 8 digitos) segue recusado, porque e ambiguo com o caso acima.
+    //
+    // Duas guardas aqui sao redundantes DE PROPOSITO, e ficam por clareza:
+    // o "strlen >= 11" (para o corte acontecer o que sobra precisa ter 10 ou
+    // 11 digitos, entao a entrada ja tem 11 ou 12) e o in_array do DDD (a
+    // validacao final refaz essa checagem; se o DDD for invalido o numero
+    // morre la de qualquer jeito). Mutacao confirmada: tirar qualquer uma das
+    // duas nao muda o resultado de nenhuma entrada. Nao confie nelas como
+    // trava - a trava real e o regex local mais a validacao final.
+    if (strlen($d) >= 11 && $d[0] === '0') {
+        $sem = substr($d, 1);
+        if (in_array((int) substr($sem, 0, 2), WA_DDDS, true)
+            && preg_match(WA_RE_LOCAL, substr($sem, 2))) {
+            $d = $sem;
+        }
     }
 
     // Sobrou coisa demais: e numero estrangeiro, nao nosso.
@@ -45,7 +104,7 @@ function wa_e164($bruto) {
     // estrangeiro que por acaso caiu num DDD valido: "+1 415 555 2671" vira
     // 14155552671, e 14 e Bauru. Celular tem 9 digitos e SEMPRE comeca com 9;
     // fixo tem 8 e comeca entre 2 e 5. Fora disso, nao e numero daqui.
-    if (!preg_match('/^9\d{8}$/', $resto) && !preg_match('/^[2-5]\d{7}$/', $resto)) {
+    if (!preg_match(WA_RE_LOCAL, $resto)) {
         return null;
     }
 

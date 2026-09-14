@@ -82,3 +82,14 @@ assert.deepEqual(chamadas.map(c => c[0]), ['from','select','eq','order','limit']
   'cadeia completa: tabela, colunas, filtro, ordem e limite');
 
 console.log('test-conversa (consulta) OK');
+
+// O filtro por wa_id JA SUMIU UMA VEZ num commit que prometia outra coisa, e a
+// tela passou a mostrar as mensagens de todos os contatos. As funcoes puras
+// acima continuam testadas, mas elas nao impedem alguem de escrever a consulta
+// inline no render e contornar o descritor. Estas duas linhas impedem.
+assert.ok(src.includes('poMontaConsulta(sb, poFiltroConversa(waId))'),
+  'o render usa o descritor, nao uma consulta inline');
+assert.ok(!/sb\.from\(['"]po_wa_mensagens['"]\)/.test(src),
+  'nenhuma consulta inline a po_wa_mensagens fora do poMontaConsulta');
+
+console.log('test-conversa (ponto de chamada) OK');

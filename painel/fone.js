@@ -16,15 +16,40 @@ function poE164(bruto) {
     71,73,74,75,77,79, 81,82,83,84,85,86,87,88,89,
     91,92,93,94,95,96,97,98,99,
   ]);
+  // Numero local brasileiro COMPLETO: celular de 9 digitos comecando em 9 ou
+  // fixo de 8 comecando entre 2 e 5. Mesma constante do WA_RE_LOCAL do PHP.
+  const PO_RE_LOCAL = /^(9\d{8}|[2-5]\d{7})$/;
   let d = String(bruto == null ? '' : bruto).replace(/\D+/g, '');
   if (d === '') return null;
+  // Prefixo internacional discado ("0048 ..."), que a agenda do celular
+  // exporta. So tira quando o que sobra vem com o DDI 55 ou ja e numero
+  // brasileiro completo - sem esse rigor "0053 7 838 1000" (Havana) virava
+  // +5553978381000. Ha um limite permanente aqui: Dinamarca, Noruega,
+  // Espanha, Belgica e Tailandia passam, porque a grafia 00+DDI deles e
+  // identica a 00+DDD daqui. Ver o comentario longo em lib/wa-fone.php.
+  // O "length >= 12" e redundante de proposito (ver o PHP).
+  if (d.length >= 12 && d.slice(0, 2) === '00') {
+    const sem = d.slice(2);
+    if (sem.slice(0, 2) === '55'
+      || (PO_DDDS.has(parseInt(sem.slice(0, 2), 10)) && PO_RE_LOCAL.test(sem.slice(2)))) d = sem;
+  }
   if (d.length >= 12 && d.slice(0, 2) === '55') d = d.slice(2);
+  // Zero de operadora antes do DDD ("048 99999-0001"). So tira quando o que
+  // sobra JA e um numero brasileiro completo - sem esse rigor "0800 123 4567"
+  // viraria DDD 80 e "(01) 99999-9999" ganharia o nono digito e entraria como
+  // Campinas. Ver o comentario longo em lib/wa-fone.php. O "length >= 11" e o
+  // PO_DDDS.has daqui sao redundantes de proposito: nao sao trava, a trava e
+  // o PO_RE_LOCAL mais a validacao final.
+  if (d.length >= 11 && d[0] === '0') {
+    const sem = d.slice(1);
+    if (PO_DDDS.has(parseInt(sem.slice(0, 2), 10)) && PO_RE_LOCAL.test(sem.slice(2))) d = sem;
+  }
   if (d.length > 11 || d.length < 10) return null;
   const ddd = parseInt(d.slice(0, 2), 10);
   let resto = d.slice(2);
   if (!PO_DDDS.has(ddd)) return null;
   if (resto.length === 8 && resto[0] >= '6') resto = '9' + resto;
-  if (!/^9\d{8}$/.test(resto) && !/^[2-5]\d{7}$/.test(resto)) return null;
+  if (!PO_RE_LOCAL.test(resto)) return null;
   return '+55' + ddd + resto;
 }
 

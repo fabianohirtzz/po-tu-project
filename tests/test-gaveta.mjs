@@ -69,3 +69,10 @@ assert.equal(vazio.venda, 0, 'campo vazio vira zero');
 assert.equal(vazio.orcamento, 0, 'orcamento vazio vira zero');
 
 console.log('test-gaveta OK');
+
+// Mesma forma de defeito: a regra de so recarimbar venda_at quando o valor
+// mudou vive numa funcao pura, e nada impede alguem de montar o patch inline.
+assert.ok(!/venda_at\s*[:=]\s*new Date\(\)/.test(src),
+  'venda_at nunca e carimbado inline, nem por objeto literal nem por atribuicao');
+
+console.log('test-gaveta (ponto de chamada) OK');

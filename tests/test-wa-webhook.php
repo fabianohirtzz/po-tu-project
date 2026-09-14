@@ -117,4 +117,56 @@ ok(wa_registra_evento($evento) === 'falha', 'rede fora e falha, nao duplicado');
 wa_db_set_transport(function () { return ['status' => 500, 'body' => 'erro interno']; });
 ok(wa_registra_evento($evento) === 'falha', '5xx do banco e falha, nao duplicado');
 
+// --- o reenvio da Meta e barrado pelo unique em wamid, e o mesmo wamid
+// gravado duas vezes deixa UMA linha. Vale para mensagem e para eco, os dois
+// tipos que de fato passam por aqui (status NAO passa - ver a asserção de
+// fonte no fim deste arquivo).
+$gravados = [];
+wa_db_set_transport(function ($metodo, $url, $corpo, $h) use (&$gravados) {
+    if ($metodo === 'POST' && strpos($url, 'po_wa_mensagens') !== false) {
+        $linha = json_decode($corpo, true);
+        if (in_array($linha['wamid'] ?? '', $gravados, true)) {
+            return ['status' => 409, 'body' => '{}'];   // unique violation
+        }
+        $gravados[] = $linha['wamid'] ?? '';
+    }
+    return ['status' => 201, 'body' => '[{}]'];
+});
+
+$ev = ['wamid' => 'wamid.ECO1', 'tipo' => 'eco', 'wa_id' => '+5548999990001',
+       'tipo_msg' => 'text', 'texto' => 'Bom dia, aqui e a Simone', 'ts' => 1757548800];
+ok(wa_registra_evento($ev) === 'novo',      'primeiro eco e novo');
+ok(wa_registra_evento($ev) === 'duplicado', 'o reenvio da Meta e duplicado');
+ok(count($gravados) === 1,                  'so uma linha gravada para o mesmo wamid');
+
+// --- evento sem wamid nao pode quebrar nada (a Meta pode mandar payload
+// incompleto, e o `wamid !== ''` que guarda a chamada em whatsapp.php e o que
+// impede uma linha com chave vazia).
+$sem_wamid = ['wamid' => '', 'tipo' => 'eco', 'wa_id' => '+5548999990002',
+              'tipo_msg' => 'text', 'texto' => 'oi', 'ts' => 1757548800];
+wa_db_set_transport(function () { return ['status' => 201, 'body' => '[{}]']; });
+ok(wa_registra_evento($sem_wamid) === 'novo', 'evento sem wamid nao quebra wa_registra_evento');
+
+// --- ASSERÇÃO DE FONTE: whatsapp.php TEM que excluir eventos de status da
+// idempotencia de po_wa_mensagens, e o motivo e a identidade do wamid. O
+// wamid de um status nao e dele: e o da MENSAGEM A QUE o recibo se refere
+// (wa_parse_evento monta 'wamid' => $s['id'], logo acima). Como
+// po_wa_mensagens.wamid e unique, gravar o status ali o faz disputar a MESMA
+// linha da mensagem original - e (a) um status chegando antes do eco faria o
+// ECO virar 'duplicado', matando o handoff e deixando o robo falar por cima
+// da dona; (b) o recibo de tudo que o sistema enviou (o motor grava a propria
+// saida com o wamid) seria descartado, zerando o relatorio de campanha. A
+// idempotencia de ENTREGA e do plano 4 e mora em po_wa_envios (secao 4.2 da
+// spec), onde o wamid e referencia, nao chave unica. O defeito vive no PONTO
+// DE CHAMADA, que nenhum teste de biblioteca alcanca - por isso asserção de
+// fonte, no molde que tests/test-filtros.mjs ja usa para o app.js.
+$src_webhook = file_get_contents(__DIR__ . '/../whatsapp.php');
+ok(strpos($src_webhook, "\$ev['wamid'] !== ''") !== false,
+   'whatsapp.php ainda condiciona a idempotencia ao wamid');
+$exclui_status = <<<'REGEX'
+/wamid'\]\s*!==\s*''\s*&&\s*\$ev\['tipo'\]\s*!==\s*'status'/
+REGEX;
+ok(preg_match($exclui_status, $src_webhook) === 1,
+   'whatsapp.php EXCLUI eventos de status da idempotencia, porque o wamid do status pertence a linha da mensagem original');
+
 echo "test-wa-webhook OK\n";
