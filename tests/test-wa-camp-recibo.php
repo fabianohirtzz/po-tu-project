@@ -88,9 +88,10 @@ ok(wa_camp_recibo('wamid.BBB', 'failed') === 'falha', 'BBB: failed vira falha me
 ok(wa_camp_recibo('wamid.BBB', 'delivered') === 'falha',
    'BBB: delivered reentregue DEPOIS do failed nao ressuscita o envio');
 ok(linha_bbb($DB)['status'] === 'falha', 'BBB: status continua falha apos o delivered reentregue');
-// m3: o cenario que de fato exercita o carimbo condicional de entregue_at e
-// este vaivem, nao um recibo repetido isolado - o original tem que
-// sobreviver ao delivered reentregue que a escada barrou.
+// Aqui a escada ja bloqueia a chamada inteira (novo <= atual), entao esta
+// asserção nao discrimina o empty() por si so - ela so prova que nada foi
+// escrito, o que a escada garante sozinha. O cenario que discrimina o
+// carimbo condicional de verdade e o de CCC, mais abaixo.
 ok(linha_bbb($DB)['entregue_at'] === $entregue_at_original,
    'BBB: entregue_at original sobrevive ao vaivem');
 
@@ -98,6 +99,24 @@ ok(wa_camp_recibo('wamid.BBB', 'read') === 'falha',
    'BBB: read depois do failed tambem nao tira da falha');
 ok(linha_bbb($DB)['status'] === 'falha', 'BBB: status continua falha apos o read');
 ok(empty(linha_bbb($DB)['lido_at']), 'BBB: lido_at nunca e carimbado, a falha bloqueou a entrada');
+
+/* --- m3: o carimbo condicional (`empty($e['entregue_at'])`) protege um
+   estado que a escada sozinha NAO cobre - uma linha que chega com o
+   `entregue_at` ja preenchido mas o status ainda ABAIXO de entregue (ex.:
+   uma carga manual, ou uma corrida que gravou o carimbo antes do status).
+   Um `delivered` sobre ela tem que levar o status a `entregue`, porque a
+   escada permite (novo > atual), mas SEM reescrever o carimbo que ja
+   existia - a hora real do evento nao pode virar a hora deste replay. */
+$DB['po_wa_envios'][] = ['id'=>'E9', 'campanha_id'=>'C1', 'lead_id'=>'L9', 'wa_id'=>'+5548999990009',
+    'wamid'=>'wamid.CCC', 'status'=>'enviado', 'entregue_at'=>'2020-01-01T00:00:00+00:00', 'lido_at'=>null];
+
+ok(wa_camp_recibo('wamid.CCC', 'delivered') === 'entregue', 'CCC: delivered leva o status a entregue');
+foreach ($DB['po_wa_envios'] as $e) {
+    if ($e['wamid'] !== 'wamid.CCC') continue;
+    ok($e['status'] === 'entregue', 'CCC: status avancou de enviado para entregue');
+    ok($e['entregue_at'] === '2020-01-01T00:00:00+00:00',
+       'CCC: entregue_at que ja existia nao e reescrito');
+}
 
 /* wamid que nao e de campanha (o PDF do roteiro, a pergunta do motor) devolve
    null e nao escreve nada. E o caso mais comum de todos. */
@@ -107,5 +126,28 @@ ok(wa_camp_recibo('', 'delivered') === null, 'wamid vazio devolve null');
 
 /* Status que a Meta inventar amanha nao pode virar escrita silenciosa. */
 ok(wa_camp_recibo('wamid.AAA', 'inventado') === null, 'status desconhecido nao grava nada');
+
+/* --- m4: erro de LEITURA de po_wa_envios tem que deixar rastro PROPRIO no
+   log, distinto do generico da camada de banco (wa_db_select_estrito ja
+   loga o status HTTP, mas nao o wamid nem que o chamador era o recibo).
+   Isto importa porque a Meta NAO reenvia um evento de status que ja
+   recebeu 200 - se a leitura falhar aqui, o log e a UNICA chance de
+   reconciliar depois. Mesmo padrao de tests/test-wa-camp-fila.php (Task 6
+   deste plano): redireciona error_log para um arquivo temporario,
+   restaura, le e confere. */
+$arq    = tempnam(sys_get_temp_dir(), 'walog');
+$antigo = ini_get('error_log');
+ini_set('error_log', $arq);
+wa_db_set_transport(function ($metodo, $url, $corpo) {
+    return ['status' => 500, 'body' => 'erro interno'];
+});
+$r = wa_camp_recibo('wamid.AAA', 'delivered');
+ini_set('error_log', $antigo);
+$saiu = file_get_contents($arq);
+unlink($arq);
+
+ok($r === null, 'erro de leitura devolve null, nunca escreve as cegas');
+ok(strpos($saiu, 'wa_camp_recibo: leitura de po_wa_envios falhou') !== false,
+   'o erro de leitura deixa o rastro PROPRIO do recibo, nao so o generico da camada de banco');
 
 echo "test-wa-camp-recibo OK\n";
