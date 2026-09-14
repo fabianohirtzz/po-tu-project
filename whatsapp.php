@@ -58,16 +58,25 @@ if (function_exists('fastcgi_finish_request')) {
 try {
     $json = json_decode($corpo, true);
     foreach (wa_parse_evento(is_array($json) ? $json : []) as $ev) {
-        // Idempotencia por wamid, INCLUSIVE para eventos de status (entregue,
-        // lido, falhou): o relatorio de campanha do plano 4 conta entregues e
-        // lidos, e a Meta reenvia o mesmo evento quando nao recebe 200 rapido.
-        // Sem isto o alcance da transmissao vem inflado. 'duplicado' pula;
-        // 'falha' processa assim mesmo, porque perder mensagem de cliente e
-        // pior que duplicar. Deixar o robo falar com um evento de status nao
-        // e risco aqui: wa_processar (lib/wa-motor.php) devolve cedo para
-        // tipo==='status', antes de qualquer envio - travado por teste em
-        // tests/test-wa-motor.php.
-        if ($ev['wamid'] !== '') {
+        // Idempotencia por wamid, EXCETO para eventos de status (entregue,
+        // lido, falhou). O wamid de um status NAO identifica o status: e o
+        // wamid da MENSAGEM A QUE ELE SE REFERE (lib/wa-webhook.php monta
+        // 'wamid' => $s['id']). Como po_wa_mensagens.wamid e "text not null
+        // unique", gravar o recibo aqui o faz disputar a MESMA linha da
+        // mensagem original, e o estrago e duplo:
+        //   (a) se o status chega antes do eco, o ECO vira 'duplicado', o
+        //       continue pula wa_processar e o robo NAO se cala - a pior
+        //       falha do sistema, robo e a dona falando por cima uma da outra;
+        //   (b) o motor grava a propria saida com o wamid (wa_registra_saida),
+        //       entao o recibo de tudo que o sistema enviou - justamente o da
+        //       transmissao paga - colidiria e seria descartado, e o relatorio
+        //       de campanha viria ZERADO, nao inflado.
+        // A idempotencia de ENTREGA e do plano 4 e mora em po_wa_envios
+        // (campanha_id, contato_id, wamid, status - secao 4.2 da spec), onde
+        // o wamid e referencia a mensagem, nao identidade unica da linha.
+        // Para as demais: 'duplicado' pula; 'falha' processa assim mesmo,
+        // porque perder mensagem de cliente e pior que duplicar.
+        if ($ev['wamid'] !== '' && $ev['tipo'] !== 'status') {
             if (wa_registra_evento($ev) === 'duplicado') continue;
         }
         wa_processar($ev);

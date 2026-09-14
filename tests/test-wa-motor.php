@@ -371,12 +371,13 @@ ok($acao === 'qualificou', "sim solto qualifica (deu: $acao)");
 ok(!array_key_exists('qualif_grupo', $DB['po_leads'][0]), 'qualif_grupo nao e gravado sem evidencia');
 
 /* --- 19. evento de status (entregue/lido) nao pode virar conversa com o
-   robo. A task 4 tira o "pular idempotencia" que so existia para
-   tipo==='status' em whatsapp.php, entao esses eventos passam a chegar
-   aqui tambem - e um robo respondendo a um recibo de entrega seria o pior
-   desfecho possivel. wa_processar ja trata isto na primeira linha
-   (`if ($ev['tipo'] === 'status') return 'status';`), este teste trava
-   que ninguem remova essa guarda por engano. */
+   robo. wa_processar recebe TODO evento que whatsapp.php desempacota,
+   status inclusive, e um robo respondendo a um recibo de entrega seria o
+   pior desfecho possivel: ele trata isto na primeira linha
+   (`if ($ev['tipo'] === 'status') return 'status';`), e este teste trava
+   que ninguem remova essa guarda por engano. E defesa em profundidade, e
+   nao substitui a asserção de fonte em tests/test-wa-webhook.php, que
+   cuida do ponto de chamada. */
 $DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $DB['po_wa_mensagens'] = []; $ENVIADAS = [];
 $acao = wa_processar([
     'tipo' => 'status', 'wa_id' => $WA, 'wamid' => 'wamid.STATUS1',
