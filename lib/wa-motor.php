@@ -280,6 +280,19 @@ function wa_resposta_grupo($texto) {
     return null;
 }
 
+/* Defesa 3 da spec 8.1: "Responda SAIR para nao receber mais".
+
+   O casamento e ESTRITO - a palavra sozinha, com pontuacao e espaco ao
+   redor. Duas razoes:
+
+   1) "quero sair do grupo" e uma pergunta sobre a viagem, nao um descadastro.
+   2) "cancelar" ficou FORA da lista de proposito: numa agencia de viagem
+      "quero cancelar" quase sempre e cancelar uma reserva, e trata-lo como
+      descadastro tiraria da lista justamente quem esta em negociacao. */
+function wa_e_saida($texto) {
+    return (bool) preg_match('/^\s*(sair|parar|descadastrar)[\s.!]*$/iu', (string) $texto);
+}
+
 /* ---------- estado ---------- */
 function wa_conversa($wa_id) {
     $l = wa_call('select', 'po_wa_conversas', 'wa_id=eq.' . rawurlencode($wa_id));
@@ -474,6 +487,22 @@ function wa_processar($ev) {
 
         if ($acao) return $acao;
         return $ja_humano ? 'ja_humano' : 'silenciou';
+    }
+
+    /* SAIR vem antes de tudo, inclusive do silencio. O silencio existe para
+       o robo nao falar por cima da humana; nao existe para a pessoa perder o
+       direito de sair da lista. Por isso o CARIMBO acontece sempre e so a
+       RESPOSTA respeita o silencio. */
+    if ($ev['tipo'] === 'mensagem' && wa_e_saida($ev['texto'] ?? '')) {
+        wa_lead_set($wa_id, ['opt_out_at' => gmdate('c')]);
+        $conv = wa_conversa($wa_id);
+        if (empty($conv['silenciado_at'])) {
+            wa_envia_texto($wa_id,
+                'Tudo bem, você não vai mais receber nossas mensagens sobre viagens. ' .
+                'Se um dia quiser voltar, é só escrever aqui.');
+            wa_conversa_set($wa_id, ['estado' => 'encerrado']);
+        }
+        return 'opt_out';
     }
 
     /* ----- mensagem do cliente ----- */

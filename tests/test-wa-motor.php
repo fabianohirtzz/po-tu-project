@@ -417,4 +417,51 @@ ok(wa_limpa_pontuacao('Perfeito, Marlene.') === 'Perfeito, Marlene.',
 ok(wa_limpa_pontuacao('Leve documento, passagem e seguro.') === 'Leve documento, passagem e seguro.',
    'virgula comum no meio da frase nao e tocada');
 
+/* ---------- SAIR ----------
+   Defesa 3 da spec 8.1. O texto da transmissao promete "Responda SAIR para
+   nao receber mais", e a promessa tem que valer.
+
+   O casamento e ESTRITO: so a palavra sozinha. "cancelar" ficou de fora de
+   proposito - numa agencia de viagem "quero cancelar" quase sempre e
+   cancelar uma RESERVA, e tratar isso como descadastro tiraria da lista
+   justamente quem esta em negociacao. */
+ok(wa_e_saida('SAIR') === true,        'SAIR maiusculo sai');
+ok(wa_e_saida('sair') === true,        'sair minusculo sai');
+ok(wa_e_saida('  Sair. ') === true,    'com espaco e ponto ainda sai');
+ok(wa_e_saida('parar') === true,       'parar tambem sai');
+ok(wa_e_saida('descadastrar') === true,'descadastrar tambem sai');
+ok(wa_e_saida('quero sair do grupo') === false,
+   'a palavra no meio da frase NAO desinscreve: "sair do grupo" e outra coisa');
+ok(wa_e_saida('quero cancelar minha reserva') === false,
+   'cancelar reserva nunca e descadastro');
+ok(wa_e_saida('') === false,           'texto vazio nao desinscreve');
+
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $DB['po_wa_mensagens'] = []; $ENVIADAS = [];
+$acao = wa_processar([
+    'tipo' => 'mensagem', 'wa_id' => $WA, 'wamid' => 'wamid.SAIR1',
+    'tipo_msg' => 'text', 'texto' => 'SAIR', 'nome' => 'Marlene',
+    'ad_id' => null, 'ctwa_clid' => null, 'ts' => time(),
+]);
+ok($acao === 'opt_out', "SAIR devolve 'opt_out' (deu: $acao)");
+ok(!empty($DB['po_leads'][0]['opt_out_at']), 'opt_out_at e carimbado no lead');
+ok(count($ENVIADAS) === 1, 'uma confirmacao e enviada');
+ok(stripos($ENVIADAS[0][2], 'não') !== false
+   || stripos($ENVIADAS[0][2], 'nao') !== false,
+   'a confirmacao diz que a pessoa nao recebera mais');
+
+/* SAIR tem que valer mesmo com o robo JA silenciado naquele contato: o
+   silencio existe para o robo nao falar por cima da humana, nao para a
+   pessoa perder o direito de sair da lista. O carimbo acontece sempre; a
+   RESPOSTA e que nao sai, para nao atropelar a conversa humana. */
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $ENVIADAS = [];
+wa_conversa_set($WA, ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
+$acao = wa_processar([
+    'tipo' => 'mensagem', 'wa_id' => $WA, 'wamid' => 'wamid.SAIR2',
+    'tipo_msg' => 'text', 'texto' => 'sair', 'nome' => 'Marlene',
+    'ad_id' => null, 'ctwa_clid' => null, 'ts' => time(),
+]);
+ok($acao === 'opt_out', 'SAIR vale mesmo com o robo silenciado');
+ok(!empty($DB['po_leads'][0]['opt_out_at']), 'o carimbo acontece mesmo silenciado');
+ok(count($ENVIADAS) === 0, 'mas o robo NAO responde por cima da humana');
+
 echo "test-wa-motor OK\n";
