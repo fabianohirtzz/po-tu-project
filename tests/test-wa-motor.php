@@ -434,6 +434,13 @@ ok(wa_e_saida('quero sair do grupo') === false,
    'a palavra no meio da frase NAO desinscreve: "sair do grupo" e outra coisa');
 ok(wa_e_saida('quero cancelar minha reserva') === false,
    'cancelar reserva nunca e descadastro');
+/* "cancelar" fica FORA da lista de proposito, e isto e decisao de produto e nao de
+   implementacao: numa agencia de viagem "quero cancelar" quase sempre e cancelar uma
+   RESERVA. Tratar como descadastro tiraria da lista justamente quem esta negociando.
+   A frase inteira ja era barrada pela ancora; esta assercao e o que impede alguem
+   acrescentar a palavra a lista sem perceber o que esta desfazendo. */
+ok(wa_e_saida('cancelar') === false,
+   'a palavra cancelar sozinha NAO descadastra: em viagem, cancelar e sobre reserva');
 ok(wa_e_saida('') === false,           'texto vazio nao desinscreve');
 
 $DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $DB['po_wa_mensagens'] = []; $ENVIADAS = [];
