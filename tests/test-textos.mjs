@@ -367,7 +367,7 @@ for (const s of ['config.js', 'video-encode.js', 'fone.js', 'app.js', 'clientes.
 
 // Cache-buster: deploy e FTP manual e o .htaccess cacheia JS/CSS por 1 mes.
 // Arquivo alterado sem ?v= novo chega velho no navegador da cliente.
-for (const [arq, v] of [['app.js', 8], ['textos.js', 1], ['painel.css', 7]]) {
+for (const [arq, v] of [['app.js', 8], ['textos.js', 2], ['painel.css', 7]]) {
   assert.ok(painel.includes(arq + '?v=' + v + '"'), arq + ' esta em ?v=' + v);
 }
 
