@@ -181,8 +181,14 @@ function wa_camp_drena($campanha_id, $limite) {
         }
     }
 
+    /* Conta 'reservado' E 'enviando'. Linha em 'enviando' e envio que pode
+       nao ter saido (processo morto entre a posse e a chamada a Meta), entao
+       ela ainda deve a alguem. Contar so 'reservado' faria a Task 8 concluir
+       a campanha com gente sem receber, e a recuperacao de orfas so roda
+       dentro do dreno - numa campanha concluida ninguem mais drena, e a
+       linha morre presa para sempre. */
     $resto = wa_db_select_estrito('po_wa_envios',
-        'campanha_id=eq.' . rawurlencode($campanha_id) . '&status=eq.reservado');
+        'campanha_id=eq.' . rawurlencode($campanha_id) . '&status=in.(reservado,enviando)');
     return [
         'enviados' => $enviados,
         'falhas'   => $falhas,

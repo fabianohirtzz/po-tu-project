@@ -37,12 +37,23 @@ $DB = [
 $CHAMADAS = 0;
 
 /* Interpreta os pares campo=eq.valor / campo=lt.valor / campo=gt.valor da
-   query string do PostgREST. Precisa entender MAIS de uma condicao ao mesmo
-   tempo (ex: campanha_id=eq.X&status=eq.reservado): e exatamente essa
-   combinacao que prova o achado C2 (isolamento entre campanhas) e a tomada
-   de posse do achado C1 (id=eq.X&status=eq.reservado, a corrida do PATCH). */
+   query string do PostgREST, e tambem campo=in.(a,b) (a correcao D1 da
+   revisao r2 usa isso para contar 'reservado' e 'enviando' juntos em
+   'restam'). Precisa entender MAIS de uma condicao ao mesmo tempo (ex:
+   campanha_id=eq.X&status=eq.reservado): e exatamente essa combinacao que
+   prova o achado C2 (isolamento entre campanhas) e a tomada de posse do
+   achado C1 (id=eq.X&status=eq.reservado, a corrida do PATCH). */
 function wa_test_condicoes($url) {
     $condicoes = [];
+    // in.(...) primeiro: a lista pode conter varios valores separados por
+    // virgula, e o parenteses nao pode ser confundido com o `&` que separa
+    // os outros pares campo=op.valor.
+    if (preg_match_all('/([a-z_]+)=in\.\(([^)]*)\)/', $url, $ms, PREG_SET_ORDER)) {
+        foreach ($ms as $m) {
+            $valores = array_map('rawurldecode', explode(',', $m[2]));
+            $condicoes[] = [$m[1], 'in', $valores];
+        }
+    }
     if (preg_match_all('/([a-z_]+)=(eq|lt|gt)\.([^&]*)/', $url, $ms, PREG_SET_ORDER)) {
         foreach ($ms as $m) {
             $condicoes[] = [$m[1], $m[2], rawurldecode($m[3])];
@@ -57,6 +68,7 @@ function wa_test_casa($linha, $condicoes) {
         if ($op === 'eq' && (string) $v !== $valor)                        return false;
         if ($op === 'lt' && ($v === null || strcmp((string) $v, $valor) >= 0)) return false;
         if ($op === 'gt' && ($v === null || strcmp((string) $v, $valor) <= 0)) return false;
+        if ($op === 'in' && !in_array((string) $v, $valor, true))          return false;
     }
     return true;
 }
@@ -427,5 +439,163 @@ ok(count($tuplas) === 1, 'o enviador foi chamado exatamente uma vez');
 ok($tuplas[0][0] === '+5548999990130', 'o enviador recebeu o wa_id certo');
 ok($tuplas[0][1] === 'Nome Correto',
    'o enviador recebeu o NOME certo, nao vazio nem trocado pelo wa_id (deu: "' . $tuplas[0][1] . '")');
+
+/* ============================================================
+   Rodada de correcao 2 - achados da re-revisao (task-5-findings-r2.md).
+   D1 e defeito de comportamento real, criado pela propria correcao da
+   rodada 1 (o estado 'enviando'). D2 a D5 sao travas de teste sobre codigo
+   que ja estava certo.
+============================================================ */
+
+/* ---------- D1 (Critical, defeito real): restam tem que contar 'enviando' ----------
+   Uma linha presa em 'enviando' (processo morto entre a posse e a chamada a
+   Meta) e alguem que NAO recebeu nada. Contar so 'reservado' em restam faz
+   a Task 8 concluir a campanha com essa pessoa de fora - e como a
+   recuperacao de orfas so roda dentro do dreno, e ninguem drena campanha
+   concluida, a linha morre presa para sempre.
+
+   Aqui a linha 'enviando' e RECENTE (dentro do prazo da posse), entao a
+   recuperacao de orfas nao mexe nela - o teste isola so a CONTAGEM, nao a
+   recuperacao (essa e o achado D2, logo abaixo). */
+$DB['po_wa_envios'] = [];
+$DB['po_wa_campanhas'][] = ['id' => 'CENVIANDO', 'template' => 'modelo_generico'];
+$DB['po_wa_envios'][] = [
+    'id' => 'EPRESA1', 'campanha_id' => 'CENVIANDO', 'lead_id' => 'LPR1',
+    'wa_id' => '+5548999990190', 'nome' => 'Presa Recente', 'status' => 'enviando',
+    'enviando_at' => gmdate('c', time() - 5),   // 5s atras: bem dentro do prazo de 30min
+];
+$d = wa_camp_drena('CENVIANDO', 10);
+ok($d['restam'] === 1,
+   'uma linha presa em enviando (recente, ainda sob posse) tem que contar em restam (deu: ' . $d['restam'] . ')');
+
+/* ---------- D2 (Important): a recuperacao de orfas precisa de trava ----------
+   Duas linhas presas em 'enviando' na MESMA campanha: uma "ativa" (posse ha
+   so 5 segundos - outro processo pode estar dentro da chamada a Meta AGORA)
+   e uma "orfa de verdade" (posse ha muito mais que o prazo - processo
+   morto). A recuperacao tem que devolver SO a orfa para 'reservado' e
+   deixar a ativa intocada: roubar a posse de quem ainda esta trabalhando
+   manda de novo uma mensagem que ja esta a caminho - o mesmo envio
+   duplicado que a tomada de posse (C1) fechou. */
+$DB['po_wa_envios'] = [];
+$DB['po_wa_campanhas'][] = ['id' => 'CORFA', 'template' => 'modelo_generico'];
+$DB['po_wa_envios'][] = [
+    'id' => 'EATIVA', 'campanha_id' => 'CORFA', 'lead_id' => 'LAT1',
+    'wa_id' => '+5548999990200', 'nome' => 'Ativa', 'status' => 'enviando',
+    'enviando_at' => gmdate('c', time() - 5),
+];
+$DB['po_wa_envios'][] = [
+    'id' => 'EORFA', 'campanha_id' => 'CORFA', 'lead_id' => 'LOR1',
+    'wa_id' => '+5548999990201', 'nome' => 'Orfa', 'status' => 'enviando',
+    'enviando_at' => gmdate('c', time() - WA_CAMP_POSSE_LEASE - 120),
+];
+$mandados_orfa = [];
+wa_camp_set_enviador(function ($wa_id, $nome) use (&$mandados_orfa) {
+    $mandados_orfa[] = $wa_id;
+    return ['ok' => true, 'wamid' => 'wamid.orfa.' . count($mandados_orfa), 'erro' => null];
+});
+$d = wa_camp_drena('CORFA', 10);
+ok(count($mandados_orfa) === 1 && $mandados_orfa[0] === '+5548999990201',
+   'so a orfa de verdade e recuperada e enviada, a ativa fica intocada (deu: ' . json_encode($mandados_orfa) . ')');
+$linha_ativa = wa_test_acha_envio($DB, 'LAT1');
+ok($linha_ativa && $linha_ativa['status'] === 'enviando',
+   'a linha ativa continua em enviando: ninguem rouba a posse de quem ainda esta trabalhando');
+$linha_orfa = wa_test_acha_envio($DB, 'LOR1');
+ok($linha_orfa && $linha_orfa['status'] === 'enviado',
+   'a orfa recuperada e enviada normalmente depois de voltar para reservado');
+
+/* ---------- D4 (Important): a transicao para 'enviando' precisa ser travada ----------
+   O teste da corrida (C1, acima) simula o PERDEDOR chegando DEPOIS de o
+   vencedor ja ter enviado e marcado 'enviado' - o status=eq.reservado do
+   perdedor falha por causa da escrita FINAL, nao da posse em si. Isso nao
+   prova que a POSSE de fato muda o status para 'enviando': se o PATCH da
+   posse so gravasse enviando_at (sem status), a linha continuaria
+   parecendo 'reservado' para qualquer outro dreno, e dois processos
+   tomariam "posse" da mesma linha ao mesmo tempo.
+
+   Aqui o dreno CONCORRENTE roda por completo logo depois que o dreno
+   corrente toma posse de verdade no banco (o PATCH ja aconteceu), mas
+   ANTES de o dreno corrente chamar a Meta. Se a posse realmente marcou
+   'enviando', o concorrente nao acha mais a linha (ela nao e mais
+   'reservado') e nao manda nada. */
+$DB['po_wa_envios'] = [];
+$DB['po_wa_campanhas'][] = ['id' => 'CPOSSE', 'template' => 'modelo_generico'];
+wa_test_usa_transporte_normal();
+wa_camp_reserva('CPOSSE', [['lead_id'=>'LP1', 'wa_id'=>'+5548999990170', 'nome'=>'Posse']]);
+
+$mandados_posse = [];
+wa_camp_set_enviador(function ($wa_id, $nome) use (&$mandados_posse) {
+    $mandados_posse[] = $wa_id;
+    return ['ok' => true, 'wamid' => 'wamid.posse.' . count($mandados_posse), 'erro' => null];
+});
+
+$posse_interceptada = false;
+$transporte_posse = function ($metodo, $url, $corpo) use (&$DB, &$CHAMADAS, &$posse_interceptada, &$transporte_posse) {
+    $CHAMADAS++;
+    if (!$posse_interceptada && $metodo === 'PATCH'
+        && strpos($url, 'id=eq.') !== false && strpos($url, 'status=eq.reservado') !== false) {
+        $posse_interceptada = true;
+        // Executa a tomada de posse de verdade primeiro, no banco real.
+        $resposta = wa_test_transport_normal($metodo, $url, $corpo, $DB);
+        // Agora, ANTES do dreno corrente sequer chamar a Meta, um dreno
+        // concorrente roda por completo contra a MESMA campanha.
+        wa_test_usa_transporte_normal();
+        wa_camp_drena('CPOSSE', 10);
+        wa_db_set_transport($transporte_posse);
+        return $resposta;
+    }
+    return wa_test_transport_normal($metodo, $url, $corpo, $DB);
+};
+wa_db_set_transport($transporte_posse);
+
+$d = wa_camp_drena('CPOSSE', 10);
+wa_test_usa_transporte_normal();
+
+ok(count($mandados_posse) === 1,
+   'a posse tem que travar o concorrente que chega ENQUANTO o vencedor ainda esta enviando (deu: ' . count($mandados_posse) . ')');
+$linha_posse = wa_test_acha_envio($DB, 'LP1');
+ok($linha_posse && $linha_posse['status'] === 'enviado', 'a linha termina enviado por um so processo');
+
+/* ---------- D5 (parte do C1 sem trava): log de gravacao falhada depois do envio ----------
+   O envio JA SAIU e foi cobrado quando o PATCH final falha. Nao da pra
+   desfazer, e o unico rastro e o log com o wamid - e por ele que se
+   reconcilia na mao. Um log que ninguem testa e um log que some na
+   primeira refatoracao. */
+$DB['po_wa_envios'] = [];
+$DB['po_wa_campanhas'][] = ['id' => 'CLOGFALHA', 'template' => 'modelo_generico'];
+wa_test_usa_transporte_normal();
+wa_camp_reserva('CLOGFALHA', [['lead_id'=>'LF1', 'wa_id'=>'+5548999990180', 'nome'=>'Log Falha']]);
+wa_camp_set_enviador(function ($wa_id, $nome) {
+    return ['ok' => true, 'wamid' => 'wamid.logfalha.1', 'erro' => null];
+});
+
+// So o PATCH FINAL (o que marca 'enviado', sem a condicao de posse) falha.
+// A ancora [?&] evita casar "campanha_id=eq." (do recupera_orfas) so
+// porque contem a substring "id=eq." no meio da palavra.
+wa_db_set_transport(function ($metodo, $url, $corpo) use (&$DB, &$CHAMADAS) {
+    $CHAMADAS++;
+    $e_o_patch_final = $metodo === 'PATCH'
+        && preg_match('/[?&]id=eq\./', $url)
+        && strpos($url, 'status=eq.reservado') === false;
+    if ($e_o_patch_final) {
+        return ['status' => 500, 'body' => '{}'];
+    }
+    return wa_test_transport_normal($metodo, $url, $corpo, $DB);
+});
+
+$arq = tempnam(sys_get_temp_dir(), 'walog');
+$antigo = ini_get('error_log');
+ini_set('error_log', $arq);
+$d = wa_camp_drena('CLOGFALHA', 10);
+ini_set('error_log', $antigo);
+$saiu = file_get_contents($arq);
+unlink($arq);
+wa_test_usa_transporte_normal();
+
+ok($d['enviados'] === 1,
+   'o envio ainda conta como enviado mesmo com a gravacao final falhando (deu: ' . $d['enviados'] . ')');
+ok(strpos($saiu, 'ENVIO SAIU E A GRAVACAO FALHOU') !== false,
+   'a gravacao falhada depois do envio deixa rastro no log');
+ok(strpos($saiu, 'wamid.logfalha.1') !== false,
+   'o rastro carrega o wamid, que e por onde se reconcilia na mao');
 
 echo "test-wa-camp-fila OK\n";

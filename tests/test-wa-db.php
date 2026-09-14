@@ -81,6 +81,15 @@ wa_db_set_transport(function () { return null; });
 ok(wa_db_update_linhas('po_wa_envios', 'id=eq.E1', ['status' => 'enviando']) === null,
    'update_linhas devolve null com a rede fora');
 
+// m3: corpo que nao decodifica para array, com status < 300 (a rede
+// respondeu algo que nao e o JSON esperado). Isso e ERRO, nao "ninguem
+// casou": [] faria o dreno pular a linha como se tivesse perdido a corrida,
+// quando na verdade o PATCH pode ter aplicado e a linha estar presa em
+// 'enviando' sem que o codigo saiba.
+wa_db_set_transport(function () { return ['status' => 200, 'body' => 'isto nao e json']; });
+ok(wa_db_update_linhas('po_wa_envios', 'id=eq.E1', ['status' => 'enviando']) === null,
+   'update_linhas devolve null com corpo invalido, NAO lista vazia (m3)');
+
 // --- insert_status: a reserva da transmissao usa isto para separar 409 (o
 // cadeado, "ja existia") de erro de verdade (banco fora do ar).
 wa_db_set_transport(function () { return ['status' => 201, 'body' => '[{"id":"E9"}]']; });

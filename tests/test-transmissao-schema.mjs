@@ -25,6 +25,17 @@ assert.ok(/create unique index if not exists po_wa_envios_camp_lead_uniq\s+on\s+
 assert.ok(/create unique index if not exists po_wa_envios_wamid_uniq\s+on\s+public\.po_wa_envios\s*\(wamid\)\s*where wamid is not null/.test(sql),
   'po_wa_envios tem unique parcial em wamid, que e por onde o recibo acha o envio');
 
+/* A tomada de posse da fila escreve status='enviando'. Se o check subir sem
+   esse valor, TODO PATCH de posse volta 400, o dreno pula todas as linhas e
+   a campanha nunca envia nada - com o log dizendo "falha ao tomar posse",
+   que nao aponta para a causa. A migration ainda nao foi aplicada, entao
+   esta trava vale de verdade. */
+assert.ok(/check \(status in \('reservado','enviando','enviado','entregue','lido','falha'\)\)/.test(sql),
+  "po_wa_envios aceita o status 'enviando', que a tomada de posse escreve");
+
+assert.ok(/enviando_at\s+timestamptz/.test(sql),
+  'po_wa_envios tem enviando_at, que marca a tomada de posse');
+
 // A defesa 3 da spec 8.1 mora em po_leads, nao em po_wa_contatos (ver as
 // decisoes de arquitetura do plano).
 assert.ok(/alter table public\.po_leads[\s\S]*?add column if not exists opt_out_at/.test(sql),

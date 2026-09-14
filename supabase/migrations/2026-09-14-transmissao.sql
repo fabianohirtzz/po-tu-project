@@ -57,9 +57,10 @@ create table if not exists public.po_wa_envios (
 );
 
 -- O CADEADO da reserva-antes-do-envio. O insert que conflita devolve 409, o
--- wa_db_insert(..., true) devolve null, e o destinatario e pulado. Sem isto,
--- dois drenos ao mesmo tempo (o cron e o botao do painel) mandam a mesma
--- campanha duas vezes para a mesma pessoa, a R$ 0,31 cada.
+-- wa_db_insert_status devolve o status para o chamador (wa_camp_reserva)
+-- separar o cadeado (409) de erro de verdade, e o destinatario e pulado. Sem
+-- isto, dois drenos ao mesmo tempo (o cron e o botao do painel) mandam a
+-- mesma campanha duas vezes para a mesma pessoa, a R$ 0,31 cada.
 create unique index if not exists po_wa_envios_camp_lead_uniq
   on public.po_wa_envios (campanha_id, lead_id);
 

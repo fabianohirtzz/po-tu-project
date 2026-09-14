@@ -137,7 +137,13 @@ function wa_db_update_linhas($tabela, $query, $campos) {
         return null;
     }
     $j = json_decode($r['body'], true);
-    return is_array($j) ? $j : [];
+    // Corpo que nao decodifica para array (rede respondeu algo que nao e
+    // JSON valido, por exemplo) e ERRO, nao "ninguem casou". Devolver []
+    // aqui faria o dreno tratar como "outro processo pegou primeiro" e
+    // pular a linha, quando na verdade o PATCH pode ter sido aplicado e a
+    // linha estar presa em 'enviando' sem ninguem saber. Simetrico com
+    // wa_db_select_estrito, que tambem devolve null nesse caso.
+    return is_array($j) ? $j : null;
 }
 
 /* Como wa_db_insert, mas devolve o STATUS HTTP junto com a linha. A reserva da
