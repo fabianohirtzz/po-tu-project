@@ -18,6 +18,7 @@ require_once __DIR__ . '/wa-db.php';
 require_once __DIR__ . '/wa-send.php';
 require_once __DIR__ . '/wa-roteiro.php';
 require_once __DIR__ . '/wa-fone.php';
+require_once __DIR__ . '/wa-camp-recibo.php';
 
 const WA_SITE = 'https://pereiraoliveiraturismo.com.br';
 
@@ -450,7 +451,15 @@ function wa_processar($ev) {
     $texto = (string) ($ev['texto'] ?? '');
     $nome  = $ev['nome'] ?? '';
 
-    if ($ev['tipo'] === 'status') return 'status';
+    if ($ev['tipo'] === 'status') {
+        /* O recibo atualiza po_wa_envios, e SO ele. Nao passa por
+           wa_registra_evento de proposito: o wamid de um status E o da
+           mensagem original e po_wa_mensagens.wamid e unique, entao recibo e
+           eco competiriam pela mesma linha e o eco viraria 'duplicado' -
+           fazendo o robo nao se calar. */
+        wa_camp_recibo($ev['wamid'] ?? '', $ev['texto'] ?? '');
+        return 'status';
+    }
 
     /* ----- eco: ela falou pelo celular ----- */
     if ($ev['tipo'] === 'eco') {

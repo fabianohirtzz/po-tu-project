@@ -15,6 +15,32 @@ $DB = ['po_wa_conversas' => [], 'po_wa_contatos' => [], 'po_leads' => [], 'po_wa
        ]];
 $ENVIADAS = [];
 
+/* wa_camp_recibo (chamado por wa_processar no ramo de status, Task 7) usa
+   wa_db_select_estrito/wa_db_update de wa-db.php diretamente, por fora da
+   injecao de dependencia acima (wa_motor_set_deps) - de proposito, e a
+   mesma funcao que tests/test-wa-camp-recibo.php testa isolada. Sem este
+   mock, o teste 19 (evento de status) faria uma chamada de rede DE
+   VERDADE para o Supabase de producao (SUPABASE_URL vem hardcoded em
+   po-data.php mesmo sem config.local.php), violando a regra do projeto de
+   que nenhum teste toca a rede. Devolver lista vazia reproduz o caso real:
+   nenhum wamid deste arquivo e de uma campanha de transmissao.
+
+   Alem de responder, o transporte REGISTRA toda escrita (POST/PATCH) que
+   passar por ele fora da injecao de dependencia. E o que permite ao teste
+   19 flagrar uma escrita em po_wa_mensagens pelo caminho de baixo: hoje
+   nada impede alguem de acrescentar `require_once .../wa-webhook.php` em
+   wa-motor.php e fazer o ramo de status chamar wa_registra_evento - a
+   guarda de whatsapp.php (travada por assercao de fonte em
+   tests/test-wa-webhook.php) fica intacta e o defeito reaparece por
+   dentro do motor, em silencio. */
+$ESCRITAS_MENSAGENS = [];
+wa_db_set_transport(function ($metodo, $url, $corpo) use (&$ESCRITAS_MENSAGENS) {
+    if (in_array($metodo, ['POST', 'PATCH'], true) && strpos($url, 'po_wa_mensagens') !== false) {
+        $ESCRITAS_MENSAGENS[] = [$metodo, $url, $corpo];
+    }
+    return ['status' => 200, 'body' => '[]'];
+});
+
 wa_motor_set_deps([
     'roteiros' => function () {
         return [['slug'=>'turquia','titulo'=>'Turquia com Antalia','pdf_url'=>'https://x/t.pdf','data_label'=>'10/05/27'],
@@ -379,6 +405,7 @@ ok(!array_key_exists('qualif_grupo', $DB['po_leads'][0]), 'qualif_grupo nao e gr
    nao substitui a asserção de fonte em tests/test-wa-webhook.php, que
    cuida do ponto de chamada. */
 $DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $DB['po_wa_mensagens'] = []; $ENVIADAS = [];
+$ESCRITAS_MENSAGENS = [];
 $acao = wa_processar([
     'tipo' => 'status', 'wa_id' => $WA, 'wamid' => 'wamid.STATUS1',
     'tipo_msg' => 'status', 'texto' => 'delivered', 'nome' => null,
@@ -388,6 +415,15 @@ ok($acao === 'status', "evento de status devolve 'status' (deu: $acao)");
 ok(count($ENVIADAS) === 0, 'nenhum envio acontece para um evento de status');
 ok($DB['po_wa_conversas'] === [], 'evento de status nao cria nem altera conversa');
 ok($DB['po_leads'] === [], 'evento de status nao cria nem altera lead');
+
+/* Evento de status nao pode ESCREVER em po_wa_mensagens, nunca. O wamid de um
+   status e o da mensagem original e a coluna e unica: gravar ali faz o recibo e o
+   eco disputarem a MESMA linha, o eco vira 'duplicado', o handoff morre e o robo
+   passa a falar por cima da atendente. Hoje isso e impedido em whatsapp.php (e
+   travado la por assercao de fonte), mas nada impediria o motor de reintroduzir o
+   defeito por dentro. Esta assercao impede. */
+ok(!$ESCRITAS_MENSAGENS,
+   'evento de status nao escreve em po_wa_mensagens, nem pelo motor');
 
 /* ---------- pontuacao quando o nome vem vazio ----------
    O {nome} sai do perfil do WhatsApp de quem escreve (contacts[0].profile.name
