@@ -155,3 +155,43 @@ function wa_send_list($para, $corpo, $botao, $itens) {
         ],
     ]);
 }
+
+/* Envio por TEMPLATE. Fora da janela de 24h a Cloud API nao aceita outra
+   coisa, e a transmissao por definicao alcanca quem nao escreveu hoje.
+
+   O corpo do texto NAO vem daqui: ele vive aprovado na Meta. O que mandamos
+   sao os parametros posicionais, na ordem em que {{1}}, {{2}} aparecem no
+   template aprovado. Ordem trocada aqui manda o nome do roteiro no lugar do
+   nome da pessoa, e o cliente recebe "Ola Mercados de Natal".
+
+   Sem parametros, o bloco `components` e OMITIDO: mandar components vazio
+   faz a Graph devolver 132000 ("number of parameters does not match") e a
+   mensagem inteira nao sai. */
+function wa_send_template($para, $template, $params = [], $idioma = 'pt_BR') {
+    $template = trim((string) $template);
+    if ($template === '') {
+        // Nome vazio viraria 400 na Meta e um destinatario sem nada, em
+        // silencio. Recusa aqui, antes de gastar a chamada.
+        error_log('wa_send_template: nome de template vazio, nada enviado');
+        return ['ok' => false, 'wamid' => null, 'erro' => 'template sem nome'];
+    }
+    $msg = [
+        'messaging_product' => 'whatsapp',
+        'to'                => wa_destino($para),
+        'type'              => 'template',
+        'template'          => [
+            'name'     => $template,
+            'language' => ['code' => $idioma],
+        ],
+    ];
+    if ($params) {
+        $msg['template']['components'] = [[
+            'type'       => 'body',
+            'parameters' => array_map(
+                function ($v) { return ['type' => 'text', 'text' => (string) $v]; },
+                array_values($params)          // array_values: chave nomeada viraria objeto no JSON
+            ),
+        ]];
+    }
+    return wa_envia($msg);
+}

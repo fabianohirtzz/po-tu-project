@@ -90,4 +90,47 @@ ok($r['ok'] === false, 'rede fora devolve ok=false');
 $r = wa_send_text('telefone ruim', 'x');
 ok($r['ok'] === false, 'destinatario invalido nao envia');
 
+/* ---------- template ----------
+   Fora da janela de 24h a Cloud API SO aceita template. A transmissao nunca
+   alcanca alguem dentro da janela, entao este e o unico caminho de envio do
+   plano 4. O corpo aprovado vive na Meta; o que mandamos sao os parametros
+   posicionais, na ordem em que {{1}}, {{2}} aparecem no template aprovado. */
+$capturado = null;
+wa_set_transport(function ($url, $payload, $headers) use (&$capturado) {
+    $capturado = ['url' => $url, 'payload' => json_decode($payload, true)];
+    return ['status' => 200, 'body' => json_encode(['messages' => [['id' => 'wamid.TPL1']]])];
+});
+
+$r = wa_send_template('+5548999990001', 'roteiro_novo_2026', ['Marlene', 'Mercados de Natal']);
+ok($r['ok'] === true,            'template com resposta 200 devolve ok');
+ok($r['wamid'] === 'wamid.TPL1', 'template devolve o wamid da Meta');
+
+$p = $capturado['payload'];
+ok($p['type'] === 'template',                  "type e 'template' (veio: {$p['type']})");
+ok($p['template']['name'] === 'roteiro_novo_2026', 'o nome do template vai no payload');
+ok($p['template']['language']['code'] === 'pt_BR', 'idioma padrao e pt_BR');
+
+$corpo = $p['template']['components'][0];
+ok($corpo['type'] === 'body', 'o primeiro componente e o body');
+ok(count($corpo['parameters']) === 2, 'os dois parametros foram enviados');
+ok($corpo['parameters'][0]['text'] === 'Marlene',
+   'a ORDEM dos parametros e preservada: o primeiro e o primeiro');
+ok($corpo['parameters'][1]['text'] === 'Mercados de Natal',
+   'a ordem dos parametros e preservada: o segundo e o segundo');
+
+/* Template SEM parametros nao pode mandar components: a Graph API devolve
+   132000 ("number of parameters does not match") e a mensagem inteira morre. */
+wa_send_template('+5548999990001', 'aviso_simples');
+ok(!isset($capturado['payload']['template']['components']),
+   'template sem parametros nao manda o bloco components');
+
+/* Nome de template vazio nunca pode virar chamada: a Meta devolveria 400 e
+   o custo do erro e um destinatario que nao recebeu nada, em silencio. */
+$antes = $capturado;
+$r = wa_send_template('+5548999990001', '');
+ok($r['ok'] === false,          'template sem nome nao e enviado');
+ok($capturado === $antes,       'template sem nome nao chega a chamar a Graph API');
+
+wa_set_transport(null);
+
 echo "test-wa-send OK\n";
