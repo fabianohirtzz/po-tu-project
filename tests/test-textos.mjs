@@ -101,10 +101,46 @@ assert.ok(faltouPdf.includes('{roteiro}'), 'o mesmo vale no envio do PDF');
    recusa uma variavel que funcionaria e a cliente le "nao existe" sobre algo
    que existe. Conferido ponto a ponto em lib/wa-motor.php e lib/wa-timeout.php:
    perguntas recebe nome, roteiro E data (wa-motor.php:390-393). */
-assert.equal(poTextoValida('perguntas', 'Oi {nome}, sobre o {roteiro}: da para viajar em {data}?'), null,
+assert.equal(poTextoValida('perguntas',
+  'Oi {nome}, sobre o {roteiro}: 1. da para viajar em {data}? 2. voce ja viajou em grupo?'), null,
   '{roteiro} e aceito em perguntas, porque o motor o passa');
-assert.equal(poTextoValida('perguntas', 'Da para viajar em {data}?'), null,
+assert.equal(poTextoValida('perguntas',
+  '1. Da para viajar em {data}? 2. Voce ja viajou em grupo?'), null,
   'e continua opcional: a mensagem vale sem ele (o PDF ja saiu com o nome do roteiro)');
+
+/* A ORDEM DAS PERGUNTAS E CONTRATO IMPLICITO DO TEXTO. wa_respostas_numeradas
+   (lib/wa-motor.php) casa \b1\b (.*?) \b2\b (.*) e atribui SEMPRE
+   1 -> data, 2 -> grupo. Com as perguntas trocadas, quem responde
+   "1. nao (nunca viajei em grupo) 2. sim" cai em data negativa: o motor grava
+   status='perdido' e manda o sem_data, quebrando a regra permanente "so a
+   pergunta da data desqualifica; quem nunca viajou em grupo e o cliente-alvo,
+   nao um descarte" - e quebrando por um texto que a propria tela aprovou. */
+const trocadas = poTextoValida('perguntas',
+  '1. Voce ja viajou em grupo? 2. A viagem sai em {data}. Da para essa data?');
+assert.ok(trocadas, 'perguntas trocadas de ordem sao recusadas');
+assert.ok(/número 1/.test(trocadas), 'e o erro diz que a da data tem que ser a numero 1');
+
+const semNumero = poTextoValida('perguntas',
+  'Voce tem disponibilidade em {data}? E ja viajou em grupo?');
+assert.ok(semNumero, 'perguntas sem numeracao sao recusadas');
+assert.ok(/[Nn]umere/.test(semNumero), 'e o erro manda numerar as duas');
+
+// So o "2" tambem nao serve: o motor precisa dos dois marcadores.
+assert.ok(poTextoValida('perguntas', 'A viagem sai em {data}, da? 2. Ja viajou em grupo?'),
+  'texto com o 2 e sem o 1 e recusado');
+
+/* O texto que ESTA no banco (seed de 2026-09-11-whatsapp-motor.sql) tem que
+   continuar valendo, senao a regra nova recusaria o que o robo ja manda. */
+assert.equal(poTextoValida('perguntas', [
+  'Para eu ja adiantar seu atendimento, me responde duas coisinhas:', '',
+  '1. A viagem sai em {data}. Voce tem disponibilidade nessa data?', '',
+  '2. Voce ja viajou em grupo alguma vez?',
+].join(String.fromCharCode(10))), null,
+  'o texto que ja esta no banco continua valido');
+
+// A regra vale SO para as perguntas: as outras mensagens nao sao numeradas.
+assert.equal(poTextoValida('menu', 'Sobre qual viagem voce quer saber?'), null,
+  'a exigencia de numerar nao vaza para as outras chaves');
 
 /* E continua recusado onde o motor NAO passa: qualificado e chamado so com
    nome (wa-motor.php:535), entao ali o {roteiro} sairia apagado do texto. */

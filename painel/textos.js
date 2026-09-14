@@ -34,7 +34,11 @@ function poTextosCatalogo() {
        com o nome do roteiro acabou de sair - e torna-lo obrigatorio
        recusaria o texto que ja esta no banco. */
     {chave:'perguntas', rotulo:'As duas perguntas de qualificação',
-     ajuda:'Vai logo depois do PDF. {data} é a data de saída da viagem.',
+     ajuda:'Vai logo depois do PDF. {data} é a data de saída da viagem. ' +
+           'As duas perguntas precisam ser numeradas, e a da DATA tem que ser a número 1: ' +
+           'o robô sempre lê a resposta "1" como a da data e a "2" como a de já ter viajado ' +
+           'em grupo. Se você trocar a ordem, quem nunca viajou em grupo — que é o cliente ' +
+           'que a gente quer — vira lead perdido por engano.',
      vars:['nome','roteiro','data'], obrigatorias:['data']},
     {chave:'qualificado', rotulo:'Quando a pessoa se qualifica',
      ajuda:'Avisa que a equipe assume daqui.',
@@ -77,6 +81,33 @@ function poTextoValida(chave, texto) {
   if (faltando) {
     return 'Falta a variável {' + faltando + '}, que é obrigatória nesta mensagem.';
   }
+
+  /* A ORDEM DAS PERGUNTAS E CONTRATO. wa_respostas_numeradas
+     (lib/wa-motor.php) casa \b1\b (.*?) \b2\b (.*) e atribui SEMPRE
+     1 -> data, 2 -> grupo. Isso nunca esteve escrito no texto, entao a tela
+     aceitava as perguntas trocadas ou sem numero - e ai quem responde
+     "1. nao (nunca viajei em grupo) 2. sim" cai em resposta de data
+     negativa, o motor grava status='perdido' e manda o sem_data. Quebraria a
+     regra permanente "so a pergunta da data desqualifica; quem nunca viajou
+     em grupo e o cliente-alvo, nao um descarte" - e quebraria por um texto
+     que a propria tela aprovou. */
+  if (chave === 'perguntas') {
+    const m1 = t.match(/\b1\b/);
+    const m2 = m1 ? t.slice(m1.index + 1).match(/\b2\b/) : null;
+    if (!m1 || !m2) {
+      return 'Numere as duas perguntas: "1." na pergunta da data e "2." na de já ter ' +
+             'viajado em grupo. Sem os números o robô não consegue separar as duas respostas.';
+    }
+    const i2 = m1.index + 1 + m2.index;
+    const iData = t.indexOf('{data}');
+    if (iData < m1.index || iData > i2) {
+      return 'A pergunta da data tem que ser a número 1: escreva {data} depois do "1" e ' +
+             'antes do "2". O robô sempre lê a resposta "1" como a da data e a "2" como a ' +
+             'de já ter viajado em grupo, então com as perguntas trocadas quem nunca ' +
+             'viajou em grupo vira lead perdido por engano.';
+    }
+  }
+
   return null;
 }
 
