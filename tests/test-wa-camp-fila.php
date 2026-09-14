@@ -3,16 +3,63 @@ require __DIR__ . '/../lib/wa-camp-fila.php';
 
 function ok($cond, $msg) { if (!$cond) { fwrite(STDERR, "ASSERT: $msg\n"); exit(1); } }
 
+/* Acha a linha de po_wa_envios pelo lead_id, em vez de confiar em indice
+   numerico fixo. Varias secoes novas deste arquivo inserem e removem linhas
+   de campanhas diferentes; um indice fixo ($DB['po_wa_envios'][0]) quebraria
+   silenciosamente assim que a ordem de insercao mudasse. */
+function wa_test_acha_envio(&$DB, $lead_id) {
+    foreach ($DB['po_wa_envios'] as $x) { if ($x['lead_id'] === $lead_id) return $x; }
+    return null;
+}
+
 /* Simulador de banco em memoria. Nenhum teste toca a rede. O que ele precisa
    imitar de verdade e o INDICE UNICO (campanha_id, lead_id): e ele o cadeado
    da reserva, e um simulador sem cadeado deixaria passar o duplo envio que
-   este teste existe para impedir. */
-$DB = ['po_wa_envios' => [], 'po_wa_campanhas' => []];
+   este teste existe para impedir.
+
+   As campanhas C1, C2 e C4 ja nascem com template: a partir da correcao I2
+   (campanha ilegivel nao pode queimar a fila), um dreno sem template legivel
+   devolve cedo sem tocar a fila - se essas campanhas nao tivessem template
+   aqui, os testes originais do brief parariam de exercitar o envio de
+   verdade e passariam por coincidencia, nao por sustentar a regra. */
+$DB = [
+    'po_wa_envios'    => [],
+    'po_wa_campanhas' => [
+        ['id' => 'C1', 'template' => 'modelo_generico'],
+        ['id' => 'C2', 'template' => 'modelo_generico'],
+        ['id' => 'C4', 'template' => 'modelo_generico'],
+    ],
+];
 
 /* Contador de chamadas ao transporte. So existe para o buraco 2 (limite <= 0
    tem que barrar ANTES de qualquer ida ao banco): sem ele, um "enviados===0"
    nao prova que o banco nao foi consultado, so que nada saiu. */
 $CHAMADAS = 0;
+
+/* Interpreta os pares campo=eq.valor / campo=lt.valor / campo=gt.valor da
+   query string do PostgREST. Precisa entender MAIS de uma condicao ao mesmo
+   tempo (ex: campanha_id=eq.X&status=eq.reservado): e exatamente essa
+   combinacao que prova o achado C2 (isolamento entre campanhas) e a tomada
+   de posse do achado C1 (id=eq.X&status=eq.reservado, a corrida do PATCH). */
+function wa_test_condicoes($url) {
+    $condicoes = [];
+    if (preg_match_all('/([a-z_]+)=(eq|lt|gt)\.([^&]*)/', $url, $ms, PREG_SET_ORDER)) {
+        foreach ($ms as $m) {
+            $condicoes[] = [$m[1], $m[2], rawurldecode($m[3])];
+        }
+    }
+    return $condicoes;
+}
+
+function wa_test_casa($linha, $condicoes) {
+    foreach ($condicoes as [$campo, $op, $valor]) {
+        $v = array_key_exists($campo, $linha) ? $linha[$campo] : null;
+        if ($op === 'eq' && (string) $v !== $valor)                        return false;
+        if ($op === 'lt' && ($v === null || strcmp((string) $v, $valor) >= 0)) return false;
+        if ($op === 'gt' && ($v === null || strcmp((string) $v, $valor) <= 0)) return false;
+    }
+    return true;
+}
 
 function wa_test_transport_normal($metodo, $url, $corpo, &$DB) {
     $tabela = preg_match('#/rest/v1/([a-z_]+)#', $url, $m) ? $m[1] : '';
@@ -20,30 +67,38 @@ function wa_test_transport_normal($metodo, $url, $corpo, &$DB) {
 
     if ($metodo === 'POST') {
         foreach ($DB[$tabela] as $e) {
-            if ($e['campanha_id'] === $linha['campanha_id'] && $e['lead_id'] === $linha['lead_id']) {
+            if (($e['campanha_id'] ?? null) === $linha['campanha_id']
+                && ($e['lead_id'] ?? null) === $linha['lead_id']) {
                 return ['status' => 409, 'body' => '{}'];        // unique_violation
             }
         }
-        $linha['id'] = 'E' . (count($DB[$tabela]) + 1);
+        $linha['id'] = 'E' . (count($DB[$tabela]) + 1) . '_' . $linha['lead_id'];
         $DB[$tabela][] = $linha;
         return ['status' => 201, 'body' => json_encode([$linha])];
     }
     if ($metodo === 'GET') {
-        $out = $DB[$tabela];
-        if (preg_match('/status=eq\.([a-z]+)/', $url, $m)) {
-            $out = array_values(array_filter($out, fn($e) => $e['status'] === $m[1]));
-        }
+        $condicoes = wa_test_condicoes($url);
+        $out = array_values(array_filter($DB[$tabela], fn($e) => wa_test_casa($e, $condicoes)));
         if (preg_match('/limit=(\d+)/', $url, $m)) {
             $out = array_slice($out, 0, (int) $m[1]);
         }
         return ['status' => 200, 'body' => json_encode($out)];
     }
     if ($metodo === 'PATCH') {
-        preg_match('/id=eq\.([A-Za-z0-9]+)/', $url, $m);
+        // O PATCH real (Prefer: return=representation) devolve so as linhas
+        // que CASARAM a condicao. E o que sustenta a tomada de posse: quem
+        // patcheia `status=eq.reservado` e ganha a corrida recebe a linha de
+        // volta; quem chega depois recebe [].
+        $condicoes = wa_test_condicoes($url);
+        $afetadas = [];
         foreach ($DB[$tabela] as &$e) {
-            if ($e['id'] === ($m[1] ?? '')) $e = array_merge($e, $linha);
+            if (wa_test_casa($e, $condicoes)) {
+                $e = array_merge($e, $linha);
+                $afetadas[] = $e;
+            }
         }
-        return ['status' => 200, 'body' => '[]'];
+        unset($e);
+        return ['status' => 200, 'body' => json_encode($afetadas)];
     }
     return ['status' => 500, 'body' => '{}'];
 }
@@ -97,6 +152,9 @@ ok($d['restam']   === 1, 'sobra um na fila');
 ok(count($mandados) === 2, 'so dois envios aconteceram');
 ok($DB['po_wa_envios'][0]['status'] === 'enviado', 'a linha vira enviado');
 ok($DB['po_wa_envios'][0]['wamid']  === 'wamid.1', 'o wamid e gravado, e por onde o recibo volta');
+// m2: enviado_at nunca era assertado, e e exatamente o que a Task 8 conta
+// para o teto diario contra a Meta.
+ok(!empty($DB['po_wa_envios'][0]['enviado_at']), 'enviado_at e gravado no envio bem sucedido');
 ok($DB['po_wa_envios'][2]['status'] === 'reservado', 'o terceiro continua reservado');
 
 $d = wa_camp_drena('C1', 10);
@@ -121,7 +179,10 @@ $d = wa_camp_drena('C2', 10);
 ok($d['enviados'] === 0, 'envio que falhou nao conta como enviado');
 ok($d['falhas']   === 1, 'a falha e contada');
 ok($DB['po_wa_envios'][0]['status'] === 'falha', 'a linha vira falha');
-ok($DB['po_wa_envios'][0]['wamid']  === null,    'falha nao inventa wamid');
+// m1: a forma antiga ($DB[...]['wamid'] === null) disparava "undefined array
+// key" toda vez que a linha nunca ganhou a chave wamid, e o warning mascara
+// warning de verdade quando um aparecer.
+ok((wa_test_acha_envio($DB, 'L9')['wamid'] ?? null) === null, 'falha nao inventa wamid');
 ok($DB['po_wa_envios'][0]['erro']   === 'template nao aprovado', 'o motivo fica gravado');
 
 /* ---------- buraco 1: leitura da fila tem que distinguir erro de vazio ----------
@@ -182,5 +243,189 @@ ok($d['enviados'] === 0, 'limite zero nao envia nada (deu: ' . $d['enviados'] . 
 ok(count($mandados) === $mandados_antes, 'limite zero nao chama o enviador');
 ok($CHAMADAS === $chamadas_antes,
    'limite zero nao consulta o banco (chamadas antes: ' . $chamadas_antes . ', depois: ' . $CHAMADAS . ')');
+
+/* ============================================================
+   Rodada de correcao 1 - achados da revisao (task-5-findings.md).
+   Todos os defeitos abaixo sao do PLANO, nao do commit original: o revisor
+   confirmou que o commit era fiel ao brief.
+============================================================ */
+
+/* ---------- C1 (Critical): tomada de posse contra dreno concorrente ----------
+   A reserva (indice unico) impede a LINHA de duplicar. Ela nao impede o
+   ENVIO de repetir: a linha continua 'reservado' durante a chamada a Meta,
+   entao dois drenos ao mesmo tempo (o cron e o botao do painel, Task 8) que
+   leem a MESMA fotografia da fila mandam a mesma mensagem duas vezes.
+
+   Para provar isso num teste de processo unico, o transporte simula a
+   corrida: na hora em que o dreno CORRENTE le a fila (a query com "limit="),
+   o transporte primeiro deixa um "outro processo" (o cron) drenar a MESMA
+   campanha ate o fim - tomando posse de verdade e mandando a mensagem -
+   e SO DEPOIS devolve ao dreno corrente a fotografia de ANTES disso
+   acontecer. Sem a tomada de posse, o dreno corrente veria a linha ainda
+   'reservado' na sua copia e mandaria de novo. */
+$DB['po_wa_envios'] = [];
+$DB['po_wa_campanhas'][] = ['id' => 'CRACE', 'template' => 'modelo_generico'];
+wa_test_usa_transporte_normal();
+wa_camp_reserva('CRACE', [['lead_id'=>'LR1', 'wa_id'=>'+5548999990140', 'nome'=>'Corrida']]);
+
+$mandados_race = [];
+wa_camp_set_enviador(function ($wa_id, $nome) use (&$mandados_race) {
+    $mandados_race[] = $wa_id;
+    return ['ok' => true, 'wamid' => 'wamid.race.' . count($mandados_race), 'erro' => null];
+});
+
+$fila_congelada = false;
+$transporte_race = function ($metodo, $url, $corpo) use (&$DB, &$CHAMADAS, &$fila_congelada, &$transporte_race) {
+    $CHAMADAS++;
+    if (!$fila_congelada && $metodo === 'GET'
+        && strpos($url, '/po_wa_envios') !== false && strpos($url, 'limit=') !== false) {
+        $fila_congelada = true;
+        // A FOTOGRAFIA que o dreno corrente vai usar, tirada AGORA.
+        $resposta = wa_test_transport_normal($metodo, $url, $corpo, $DB);
+        // O "outro processo" (cron) drena a mesma campanha ate o fim, de
+        // verdade, tomando posse pelo PATCH condicional.
+        wa_test_usa_transporte_normal();
+        wa_camp_drena('CRACE', 10);
+        // Devolve este transporte especial para o resto da chamada corrente.
+        wa_db_set_transport($transporte_race);
+        return $resposta;
+    }
+    return wa_test_transport_normal($metodo, $url, $corpo, $DB);
+};
+wa_db_set_transport($transporte_race);
+
+$d = wa_camp_drena('CRACE', 10);
+wa_test_usa_transporte_normal();
+
+ok(count($mandados_race) === 1,
+   'dois drenos leem a mesma fotografia, mas so UM envio sai (deu: ' . count($mandados_race) . ')');
+ok($d['enviados'] === 0,
+   'o dreno corrente nao pode contar como seu um envio que a corrida ja tinha levado');
+$linha_race = wa_test_acha_envio($DB, 'LR1');
+ok($linha_race && $linha_race['status'] === 'enviado',
+   'a linha termina enviado (por quem tomou posse primeiro), nao presa nem duplicada');
+
+/* ---------- C2 (Critical): o dreno tem que respeitar a fronteira da campanha ----------
+   Removendo campanha_id=eq. da consulta da fila, um dreno passaria a puxar
+   linhas 'reservado' de QUALQUER campanha e mandar a elas o template errado.
+   Duas campanhas reservadas ao mesmo tempo: drenar uma nao pode tocar a outra. */
+$DB['po_wa_envios'] = [];
+$DB['po_wa_campanhas'][] = ['id' => 'CISO_A', 'template' => 'modelo_generico'];
+$DB['po_wa_campanhas'][] = ['id' => 'CISO_B', 'template' => 'modelo_generico'];
+wa_camp_reserva('CISO_A', [['lead_id'=>'LA1', 'wa_id'=>'+5548999990100', 'nome'=>'Iso A']]);
+wa_camp_reserva('CISO_B', [['lead_id'=>'LB1', 'wa_id'=>'+5548999990101', 'nome'=>'Iso B']]);
+
+$mandados_iso = [];
+wa_camp_set_enviador(function ($wa_id, $nome) use (&$mandados_iso) {
+    $mandados_iso[] = $wa_id;
+    return ['ok' => true, 'wamid' => 'wamid.iso.' . count($mandados_iso), 'erro' => null];
+});
+
+$d = wa_camp_drena('CISO_A', 10);
+ok($d['enviados'] === 1, 'drenar CISO_A manda so quem e de CISO_A (deu: ' . $d['enviados'] . ')');
+ok(count($mandados_iso) === 1 && $mandados_iso[0] === '+5548999990100',
+   'o enviador so recebeu o destinatario de CISO_A');
+$linha_b = wa_test_acha_envio($DB, 'LB1');
+ok($linha_b && $linha_b['status'] === 'reservado',
+   'o reservado de CISO_B continua intocado depois de drenar CISO_A');
+
+/* ---------- I1 (Important): reserva confunde erro de banco com conflito ----------
+   wa_db_insert (o antigo caminho) devolve null em 409, em 500, em rede caida
+   e em corpo malformado; wa_camp_reserva chamava tudo isso de "ja existia".
+   Com transporte fora do ar, a reserva tem que contar 'erros', nao inflar
+   'ja_existiam' - senao a campanha e encerrada como concluida sem enviar. */
+wa_test_usa_transporte_normal();
+wa_db_set_transport(function ($metodo, $url, $corpo) use (&$CHAMADAS) {
+    $CHAMADAS++;
+    return ['status' => 500, 'body' => '{}'];
+});
+$rerro = wa_camp_reserva('CINSERTERR', [
+    ['lead_id'=>'LI1', 'wa_id'=>'+5548999990150', 'nome'=>'Erro Um'],
+    ['lead_id'=>'LI2', 'wa_id'=>'+5548999990151', 'nome'=>'Erro Dois'],
+]);
+ok($rerro['reservados'] === 0,  'banco fora do ar nao reserva nada (deu: ' . $rerro['reservados'] . ')');
+ok($rerro['ja_existiam'] === 0,
+   'banco fora do ar NAO pode virar "ja existia" (deu: ' . $rerro['ja_existiam'] . ')');
+ok($rerro['erros'] === 2, 'as duas falhas de verdade sao contadas em erros (deu: ' . $rerro['erros'] . ')');
+wa_test_usa_transporte_normal();
+
+/* ---------- I2 (Important): campanha ilegivel nao pode queimar a fila ----------
+   Hoje, se a leitura de po_wa_campanhas falhar (ou a campanha nao tiver
+   template), $template vira '' e toda a fila reservada vira 'falha'
+   permanente, sem nenhum envio - o indice unico impede ate re-reservar.
+   Duas causas reais de "campanha ilegivel", as duas testadas: a leitura
+   falhar de verdade (rede/500), e a campanha existir mas sem template. Nos
+   dois casos a fila tem que ficar INTACTA, e o enviador nunca e chamado. */
+$DB['po_wa_envios'] = [];
+$mandados_ileg = [];
+wa_camp_set_enviador(function ($wa_id, $nome) use (&$mandados_ileg) {
+    $mandados_ileg[] = $wa_id;
+    return ['ok' => true, 'wamid' => 'wamid.ileg.' . count($mandados_ileg), 'erro' => null];
+});
+
+// (a) leitura da campanha falha de verdade (500). CCAMPERR de proposito NAO
+// entra em $DB['po_wa_campanhas']: o transporte abaixo intercepta a consulta
+// antes mesmo de o banco em memoria ser olhado.
+wa_camp_reserva('CCAMPERR', [['lead_id'=>'LE1', 'wa_id'=>'+5548999990110', 'nome'=>'Erro Leitura']]);
+wa_db_set_transport(function ($metodo, $url, $corpo) use (&$DB, &$CHAMADAS) {
+    $CHAMADAS++;
+    if ($metodo === 'GET' && strpos($url, '/po_wa_campanhas') !== false) {
+        return ['status' => 500, 'body' => '{}'];
+    }
+    return wa_test_transport_normal($metodo, $url, $corpo, $DB);
+});
+$d = wa_camp_drena('CCAMPERR', 10);
+ok($d['enviados'] === 0 && $d['restam'] === -1,
+   'leitura da campanha fora do ar nao envia nada (deu enviados=' . $d['enviados'] . ' restam=' . $d['restam'] . ')');
+$linha_e = wa_test_acha_envio($DB, 'LE1');
+ok($linha_e && $linha_e['status'] === 'reservado',
+   'a linha continua reservada, a fila NAO e queimada quando a campanha nao le');
+wa_test_usa_transporte_normal();
+
+// (b) a campanha le normalmente, mas nao tem template configurado.
+$DB['po_wa_campanhas'][] = ['id' => 'CSEMTPL', 'template' => ''];
+wa_camp_reserva('CSEMTPL', [['lead_id'=>'LS1', 'wa_id'=>'+5548999990111', 'nome'=>'Sem Template']]);
+$d = wa_camp_drena('CSEMTPL', 10);
+ok($d['enviados'] === 0 && $d['restam'] === -1,
+   'campanha sem template nao envia nada (deu enviados=' . $d['enviados'] . ' restam=' . $d['restam'] . ')');
+$linha_s = wa_test_acha_envio($DB, 'LS1');
+ok($linha_s && $linha_s['status'] === 'reservado',
+   'a linha continua reservada, a fila NAO e queimada quando falta template');
+
+ok(count($mandados_ileg) === 0,
+   'em nenhum dos dois casos de campanha ilegivel o enviador chega a ser chamado');
+
+/* ---------- I3 (Important): ok=true com wamid=null nao pode virar 'enviado' ----------
+   A resposta 200-sem-identificador da Meta e um caso real (a documentacao da
+   Graph API preve isso). A condicao tem que exigir os dois: ok E wamid. */
+$DB['po_wa_envios'] = [];
+$DB['po_wa_campanhas'][] = ['id' => 'COKNULL', 'template' => 'modelo_generico'];
+wa_camp_reserva('COKNULL', [['lead_id'=>'LN1', 'wa_id'=>'+5548999990120', 'nome'=>'Ok Sem Wamid']]);
+wa_camp_set_enviador(function ($wa_id, $nome) {
+    return ['ok' => true, 'wamid' => null, 'erro' => null];
+});
+$d = wa_camp_drena('COKNULL', 10);
+ok($d['enviados'] === 0 && $d['falhas'] === 1,
+   'ok=true sem wamid NAO conta como enviado (deu enviados=' . $d['enviados'] . ' falhas=' . $d['falhas'] . ')');
+$linha_n = wa_test_acha_envio($DB, 'LN1');
+ok($linha_n && $linha_n['status'] === 'falha', 'a linha vira falha quando falta o wamid, mesmo com ok=true');
+ok(($linha_n['wamid'] ?? null) === null, 'falha continua sem wamid');
+
+/* ---------- I4 (Important): o que chega ao enviador tem que ser conferido ----------
+   Guardar so o wa_id (como os testes originais faziam) deixa passar nome
+   vazio ou os dois parametros trocados. Aqui guarda-se a TUPLA inteira. */
+$DB['po_wa_envios'] = [];
+$DB['po_wa_campanhas'][] = ['id' => 'CTUPLE', 'template' => 'modelo_generico'];
+wa_camp_reserva('CTUPLE', [['lead_id'=>'LT1', 'wa_id'=>'+5548999990130', 'nome'=>'Nome Correto']]);
+$tuplas = [];
+wa_camp_set_enviador(function ($wa_id, $nome) use (&$tuplas) {
+    $tuplas[] = [$wa_id, $nome];
+    return ['ok' => true, 'wamid' => 'wamid.tuple.1', 'erro' => null];
+});
+$d = wa_camp_drena('CTUPLE', 10);
+ok(count($tuplas) === 1, 'o enviador foi chamado exatamente uma vez');
+ok($tuplas[0][0] === '+5548999990130', 'o enviador recebeu o wa_id certo');
+ok($tuplas[0][1] === 'Nome Correto',
+   'o enviador recebeu o NOME certo, nao vazio nem trocado pelo wa_id (deu: "' . $tuplas[0][1] . '")');
 
 echo "test-wa-camp-fila OK\n";

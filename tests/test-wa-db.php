@@ -56,4 +56,50 @@ ok(wa_db_update('po_wa_conversas', 'id=eq.1', ['estado' => 'x']) === false, 'upd
 wa_db_set_transport(function () { return ['status' => 200, 'body' => 'isto nao e json']; });
 ok(wa_db_select('po_wa_conversas', '') === [], 'json invalido devolve []');
 
+// --- update_linhas: usada pela tomada de posse da fila de transmissao.
+// Precisa devolver as LINHAS (nao um booleano), para o chamador distinguir
+// "eu tomei posse" de "outro processo pegou primeiro".
+wa_db_set_transport(function () { return ['status' => 200, 'body' => '[{"id":"E1","status":"enviando"}]']; });
+$posse = wa_db_update_linhas('po_wa_envios', 'id=eq.E1&status=eq.reservado', ['status' => 'enviando']);
+ok(is_array($posse) && count($posse) === 1 && $posse[0]['id'] === 'E1',
+   'update_linhas devolve a linha quando o PATCH casa');
+
+// Ninguem casou (outro dreno ja tinha tomado posse): PostgREST responde 200
+// com lista vazia, nao erro. Isso NAO pode virar null, senao o chamador
+// trataria "perdi a corrida" como "a escrita falhou".
+wa_db_set_transport(function () { return ['status' => 200, 'body' => '[]']; });
+$posse2 = wa_db_update_linhas('po_wa_envios', 'id=eq.E1&status=eq.reservado', ['status' => 'enviando']);
+ok($posse2 === [], 'update_linhas devolve lista vazia quando ninguem casa, nao null');
+
+// Erro de verdade (rede fora ou 5xx) tem que ser null, DIFERENTE de "ninguem
+// casou": e a distincao que impede o dreno de reenviar uma linha cujo status
+// real e desconhecido.
+wa_db_set_transport(function () { return ['status' => 500, 'body' => '{}']; });
+ok(wa_db_update_linhas('po_wa_envios', 'id=eq.E1', ['status' => 'enviando']) === null,
+   'update_linhas devolve null em erro, nunca lista vazia');
+wa_db_set_transport(function () { return null; });
+ok(wa_db_update_linhas('po_wa_envios', 'id=eq.E1', ['status' => 'enviando']) === null,
+   'update_linhas devolve null com a rede fora');
+
+// --- insert_status: a reserva da transmissao usa isto para separar 409 (o
+// cadeado, "ja existia") de erro de verdade (banco fora do ar).
+wa_db_set_transport(function () { return ['status' => 201, 'body' => '[{"id":"E9"}]']; });
+$ins = wa_db_insert_status('po_wa_envios', ['campanha_id' => 'C1', 'lead_id' => 'L1']);
+ok($ins['status'] === 201 && $ins['linha']['id'] === 'E9',
+   'insert_status devolve o status HTTP e a linha criada');
+
+wa_db_set_transport(function () { return ['status' => 409, 'body' => '{}']; });
+$ins409 = wa_db_insert_status('po_wa_envios', ['campanha_id' => 'C1', 'lead_id' => 'L1']);
+ok($ins409['status'] === 409 && $ins409['linha'] === null,
+   'insert_status devolve 409 sem inventar linha (409 e o cadeado, quem decide o que fazer e o chamador)');
+
+wa_db_set_transport(function () { return ['status' => 500, 'body' => '{}']; });
+$ins500 = wa_db_insert_status('po_wa_envios', ['campanha_id' => 'C1', 'lead_id' => 'L1']);
+ok($ins500['status'] === 500, 'insert_status devolve o status de erro de verdade, nao 409');
+
+wa_db_set_transport(function () { return null; });
+$insRede = wa_db_insert_status('po_wa_envios', ['campanha_id' => 'C1', 'lead_id' => 'L1']);
+ok($insRede['status'] === 0 && $insRede['linha'] === null,
+   'insert_status com a rede fora devolve status 0, nao 409');
+
 echo "test-wa-db OK\n";

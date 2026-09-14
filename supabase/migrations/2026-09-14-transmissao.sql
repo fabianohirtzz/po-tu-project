@@ -44,11 +44,16 @@ create table if not exists public.po_wa_envios (
   status       text        not null default 'reservado',
   erro         text,
   reservado_at timestamptz not null default now(),
+  -- Marca a TOMADA DE POSSE da linha, antes da chamada a Meta. Sem um estado
+  -- intermediario, dois drenos simultaneos (o cron e o botao do painel) leem as
+  -- mesmas linhas `reservado` e mandam a mesma mensagem duas vezes, cobrada duas
+  -- vezes. O reservado_at nao serve: ele marca quando a pessoa entrou na campanha.
+  enviando_at  timestamptz,
   enviado_at   timestamptz,
   entregue_at  timestamptz,
   lido_at      timestamptz,
   constraint po_wa_envios_status_chk
-    check (status in ('reservado','enviado','entregue','lido','falha'))
+    check (status in ('reservado','enviando','enviado','entregue','lido','falha'))
 );
 
 -- O CADEADO da reserva-antes-do-envio. O insert que conflita devolve 409, o

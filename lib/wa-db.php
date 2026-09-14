@@ -116,3 +116,43 @@ function wa_db_update($tabela, $query, $campos) {
     }
     return true;
 }
+
+/* Como wa_db_update, mas devolve as LINHAS afetadas em vez de um booleano. O
+   cabecalho `Prefer: return=representation` ja esta em wa_db_headers(), entao o
+   PATCH ja responde com elas; o que faltava era nao jogar fora.
+
+   Existe para a tomada de posse da fila de transmissao: um PATCH que casa
+   `status=eq.reservado` devolve a linha quando ESTE processo a pegou, e devolve
+   lista VAZIA quando outro processo pegou primeiro. E a unica forma de dois
+   drenos simultaneos nao mandarem a mesma mensagem paga duas vezes.
+
+   Devolve null quando a escrita falhou, que e diferente de "ninguem casou". */
+function wa_db_update_linhas($tabela, $query, $campos) {
+    $r = wa_db_http('PATCH', wa_db_url($tabela, $query), json_encode($campos), wa_db_headers());
+    if (!$r) return null;
+    if ($r['status'] >= 300) {
+        // Sem o corpo: em erro o Postgres ecoa valores da linha, que aqui sao
+        // telefone e nome de cliente.
+        error_log('wa_db_update_linhas ' . $tabela . ' status ' . $r['status']);
+        return null;
+    }
+    $j = json_decode($r['body'], true);
+    return is_array($j) ? $j : [];
+}
+
+/* Como wa_db_insert, mas devolve o STATUS HTTP junto com a linha. A reserva da
+   transmissao precisa separar 409 (a pessoa ja esta nesta campanha, que e o cadeado
+   funcionando e nao e erro) de 500 ou rede caida (erro de verdade). Sem a
+   distincao, uma reserva que nao escreveu nada se parece com uma reserva completa,
+   e a campanha e encerrada sem enviar.
+
+   status 0 significa sem resposta nenhuma (rede fora). */
+function wa_db_insert_status($tabela, $linha) {
+    $r = wa_db_http('POST', wa_db_url($tabela), json_encode($linha), wa_db_headers());
+    if (!$r) return ['status' => 0, 'linha' => null];
+    $j = json_decode($r['body'], true);
+    return [
+        'status' => (int) $r['status'],
+        'linha'  => (is_array($j) && isset($j[0])) ? $j[0] : null,
+    ];
+}
