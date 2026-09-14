@@ -88,4 +88,36 @@ ok(wa_camp_ddi_suspeito(['telefone' => '0012125551234']) === null,
    '00 + DDI que NAO vira numero brasileiro valido nao e marcado');
 ok(wa_camp_ddi_suspeito(null) === null, 'payload nulo nao quebra');
 
+/* ---------- escada de lotes ----------
+   Defesa 2 da spec 8.1: "o primeiro envio vai para um grupo pequeno; o
+   tamanho sobe conforme o numero mantem boa qualidade". Numero novo que
+   dispara 800 templates de uma vez e numero que a Meta rebaixa ou bloqueia,
+   e a cliente perde o WhatsApp que usa para trabalhar todo dia. */
+ok(wa_camp_degrau(0, 0, 0)   === 50,   'a primeira campanha da casa vai para 50');
+ok(wa_camp_degrau(1, 0, 50)  === 150,  'sem falha, a segunda sobe para 150');
+ok(wa_camp_degrau(2, 0, 150) === 400,  'a terceira sobe para 400');
+ok(wa_camp_degrau(9, 0, 999) === 2000, 'a escada para no topo e nao passa dele');
+
+/* Qualidade ruim nao sobe degrau: DESCE um. 5% de falha em template e sinal
+   de lista velha, e insistir e o caminho para o numero ser rebaixado. */
+ok(wa_camp_degrau(2, 20, 150) === 150,
+   'com mais de 5% de falha a campanha seguinte desce um degrau');
+ok(wa_camp_degrau(1, 20, 50)  === 50,
+   'do primeiro degrau nao se desce mais');
+ok(wa_camp_degrau(2, 7, 150)  === 400,
+   'exatamente 4,6% de falha ainda sobe: o corte e ACIMA de 5%');
+
+/* Divisao por zero: campanha anterior sem nenhum envio. */
+ok(wa_camp_degrau(3, 0, 0) === 1000, 'campanha anterior vazia nao derruba o degrau');
+
+/* ---------- teto diario ----------
+   O teto da Meta e por dia e por numero (250 antes da verificacao da empresa,
+   2.000 depois - a empresa foi verificada em 11/09/2026). Estourar devolve
+   erro por destinatario, e cada erro ja e uma mensagem perdida. */
+ok(wa_camp_lote_permitido(400, 0, 1000)   === 400, 'com o dia livre, o lote e o degrau inteiro');
+ok(wa_camp_lote_permitido(400, 800, 1000) === 200, 'perto do teto, o lote encolhe');
+ok(wa_camp_lote_permitido(400, 1000, 1000) === 0,  'no teto, nao sai nada');
+ok(wa_camp_lote_permitido(400, 1200, 1000) === 0,  'acima do teto nunca devolve negativo');
+ok(WA_CAMP_TETO_DIARIO === 1000, 'o teto proprio padrao e 1000 por dia');
+
 echo "test-wa-camp OK\n";

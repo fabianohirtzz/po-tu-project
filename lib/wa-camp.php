@@ -112,3 +112,40 @@ function wa_camp_ddi_suspeito($payload_import) {
     }
     return null;
 }
+
+/* Defesa 2 da spec 8.1: lotes crescentes. Numero novo que dispara centenas de
+   templates de uma vez e numero que a Meta rebaixa ou bloqueia - e o numero
+   dela e o que a agencia usa para trabalhar todo dia, entao o custo de errar
+   aqui nao e a campanha, e o telefone da empresa. */
+const WA_CAMP_ESCADA = [50, 150, 400, 1000, 2000];
+
+/* Teto NOSSO, por dia. O teto real e da Meta (250/dia antes da verificacao da
+   empresa, 2.000 depois; a empresa foi verificada em 11/09/2026), mas ele nao
+   e legivel pela API de forma confiavel, entao mantemos um cinto proprio
+   abaixo dele. */
+const WA_CAMP_TETO_DIARIO = 1000;
+
+/* O degrau da PROXIMA campanha. Sobe com o numero de campanhas concluidas e
+   desce um quando a ultima passou de 5% de falha. */
+function wa_camp_degrau($concluidas, $falhas_ultima, $total_ultima) {
+    $i = (int) $concluidas;
+    if ($i < 0) $i = 0;
+    if ($i > count(WA_CAMP_ESCADA) - 1) $i = count(WA_CAMP_ESCADA) - 1;
+
+    // Guarda de divisao por zero: campanha anterior sem nenhum envio nao diz
+    // nada sobre qualidade, entao nao derruba o degrau.
+    if ($i > 0 && (int) $total_ultima > 0
+        && ((int) $falhas_ultima / (int) $total_ultima) > 0.05) {
+        $i = $i - 1;
+    }
+    return WA_CAMP_ESCADA[$i];
+}
+
+/* Quantos podem sair AGORA: o degrau, limitado pelo que sobra do dia.
+   Nunca negativo - um lote negativo viraria array_slice ao contrario e
+   mandaria para o fim da fila. */
+function wa_camp_lote_permitido($degrau, $enviados_hoje, $teto = WA_CAMP_TETO_DIARIO) {
+    $resta = (int) $teto - (int) $enviados_hoje;
+    if ($resta < 0) $resta = 0;
+    return min((int) $degrau, $resta);
+}
