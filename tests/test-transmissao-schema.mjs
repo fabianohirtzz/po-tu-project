@@ -16,12 +16,13 @@ assert.ok(/create table if not exists public\.po_wa_campanhas/.test(sql),
 assert.ok(/create table if not exists public\.po_wa_envios/.test(sql),
   'cria po_wa_envios');
 
-// O cadeado da Task 5.
-assert.ok(/create unique index if not exists po_wa_envios_camp_lead_uniq[\s\S]*?\(campanha_id, lead_id\)/.test(sql),
+// O cadeado da Task 5. O `on public.po_wa_envios` faz parte da assercao: um
+// indice com o nome certo na tabela errada nao tranca nada, e passava.
+assert.ok(/create unique index if not exists po_wa_envios_camp_lead_uniq\s+on\s+public\.po_wa_envios\s*\(campanha_id, lead_id\)/.test(sql),
   'po_wa_envios tem unique (campanha_id, lead_id), que e o cadeado da reserva');
 
-// A chave do recibo de entrega da Task 7.
-assert.ok(/create unique index if not exists po_wa_envios_wamid_uniq[\s\S]*?\(wamid\)[\s\S]*?where wamid is not null/.test(sql),
+// A chave do recibo de entrega da Task 7, tambem presa a tabela.
+assert.ok(/create unique index if not exists po_wa_envios_wamid_uniq\s+on\s+public\.po_wa_envios\s*\(wamid\)\s*where wamid is not null/.test(sql),
   'po_wa_envios tem unique parcial em wamid, que e por onde o recibo acha o envio');
 
 // A defesa 3 da spec 8.1 mora em po_leads, nao em po_wa_contatos (ver as
@@ -52,13 +53,11 @@ assert.ok(/nome\s+text\s+not null default ''/.test(sql),
 assert.ok(!/^\s*(enviados|entregues|lidos|falhas)\s+integer/m.test(sql),
   'po_wa_campanhas NAO tem contador copiado de entrega');
 
-// RLS ligada, no padrao das tabelas existentes (<tabela>_auth).
-assert.ok(/alter table public\.po_wa_campanhas enable row level security/.test(sql),
+// RLS ligada, no padrao das tabelas existentes (<tabela>_auth). Ancorado no
+// inicio da linha (^...m) para nao casar com a linha comentada.
+assert.ok(/^alter table public\.po_wa_campanhas\s+enable row level security/m.test(sql),
   'RLS ligada em po_wa_campanhas');
-// Mesma tolerancia de espaco: "po_wa_campanhas" e "po_wa_envios" ficam
-// alinhados um embaixo do outro, entao o segundo tem espacos extras antes de
-// "enable" para casar a coluna com o primeiro.
-assert.ok(/alter table public\.po_wa_envios\s+enable row level security/.test(sql),
+assert.ok(/^alter table public\.po_wa_envios\s+enable row level security/m.test(sql),
   'RLS ligada em po_wa_envios');
 
 console.log('test-transmissao-schema OK');
