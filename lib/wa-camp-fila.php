@@ -186,12 +186,171 @@ function wa_camp_drena($campanha_id, $limite) {
        ela ainda deve a alguem. Contar so 'reservado' faria a Task 8 concluir
        a campanha com gente sem receber, e a recuperacao de orfas so roda
        dentro do dreno - numa campanha concluida ninguem mais drena, e a
-       linha morre presa para sempre. */
-    $resto = wa_db_select_estrito('po_wa_envios',
+       linha morre presa para sempre.
+
+       wa_db_conta e nao um select: este numero e o que decide se a campanha
+       acabou. Trazer as linhas para contar em PHP puxaria a campanha inteira
+       pela rede a cada drenagem E ficaria a merce do teto de linhas do
+       PostgREST, que devolveria uma contagem capada - fila que ainda tem
+       gente aparecendo como vazia, campanha concluida cedo, em silencio. */
+    $resto = wa_db_conta('po_wa_envios',
         'campanha_id=eq.' . rawurlencode($campanha_id) . '&status=in.(reservado,enviando)');
     return [
         'enviados' => $enviados,
         'falhas'   => $falhas,
-        'restam'   => is_array($resto) ? count($resto) : -1,
+        'restam'   => $resto === null ? -1 : $resto,
+    ];
+}
+
+/* ============================================================
+   Reserva em LOTES, com orcamento de tempo.
+
+   A reserva e um POST por pessoa. No topo da escada (2.000) isso e 2.000
+   POSTs sequenciais dentro de UMA requisicao do painel: o PHP do cPanel morre
+   no meio, a cliente ve erro e a campanha fica com publico parcial - parte da
+   base recebe, parte nao, e nada diz quem ficou de fora.
+
+   Por isso a reserva e retomavel. A campanha nasce 'rascunho' e so vira
+   'enviando' quando o publico INTEIRO esta reservado; o dreno (cron e painel)
+   so olha 'enviando', entao nunca existe campanha enviando pela metade.
+============================================================ */
+
+const WA_CAMP_RESERVA_LOTE     = 200;   // destinatarios por chamada
+const WA_CAMP_RESERVA_SEGUNDOS = 15;    // orcamento de tempo por chamada
+
+/* Os lead_id que JA estao nesta campanha, como mapa. Paginado: sem isto uma
+   campanha grande volta capada pelo teto de linhas do PostgREST e as pessoas
+   que ficaram fora da pagina seriam "reservadas de novo" - o unique devolve
+   409, entao nao duplicam, mas o lote inteiro se gastaria repetindo gente ja
+   reservada e a reserva nunca terminaria. Devolve null se a leitura falhar. */
+function wa_camp_lead_ids_reservados($campanha_id) {
+    $mapa = [];
+    $de   = 0;
+    for ($i = 0; $i < 100; $i++) {      // teto de 100 mil linhas por campanha
+        $p = wa_db_select_estrito('po_wa_envios',
+            'select=lead_id&campanha_id=eq.' . rawurlencode($campanha_id)
+            . '&order=reservado_at.asc&offset=' . $de . '&limit=1000');
+        if ($p === null) return null;
+        foreach ($p as $l) $mapa[(string) ($l['lead_id'] ?? '')] = true;
+        if (count($p) < 1000) break;
+        $de += count($p);
+    }
+    return $mapa;
+}
+
+/* Reserva o proximo pedaco do publico e diz o que falta.
+
+   'completo' => true e a UNICA autorizacao para a campanha virar 'enviando'.
+   Erro de escrita mantem 'completo' falso de proposito: uma reserva que nao
+   escreveu nada nao pode se parecer com uma reserva terminada (mesmo achado
+   I1 que separou 409 de erro em wa_camp_reserva). */
+function wa_camp_reserva_lote($campanha_id, $publico,
+                              $limite = WA_CAMP_RESERVA_LOTE,
+                              $prazo  = WA_CAMP_RESERVA_SEGUNDOS) {
+    $ja = wa_camp_lead_ids_reservados($campanha_id);
+    if ($ja === null) {
+        return ['reservados' => 0, 'ja_existiam' => 0, 'erros' => 1,
+                'faltam' => -1, 'reservados_total' => -1, 'completo' => false];
+    }
+
+    /* Pega quem AINDA NAO esta na campanha, em vez de avancar por posicao na
+       lista. A lista e recalculada da base a cada chamada e pode mudar entre
+       uma e outra (alguem responde SAIR, alguem e revisado): avancar por
+       offset pularia gente para sempre, em silencio. */
+    $falta = [];
+    foreach ($publico as $p) {
+        if (!isset($ja[(string) ($p['lead_id'] ?? '')])) $falta[] = $p;
+    }
+
+    $limite = (int) $limite;
+    if ($limite < 0) $limite = 0;
+    $lote = array_slice($falta, 0, $limite);
+
+    $fim  = time() + (int) $prazo;
+    $acc  = ['reservados' => 0, 'ja_existiam' => 0, 'erros' => 0];
+    foreach ($lote as $p) {
+        // O orcamento e conferido ANTES de cada POST: estourar o tempo do PHP
+        // no meio da escrita e o desfecho que esta funcao existe para evitar.
+        if (time() >= $fim) break;
+        $r = wa_camp_reserva($campanha_id, [$p]);
+        $acc['reservados']  += $r['reservados'];
+        $acc['ja_existiam'] += $r['ja_existiam'];
+        $acc['erros']       += $r['erros'];
+    }
+
+    $faltam = count($falta) - $acc['reservados'] - $acc['ja_existiam'];
+    if ($faltam < 0) $faltam = 0;
+    $acc['faltam']           = $faltam;
+    $acc['reservados_total'] = count($ja) + $acc['reservados'] + $acc['ja_existiam'];
+    $acc['completo']         = ($faltam === 0 && $acc['erros'] === 0);
+    return $acc;
+}
+
+/* Drena uma campanha e a conclui quando a fila esvazia. Cron e painel chamam
+   ESTA funcao, nunca wa_camp_drena direto: as duas telas decidindo sozinhas
+   quando concluir e como a regra "so conclui com a fila vazia" apodrece.
+
+   A guarda do lote zero e o detalhe que custa dinheiro se faltar:
+   wa_camp_drena devolve restam=0 quando o limite e zero (teto diario batido),
+   SEM ter olhado a fila. Concluir a campanha ai deixaria todo o resto da base
+   sem receber, com a campanha marcada como concluida. Lote zero nao e
+   evidencia de fila vazia: e evidencia de que nada foi tentado. */
+function wa_camp_drena_campanha($campanha_id) {
+    $m      = wa_camp_metricas();
+    $degrau = wa_camp_degrau($m['concluidas'], $m['falhas_ultima'], $m['total_ultima']);
+    $lote   = wa_camp_lote_permitido($degrau, $m['enviados_hoje']);
+
+    $d = wa_camp_drena($campanha_id, $lote);
+    $d['lote']      = $lote;
+    $d['degrau']    = $degrau;
+    $d['concluida'] = false;
+
+    if ($lote > 0 && $d['restam'] === 0) {
+        $d['concluida'] = wa_db_update('po_wa_campanhas',
+            'id=eq.' . rawurlencode($campanha_id),
+            ['status' => 'concluida', 'concluida_at' => gmdate('c')]) === true;
+    }
+    return $d;
+}
+
+/* Os numeros que decidem o tamanho do proximo lote. Todos CONTADOS de
+   po_wa_envios, nunca lidos de contador guardado: contador copiado desanda no
+   primeiro webhook fora de ordem e o lote passaria a crescer sobre um numero
+   que ninguem conferiu. */
+function wa_camp_metricas() {
+    $vazio = ['concluidas' => 0, 'falhas_ultima' => 0, 'total_ultima' => 0,
+              'enviados_hoje' => WA_CAMP_TETO_DIARIO];
+
+    $concluidas = wa_db_conta('po_wa_campanhas', 'status=eq.concluida');
+    /* Sem leitura confiavel, o degrau comeca do zero E o dia conta como
+       cheio: as duas escolhas erram para o lado de mandar menos, que e o lado
+       barato. O contrario (enviados_hoje=0) liberaria o lote inteiro de novo
+       a cada varredura do cron enquanto o banco estivesse instavel. */
+    if ($concluidas === null) return $vazio;
+
+    $falhas = 0; $total = 0;
+    if ($concluidas > 0) {
+        $ult = wa_db_select_estrito('po_wa_campanhas',
+            'select=id&status=eq.concluida&order=concluida_at.desc&limit=1');
+        if ($ult && isset($ult[0]['id'])) {
+            $cid = 'campanha_id=eq.' . rawurlencode((string) $ult[0]['id']);
+            $t = wa_db_conta('po_wa_envios', $cid);
+            $f = wa_db_conta('po_wa_envios', $cid . '&status=eq.falha');
+            // Contagem ilegivel fica em zero aqui de proposito: total_ultima=0
+            // ja desliga a queda de degrau (guarda de divisao por zero), entao
+            // o degrau nao sobe nem desce sobre numero que ninguem conferiu.
+            if ($t !== null) $total  = $t;
+            if ($f !== null) $falhas = $f;
+        }
+    }
+
+    $hoje = wa_db_conta('po_wa_envios',
+        'enviado_at=gte.' . rawurlencode(gmdate('Y-m-d') . 'T00:00:00Z'));
+
+    return [
+        'concluidas'    => $concluidas,
+        'falhas_ultima' => $falhas,
+        'total_ultima'  => $total,
+        'enviados_hoje' => $hoje === null ? WA_CAMP_TETO_DIARIO : $hoje,
     ];
 }

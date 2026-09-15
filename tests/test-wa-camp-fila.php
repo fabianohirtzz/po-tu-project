@@ -54,7 +54,11 @@ function wa_test_condicoes($url) {
             $condicoes[] = [$m[1], 'in', $valores];
         }
     }
-    if (preg_match_all('/([a-z_]+)=(eq|lt|gt)\.([^&]*)/', $url, $ms, PREG_SET_ORDER)) {
+    /* gte e lte ANTES de gt e lt na alternancia. Ao contrario, "enviado_at=
+       gte.X" casaria como operador 'gt' com o valor "e.X" e a condicao
+       passaria a comparar contra uma string que comeca com "e." - filtro que
+       nunca casa nada, e um teto diario que se acha sempre vazio. */
+    if (preg_match_all('/([a-z_]+)=(eq|gte|lte|lt|gt)\.([^&]*)/', $url, $ms, PREG_SET_ORDER)) {
         foreach ($ms as $m) {
             $condicoes[] = [$m[1], $m[2], rawurldecode($m[3])];
         }
@@ -66,8 +70,10 @@ function wa_test_casa($linha, $condicoes) {
     foreach ($condicoes as [$campo, $op, $valor]) {
         $v = array_key_exists($campo, $linha) ? $linha[$campo] : null;
         if ($op === 'eq' && (string) $v !== $valor)                        return false;
-        if ($op === 'lt' && ($v === null || strcmp((string) $v, $valor) >= 0)) return false;
-        if ($op === 'gt' && ($v === null || strcmp((string) $v, $valor) <= 0)) return false;
+        if ($op === 'lt'  && ($v === null || strcmp((string) $v, $valor) >= 0)) return false;
+        if ($op === 'gt'  && ($v === null || strcmp((string) $v, $valor) <= 0)) return false;
+        if ($op === 'lte' && ($v === null || strcmp((string) $v, $valor) >  0)) return false;
+        if ($op === 'gte' && ($v === null || strcmp((string) $v, $valor) <  0)) return false;
         if ($op === 'in' && !in_array((string) $v, $valor, true))          return false;
     }
     return true;
@@ -91,10 +97,34 @@ function wa_test_transport_normal($metodo, $url, $corpo, &$DB) {
     if ($metodo === 'GET') {
         $condicoes = wa_test_condicoes($url);
         $out = array_values(array_filter($DB[$tabela], fn($e) => wa_test_casa($e, $condicoes)));
+
+        // order=campo.asc|desc. Sem isto, "a ultima campanha concluida" seria
+        // a primeira que o array_filter devolvesse, e o teste das metricas
+        // passaria por coincidencia da ordem de insercao.
+        if (preg_match('/order=([a-z_]+)\.(asc|desc)/', $url, $mo)) {
+            $campo = $mo[1];
+            $dir   = $mo[2] === 'desc' ? -1 : 1;
+            usort($out, function ($a, $b) use ($campo, $dir) {
+                return $dir * strcmp((string) ($a[$campo] ?? ''), (string) ($b[$campo] ?? ''));
+            });
+        }
+
+        // O TOTAL e contado antes do recorte, como no PostgREST real: e ele
+        // que vai no Content-Range e e o que wa_db_conta le. Contar depois do
+        // limite faria toda contagem valer 1 e a fila pareceria quase vazia.
+        $total = count($out);
+        if (preg_match('/offset=(\d+)/', $url, $mf)) {
+            $out = array_slice($out, (int) $mf[1]);
+        }
         if (preg_match('/limit=(\d+)/', $url, $m)) {
             $out = array_slice($out, 0, (int) $m[1]);
         }
-        return ['status' => 200, 'body' => json_encode($out)];
+        $faixa = $out ? ('0-' . (count($out) - 1)) : '*';
+        return [
+            'status'  => 200,
+            'body'    => json_encode($out),
+            'headers' => ['content-range' => $faixa . '/' . $total],
+        ];
     }
     if ($metodo === 'PATCH') {
         // O PATCH real (Prefer: return=representation) devolve so as linhas
@@ -204,22 +234,29 @@ ok($DB['po_wa_envios'][0]['erro']   === 'template nao aprovado', 'o motivo fica 
    houvesse mais ninguem a mandar - a campanha ficaria eternamente incompleta
    com a tela dizendo sucesso, no lugar de sinalizar erro (restam=-1).
 
-   O truque para expor isso de verdade: falhar SO a leitura da fila (a que
-   carrega "limit="), e deixar a leitura final de "resto" funcionando normal.
-   Se as duas leituras falhassem juntas (como um 500 geral faria), a leitura
-   de "resto" tambem devolveria null e restam sairia -1 de qualquer jeito,
-   MESMO com a mutacao (select em vez de select_estrito) na leitura da fila -
-   e o buraco passaria despercebido por coincidencia. */
+   O truque para expor isso de verdade: falhar SO a leitura da fila (a unica
+   que filtra status=eq.reservado), e deixar a contagem final de "resto"
+   funcionando normal. Se as duas falhassem juntas (como um 500 geral faria),
+   a contagem de "resto" tambem devolveria null e restam sairia -1 de qualquer
+   jeito, MESMO com a mutacao (select em vez de select_estrito) na leitura da
+   fila - e o buraco passaria despercebido por coincidencia.
+
+   A marca do recorte era "limit=", e deixou de servir quando a contagem do
+   resto passou a usar wa_db_conta (que tambem manda limit=1, para o corpo vir
+   vazio). Marcar pelo FILTRO e mais preciso de qualquer forma: a fila e a
+   unica consulta que pede status=eq.reservado; o resto pede
+   status=in.(reservado,enviando). */
 wa_camp_reserva('C4', [
     ['lead_id'=>'L20', 'wa_id'=>'+5548999990020', 'nome'=>'Vinte'],
     ['lead_id'=>'L21', 'wa_id'=>'+5548999990021', 'nome'=>'Vinte e um'],
 ]);
 wa_db_set_transport(function ($metodo, $url, $corpo) use (&$DB, &$CHAMADAS) {
     $CHAMADAS++;
-    // So a consulta com "limit=" (a leitura da fila) sofre a queda do banco.
-    // A leitura final de "resto" (sem limit) e a de po_wa_campanhas seguem
-    // respondendo normal, para a mutacao nao se esconder atras delas.
-    if ($metodo === 'GET' && strpos($url, 'limit=') !== false) {
+    // So a leitura da FILA (status=eq.reservado) sofre a queda do banco. A
+    // contagem final de "resto" (status=in.(...)) e a leitura de
+    // po_wa_campanhas seguem respondendo normal, para a mutacao nao se
+    // esconder atras delas.
+    if ($metodo === 'GET' && strpos($url, 'status=eq.reservado') !== false) {
         return ['status' => 500, 'body' => '{}'];
     }
     return wa_test_transport_normal($metodo, $url, $corpo, $DB);
@@ -597,5 +634,140 @@ ok(strpos($saiu, 'ENVIO SAIU E A GRAVACAO FALHOU') !== false,
    'a gravacao falhada depois do envio deixa rastro no log');
 ok(strpos($saiu, 'wamid.logfalha.1') !== false,
    'o rastro carrega o wamid, que e por onde se reconcilia na mao');
+
+/* ============================================================
+   Task 8 - o que liga a fila a tela e ao cron.
+============================================================ */
+
+/* ---------- reserva em lotes ----------
+   A reserva e um POST por pessoa. No topo da escada sao 2.000 POSTs
+   sequenciais dentro de UMA requisicao do painel, que o PHP do cPanel nao
+   aguenta: a requisicao morre no meio e a campanha fica com publico parcial.
+   Por isso ela e retomavel, e 'completo' e a unica autorizacao para a
+   campanha sair de 'rascunho'. */
+$DB['po_wa_envios'] = [];
+wa_test_usa_transporte_normal();
+$publico5 = [];
+for ($i = 1; $i <= 5; $i++) {
+    $publico5[] = ['lead_id' => 'LL' . $i, 'wa_id' => '+554899999' . (3000 + $i), 'nome' => 'Lote ' . $i];
+}
+
+$l1 = wa_camp_reserva_lote('CLOTE', $publico5, 2);
+ok($l1['reservados'] === 2, 'o lote respeita o limite (deu: ' . $l1['reservados'] . ')');
+ok($l1['faltam'] === 3,     'e diz quantos ainda faltam (deu: ' . $l1['faltam'] . ')');
+ok($l1['completo'] === false, 'com gente faltando a reserva NAO esta completa');
+
+$l2 = wa_camp_reserva_lote('CLOTE', $publico5, 2);
+ok($l2['reservados'] === 2, 'a segunda chamada continua de onde parou');
+ok($l2['ja_existiam'] === 0,
+   'e nao gasta o lote repetindo quem ja estava reservado (deu: ' . $l2['ja_existiam'] . ')');
+ok($l2['faltam'] === 1, 'sobra um');
+
+$l3 = wa_camp_reserva_lote('CLOTE', $publico5, 2);
+ok($l3['reservados'] === 1 && $l3['faltam'] === 0, 'a terceira fecha o publico');
+ok($l3['completo'] === true, 'so entao a reserva esta completa');
+ok($l3['reservados_total'] === 5, 'e o total reservado bate com o publico (deu: ' . $l3['reservados_total'] . ')');
+ok(count(array_filter($DB['po_wa_envios'], fn($e) => $e['campanha_id'] === 'CLOTE')) === 5,
+   'as cinco linhas estao no banco, sem duplicata');
+
+// Reserva que NAO escreveu nada nunca pode se parecer com reserva terminada:
+// e o mesmo achado I1, agora no caminho que autoriza a campanha a enviar.
+$DB['po_wa_envios'] = [];
+wa_db_set_transport(function ($metodo, $url, $corpo) use (&$DB, &$CHAMADAS) {
+    $CHAMADAS++;
+    if ($metodo === 'POST') return ['status' => 500, 'body' => '{}'];
+    return wa_test_transport_normal($metodo, $url, $corpo, $DB);
+});
+$lerr = wa_camp_reserva_lote('CLOTE2', $publico5, 10);
+ok($lerr['erros'] === 5, 'as falhas de escrita sao contadas (deu: ' . $lerr['erros'] . ')');
+ok($lerr['completo'] === false, 'reserva com erro NAO fica completa, e a campanha nao envia');
+wa_test_usa_transporte_normal();
+
+// Leitura do que ja foi reservado fora do ar: nao da para saber quem falta,
+// entao nada e reservado e nada e dado por completo.
+wa_db_set_transport(function ($metodo, $url, $corpo) use (&$CHAMADAS) {
+    $CHAMADAS++;
+    return ['status' => 500, 'body' => '{}'];
+});
+$lread = wa_camp_reserva_lote('CLOTE3', $publico5, 10);
+ok($lread['reservados'] === 0 && $lread['completo'] === false,
+   'leitura fora do ar nao reserva nada nem conclui a reserva');
+wa_test_usa_transporte_normal();
+
+/* ---------- metricas que decidem o lote ---------- */
+$DB['po_wa_campanhas'] = [
+    ['id'=>'CA', 'status'=>'concluida', 'concluida_at'=>'2026-09-10T00:00:00Z'],
+    ['id'=>'CB', 'status'=>'concluida', 'concluida_at'=>'2026-09-12T00:00:00Z'],
+];
+$DB['po_wa_envios'] = [
+    ['id'=>'X1','campanha_id'=>'CB','lead_id'=>'L1','wa_id'=>'+5548999990001','nome'=>'a','status'=>'enviado','enviado_at'=>gmdate('Y-m-d').'T10:00:00Z'],
+    ['id'=>'X2','campanha_id'=>'CB','lead_id'=>'L2','wa_id'=>'+5548999990002','nome'=>'b','status'=>'falha','enviado_at'=>null],
+];
+$m = wa_camp_metricas();
+ok($m['concluidas'] === 2,    'conta as campanhas concluidas (deu: ' . $m['concluidas'] . ')');
+ok($m['total_ultima'] === 2,  'conta os envios da ULTIMA campanha concluida');
+ok($m['falhas_ultima'] === 1, 'conta as falhas da ultima');
+ok($m['enviados_hoje'] === 1, 'conta so o que saiu hoje');
+
+/* Contagem do dia ilegivel tem que valer TETO, nunca zero. Zero liberaria o
+   lote inteiro de novo a cada varredura do cron enquanto o banco estivesse
+   instavel, e o teto contra a Meta existe justamente para o numero da agencia
+   nao ser rebaixado. */
+wa_db_set_transport(function ($metodo, $url, $corpo) use (&$DB, &$CHAMADAS) {
+    $CHAMADAS++;
+    if ($metodo === 'GET' && strpos($url, 'enviado_at=gte.') !== false) {
+        return ['status' => 500, 'body' => '{}'];
+    }
+    return wa_test_transport_normal($metodo, $url, $corpo, $DB);
+});
+$mfalha = wa_camp_metricas();
+ok($mfalha['enviados_hoje'] === WA_CAMP_TETO_DIARIO,
+   'contagem do dia ilegivel conta como dia cheio, nao como dia vazio (deu: ' . $mfalha['enviados_hoje'] . ')');
+ok(wa_camp_lote_permitido(wa_camp_degrau(0, 0, 0), $mfalha['enviados_hoje']) === 0,
+   'e com o dia cheio o lote permitido e zero');
+wa_test_usa_transporte_normal();
+
+/* ---------- drenar e concluir, o caminho unico do cron e do painel ---------- */
+$DB['po_wa_campanhas'] = [['id' => 'CFIM', 'status' => 'enviando', 'template' => 'modelo_generico']];
+$DB['po_wa_envios']    = [];
+wa_camp_reserva('CFIM', [['lead_id'=>'LZ1', 'wa_id'=>'+5548999990210', 'nome'=>'Fim']]);
+wa_camp_set_enviador(function ($wa_id, $nome) {
+    return ['ok' => true, 'wamid' => 'wamid.fim.1', 'erro' => null];
+});
+$df = wa_camp_drena_campanha('CFIM');
+ok($df['enviados'] === 1 && $df['restam'] === 0, 'drena a campanha inteira');
+ok($df['concluida'] === true, 'fila vazia conclui a campanha');
+ok($DB['po_wa_campanhas'][0]['status'] === 'concluida', 'e o status muda no banco');
+
+/* A guarda que custa dinheiro se faltar: com o teto do dia batido, o lote e
+   zero e wa_camp_drena devolve restam=0 SEM ter olhado a fila. Concluir a
+   campanha ai deixa todo o resto da base sem receber, com a campanha marcada
+   como concluida - e ninguem drena campanha concluida. */
+$DB['po_wa_campanhas'] = [['id' => 'CTETO', 'status' => 'enviando', 'template' => 'modelo_generico']];
+$DB['po_wa_envios']    = [];
+wa_camp_reserva('CTETO', [['lead_id'=>'LT9', 'wa_id'=>'+5548999990220', 'nome'=>'Teto']]);
+$mandados_teto = [];
+wa_camp_set_enviador(function ($wa_id, $nome) use (&$mandados_teto) {
+    $mandados_teto[] = $wa_id;
+    return ['ok' => true, 'wamid' => 'wamid.teto.1', 'erro' => null];
+});
+// O dia ja bateu o teto: a contagem de hoje volta cheia.
+wa_db_set_transport(function ($metodo, $url, $corpo) use (&$DB, &$CHAMADAS) {
+    $CHAMADAS++;
+    if ($metodo === 'GET' && strpos($url, 'enviado_at=gte.') !== false) {
+        return ['status' => 200, 'body' => '[]',
+                'headers' => ['content-range' => '*/' . WA_CAMP_TETO_DIARIO]];
+    }
+    return wa_test_transport_normal($metodo, $url, $corpo, $DB);
+});
+$dt = wa_camp_drena_campanha('CTETO');
+wa_test_usa_transporte_normal();
+ok($dt['lote'] === 0, 'com o teto do dia batido o lote e zero (deu: ' . $dt['lote'] . ')');
+ok(count($mandados_teto) === 0, 'e nada e enviado');
+ok($dt['concluida'] === false,
+   'lote zero NAO e evidencia de fila vazia: a campanha nao pode ser concluida');
+ok($DB['po_wa_campanhas'][0]['status'] === 'enviando', 'a campanha continua enviando, para o proximo dia');
+$linha_teto = wa_test_acha_envio($DB, 'LT9');
+ok($linha_teto && $linha_teto['status'] === 'reservado', 'e o destinatario continua na fila');
 
 echo "test-wa-camp-fila OK\n";

@@ -10,6 +10,7 @@
 ============================================================ */
 
 require_once __DIR__ . '/lib/wa-timeout.php';
+require_once __DIR__ . '/lib/wa-camp-fila.php';
 
 $cli = (php_sapi_name() === 'cli');
 if (!$cli) {
@@ -34,6 +35,27 @@ if (!$cli) {
 // deixar rastro nenhum alem do proprio log de erro do PHP.
 try {
     $r = wa_varre_timeouts();
+
+    /* Drena a campanha em andamento. Vem DEPOIS dos timeouts de proposito:
+       lembrete e encerramento sao gratis, a transmissao custa - se algo
+       estourar aqui, o que ja era gratuito ja aconteceu.
+
+       Uma campanha por vez (limit=1): duas drenando juntas dividiriam o teto
+       diario sem saber uma da outra e estourariam o limite da Meta.
+
+       So 'enviando'. Campanha em 'rascunho' ainda esta montando a lista (a
+       reserva vem em pedacos, pelo painel) e nao pode comecar a enviar pela
+       metade: quem sobrasse da lista nunca receberia, e nada diria quem foi. */
+    $c = wa_db_select_estrito('po_wa_campanhas',
+        'select=id&status=eq.enviando&order=created_at.asc&limit=1');
+    if ($c) {
+        /* wa_camp_drena_campanha e o MESMO caminho do botao do painel: a
+           escada, o teto do dia e o encerramento da campanha ficam num lugar
+           so. Duas telas decidindo sozinhas quando concluir uma campanha e
+           como essa regra apodrece. */
+        $r['campanha'] = wa_camp_drena_campanha($c[0]['id']);
+    }
+
     error_log('wa-cron: ' . json_encode($r));
     echo json_encode($r);
 } catch (Throwable $e) {

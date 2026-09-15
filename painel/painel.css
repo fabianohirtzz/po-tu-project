@@ -512,3 +512,15 @@ tbody tr:last-child td{border-bottom:none}
 .txt-area.erro{border-color:var(--st-perdido)}
 .txt-erro{margin-top:6px;font-size:.76rem;font-weight:600;color:var(--st-perdido)}
 #txt-salvar{margin-top:4px}
+
+/* ---------- TRANSMISSAO ----------
+   O custo e a coisa mais visivel da tela de proposito (spec 8.2): e o unico
+   lugar do painel onde um clique vira fatura de terceiro, e custo invisivel
+   e como um projeto perde a confianca do cliente. */
+.camp-num{display:flex;gap:26px;flex-wrap:wrap;margin:12px 0 6px}
+.camp-num b{display:block;font-size:1.6rem;font-weight:800;color:var(--ink);line-height:1.15}
+.camp-num span{font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.camp-alerta:empty{display:none}
+.camp-and-n{font-size:.95rem;font-weight:700;color:var(--ink);margin-top:4px}
+#camp-progresso:empty{display:none}
+#camp-progresso{margin-top:10px}
