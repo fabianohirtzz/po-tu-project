@@ -54,7 +54,9 @@ function ce_filho($caso) {
 
     po_auth_set_verificador(fn($u, $a, $t) => $caso !== 'sem-auth' && $t === 'tok.valido');
 
-    $criar = ['modo'=>'criar', 'nome'=>'Portugal 2027',
+    /* total_confirmado = 1 porque so um lead da ce_base entra (os outros sao
+       opt-out e fixo). E o numero que a tela mostrou e a cliente confirmou. */
+    $criar = ['modo'=>'criar', 'nome'=>'Portugal 2027', 'total_confirmado'=>'1',
               'template'=>'po_roteiro_novo', 'corpo'=>CE_CORPO];
     switch ($caso) {
         case 'sem-auth':        $_POST = array_merge($_POST, $criar); break;
@@ -68,7 +70,18 @@ function ce_filho($caso) {
         case 'criar-duplicada': $_POST = array_merge($_POST, $criar); break;
         case 'criar-vazio':     $_POST = array_merge($_POST, $criar); break;
         case 'base-fora':       $_POST = array_merge($_POST, $criar); break;
+        case 'criar-confirmado-velho':
+            $_POST = array_merge($_POST, $criar, ['total_confirmado'=>'9']); break;
+        case 'criar-sem-confirmado':
+            $_POST = array_merge($_POST, $criar); unset($_POST['total_confirmado']); break;
+        case 'criar-campanhas-ilegivel': $_POST = array_merge($_POST, $criar); break;
+        case 'criar-gemea-no-banco':     $_POST = array_merge($_POST, $criar); break;
+        case 'criar-fecha-falha':        $_POST = array_merge($_POST, $criar); break;
         case 'drenar-rascunho': $_POST = ['sb_token'=>'tok.valido', 'modo'=>'drenar',
+                                          'campanha_id'=>'CJA']; break;
+        case 'drenar-recente':  $_POST = ['sb_token'=>'tok.valido', 'modo'=>'drenar',
+                                          'campanha_id'=>'CJA']; break;
+        case 'drenar-espacado': $_POST = ['sb_token'=>'tok.valido', 'modo'=>'drenar',
                                           'campanha_id'=>'CJA']; break;
         case 'cancelar':        $_POST = ['sb_token'=>'tok.valido', 'modo'=>'cancelar',
                                           'campanha_id'=>'CJA']; break;
@@ -79,6 +92,13 @@ function ce_filho($caso) {
 
         if (strpos($url, 'po_wa_campanhas') !== false) {
             if ($metodo === 'GET') {
+                /* Leitura da lista de campanhas ilegivel. Se esta linha virar
+                   "lista vazia", nasce a campanha gemea pela outra porta, com
+                   a base cobrada em dobro - a regra permanente do projeto e
+                   que leitura de banco distingue erro de vazio. */
+                if ($caso === 'criar-campanhas-ilegivel') {
+                    return ['status'=>503, 'body'=>'{"message":"fora"}'];
+                }
                 // A conferencia de "uma campanha por vez".
                 if ($caso === 'criar-duplicada') {
                     return ['status'=>200, 'body'=>json_encode([[
@@ -86,18 +106,43 @@ function ce_filho($caso) {
                 }
                 // Campanha ainda montando a lista: nao pode ser drenada, e
                 // PODE ser cancelada (e a saida de emergencia).
+                if (in_array($caso, ['drenar-recente', 'drenar-espacado'], true)) {
+                    return ['status'=>200, 'body'=>json_encode([[
+                        'id'=>'CJA', 'nome'=>'Rodando', 'status'=>'enviando',
+                        'template'=>'po_roteiro_novo', 'total'=>10]])];
+                }
                 if ($caso === 'drenar-rascunho' || $caso === 'cancelar') {
                     return ['status'=>200, 'body'=>json_encode([[
                         'id'=>'CJA', 'nome'=>'Montando', 'status'=>'rascunho', 'total'=>0]])];
                 }
                 return ['status'=>200, 'body'=>'[]', 'headers'=>['content-range'=>'*/0']];
             }
-            if ($metodo === 'POST') return ['status'=>201, 'body'=>'[{"id":"CNOVA"}]'];
-            return ['status'=>204, 'body'=>''];      // PATCH: fecha a reserva
+            if ($metodo === 'POST') {
+                // O indice unico parcial po_wa_campanhas_uma_ativa batendo: a
+                // outra aba ganhou a corrida entre ler e escrever.
+                if ($caso === 'criar-gemea-no-banco') {
+                    return ['status'=>409, 'body'=>'{"code":"23505"}'];
+                }
+                return ['status'=>201, 'body'=>'[{"id":"CNOVA"}]'];
+            }
+            // PATCH: fecha a reserva (rascunho -> enviando)
+            if ($caso === 'criar-fecha-falha') return ['status'=>500, 'body'=>'{}'];
+            return ['status'=>204, 'body'=>''];
         }
 
         if (strpos($url, 'po_wa_envios') !== false) {
             if ($metodo === 'GET') {
+                // O ultimo envio desta campanha, que e o que espaca o dreno manual.
+                if (strpos($url, 'order=enviado_at.desc') !== false) {
+                    if ($caso === 'drenar-recente') {
+                        return ['status'=>200, 'body'=>json_encode(
+                            [['enviado_at'=>gmdate('c', time() - 60)]])];
+                    }
+                    if ($caso === 'drenar-espacado') {
+                        return ['status'=>200, 'body'=>json_encode(
+                            [['enviado_at'=>gmdate('c', time() - 3600)]])];
+                    }
+                }
                 return ['status'=>200, 'body'=>'[]', 'headers'=>['content-range'=>'*/0']];
             }
             return ['status'=>201, 'body'=>'[{"id":"E1"}]'];
@@ -227,12 +272,6 @@ ok(count($patches) === 1, 'a lista completa fecha a campanha');
 ok(json_decode($patches[0]['corpo'], true)['status'] === 'enviando',
    'e so entao ela vira enviando, liberada para o dreno');
 
-/* ---------- drenar so aceita campanha com a lista fechada ---------- */
-$r = ce_roda('drenar-rascunho');
-ok($r['codigo'] === 409, 'campanha em rascunho nao pode ser drenada (deu: ' . $r['codigo'] . ')');
-ok(!ce_escreveu($r),
-   'e nada e enviado: drenar uma lista pela metade concluiria a campanha com o resto da base de fora');
-
 /* ---------- cancelar: a saida de emergencia ----------
    Sem ela, uma campanha travada em rascunho bloqueia TODA campanha futura
    (existe uma por vez) e so teria conserto por SQL no banco. */
@@ -241,5 +280,87 @@ ok($r['codigo'] === 200 && $r['json']['cancelada'] === true, 'a campanha travada
 $pt = array_values(array_filter($r['chamadas'], fn($c) => $c['metodo'] === 'PATCH'));
 ok(count($pt) === 1 && json_decode($pt[0]['corpo'], true)['status'] === 'cancelada',
    'e o status vai para cancelada, que o dreno do cron nao pega');
+
+/* ---------- I2: o numero confirmado prende o servidor ----------
+   A spec 8.2 pede que nada dispare sem o aviso de pessoas e custo. O aviso so
+   vale se for VINCULANTE: sem isto ela confirma "1 pessoa, R$ 0,31" numa aba
+   e a campanha sai com o publico que o servidor recalculou agora. */
+$r = ce_roda('criar-confirmado-velho');
+ok($r['codigo'] === 409, 'total confirmado divergente e recusado (deu: ' . $r['codigo'] . ')');
+ok(!ce_escreveu($r), 'e nada e criado com um numero que ela nao viu');
+
+$r = ce_roda('criar-sem-confirmado');
+ok($r['codigo'] === 400 && !ce_escreveu($r),
+   'criar sem o numero confirmado e recusado: seria gastar sem o aviso');
+
+/* ---------- I6: leitura ilegivel nao pode virar campanha gemea ----------
+   Regra permanente do projeto: leitura de banco distingue erro de vazio. Se
+   esta conferencia regredir para "lista vazia", um Supabase instavel faz
+   nascer a segunda campanha e a base sai cobrada em dobro. */
+$r = ce_roda('criar-campanhas-ilegivel');
+ok($r['codigo'] === 502, 'lista de campanhas ilegivel devolve erro (deu: ' . $r['codigo'] . ')');
+ok(!ce_escreveu($r), 'e nao cria campanha nenhuma em cima de leitura que falhou');
+
+/* ---------- I8: o 409 do banco tem a mesma mensagem da conferencia ----------
+   O indice unico parcial po_wa_campanhas_uma_ativa e quem de fato tranca: a
+   conferencia le e so depois escreve, e nessa janela cabe a outra aba. */
+$r = ce_roda('criar-gemea-no-banco');
+ok($r['codigo'] === 409, 'o 409 do indice unico vira 409 do endpoint (deu: ' . $r['codigo'] . ')');
+ok(strpos($r['json']['error'], 'campanha em andamento') !== false,
+   'com a mesma mensagem da conferencia, e nao um erro cru de banco');
+
+/* ---------- I1: nao anunciar prontidao quando a escrita falhou ----------
+   O PATCH que leva rascunho -> enviando falhando e a campanha fica em
+   rascunho: nem o cron nem o botao drenam, e ela ainda bloqueia toda campanha
+   futura. Dizer completo:true ai faz a tela escrever "campanha pronta". */
+$r = ce_roda('criar-fecha-falha');
+ok($r['codigo'] === 200 && $r['json']['ok'] === true, 'a campanha foi criada e reservada');
+ok($r['json']['reservados'] === 1, 'a reserva em si funcionou');
+ok($r['json']['completo'] === false,
+   'mas completo e FALSO quando o fechamento da lista falhou (deu: '
+   . var_export($r['json']['completo'], true) . ')');
+
+/* ---------- drenar so aceita campanha com a lista fechada ---------- */
+$r = ce_roda('drenar-rascunho');
+ok($r['codigo'] === 409, 'campanha em rascunho nao pode ser drenada (deu: ' . $r['codigo'] . ')');
+ok(!ce_escreveu($r),
+   'e nada e enviado: drenar uma lista pela metade concluiria a campanha com o resto da base de fora');
+
+/* ---------- I3: o dreno manual tem espacamento ----------
+   O degrau e o teto do dia limitam TAMANHO; a defesa 2 da spec 8.1 e sobre
+   CADENCIA. Quem materializa a cadencia e o cron horario - o botao do painel
+   a contornava: vinte cliques mandavam vinte lotes num minuto. */
+$r = ce_roda('drenar-recente');
+ok($r['codigo'] === 429, 'lote disparado ha 1 minuto bloqueia o proximo (deu: ' . $r['codigo'] . ')');
+ok(!ce_escreveu($r), 'e nada sai: nenhuma mensagem paga no clique repetido');
+
+$r = ce_roda('drenar-espacado');
+ok($r['codigo'] === 200, 'com uma hora desde o ultimo envio o dreno manual passa (deu: ' . $r['codigo'] . ')');
+
+/* ---------- ASSERCAO DE FONTE: a fiacao do cron ----------
+   O gemeo das travas do modo drenar mora no wa-cron.php e nao passa por
+   nenhum teste de comportamento (o cron nao e chamavel sem rede). A regra
+   permanente do projeto e que a trava fica no PONTO DE CHAMADA, nao so na
+   funcao pura - foi assim que o filtro da conversa sumiu uma vez. Mesmo molde
+   da assercao que tests/test-wa-webhook.php usa para o whatsapp.php. */
+$src_cron = file_get_contents(__DIR__ . '/../wa-cron.php');
+ok(preg_match("/wa_db_select_estrito\(\s*'po_wa_campanhas',\s*'([^']*)'/", $src_cron, $mc) === 1,
+   'wa-cron.php escolhe a campanha a drenar lendo po_wa_campanhas');
+$q_cron = $mc[1];
+/* status=eq.enviando: campanha em 'rascunho' ainda esta montando a lista.
+   Drenar ali mandaria so para o pedaco ja reservado e concluiria a campanha
+   com o resto da base de fora, sem nada dizendo quem ficou. */
+ok(strpos($q_cron, 'status=eq.enviando') !== false,
+   'o cron so drena campanha com a lista fechada (a consulta foi: ' . $q_cron . ')');
+/* limit=1: duas campanhas drenando na mesma varredura dividiriam o teto
+   diario sem saber uma da outra e estourariam o limite da Meta. */
+ok(strpos($q_cron, 'limit=1') !== false,
+   'o cron drena UMA campanha por varredura (a consulta foi: ' . $q_cron . ')');
+/* O mesmo caminho do botao do painel: a escada, o teto do dia e o
+   encerramento da campanha num lugar so. */
+ok(strpos($src_cron, 'wa_camp_drena_campanha(') !== false,
+   'o cron drena pelo mesmo caminho do painel, e nao por wa_camp_drena direto');
+ok(strpos($src_cron, "require_once __DIR__ . '/lib/wa-camp-fila.php'") !== false,
+   'o cron carrega a fila da transmissao');
 
 echo "test-campanha-endpoint OK\n";

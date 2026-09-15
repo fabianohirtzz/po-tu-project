@@ -31,6 +31,14 @@ require_once __DIR__ . '/lib/wa-db.php';     // ja carrega o lib/wa-config.php
 
 const CAMP_PAGINA = 1000;   // paginacao da leitura da base
 
+/* Espacamento minimo entre dois lotes disparados PELO BOTAO. O degrau e o
+   teto do dia limitam TAMANHO; nada limitava FREQUENCIA, e a defesa 2 da spec
+   8.1 e sobre cadencia: numero novo que dispara centenas de templates de uma
+   vez e numero que a Meta rebaixa. Quem materializa a cadencia e o cron
+   horario; o botao, que e util para nao esperar uma hora pelo primeiro lote,
+   contornava essa cadencia - vinte cliques mandavam vinte lotes num minuto. */
+const CAMP_INTERVALO_MANUAL = 600;   // 10 min
+
 header('Content-Type: application/json; charset=utf-8');
 
 /* A mensagem de erro NUNCA carrega nome, telefone nem trecho de ficha: ela
@@ -106,15 +114,20 @@ function camp_calcula() {
    O total e reescrito porque a base pode ter mudado entre a confirmacao e o
    fim da reserva (alguem respondeu SAIR, alguem foi revisado). Quem manda e
    quantas linhas existem de verdade na fila; o preco continua congelado, e o
-   custo passa a ser o do numero real. */
+   custo passa a ser o do numero real.
+
+   DEVOLVE o booleano, e quem chama e obrigado a olhar. Jogar fora o retorno
+   fazia a resposta dizer completo:true com o PATCH em 500: a tela anunciava
+   "campanha pronta" e a campanha ficava em 'rascunho' - que nem o cron nem o
+   botao drenam, e que ainda bloqueia toda campanha futura. */
 function camp_fecha_reserva($id, $reservados_total, $custo_estimado) {
     $n = (int) $reservados_total;
-    wa_db_update('po_wa_campanhas', 'id=eq.' . rawurlencode((string) $id), [
+    return wa_db_update('po_wa_campanhas', 'id=eq.' . rawurlencode((string) $id), [
         'total'                   => $n,
         'custo_estimado_centavos' => $n > 0 ? wa_camp_custo($n, WA_CAMP_PRECO_CENTAVOS)
                                             : (int) $custo_estimado,
         'status'                  => 'enviando',
-    ]);
+    ]) === true;
 }
 
 $modo = cpost('modo');
@@ -187,6 +200,20 @@ if ($modo === 'criar') {
                  . 'que é como a pessoa sai da lista.');
     }
 
+    /* O NUMERO QUE ELA CONFIRMOU PRENDE O SERVIDOR (spec 8.2). Sem isto o
+       aviso de custo existe mas nao e vinculante: a tela confirma "23 pessoas,
+       R$ 7,13" sobre uma previa que so e recalculada ao entrar na aba, e o
+       criar refaz a conta do zero. Com duas abas do painel abertas, ela
+       confirma um numero e a campanha sai com outro publico e outro custo.
+
+       Vazio tambem e recusado: criar campanha sem numero confirmado seria
+       gastar sem o aviso, que e exatamente o que a spec proibe. */
+    $confirmado = cpost('total_confirmado');
+    if ($confirmado === '' || !ctype_digit($confirmado)) {
+        cfail(400, 'Recarregue a aba Transmissão: o público e o custo precisam estar '
+                 . 'na tela antes de enviar.');
+    }
+
     /* Uma campanha por vez. Esta conferencia vem ANTES de calcular o publico:
        quem esbarrou nela ja perdeu, e nao ha por que ler 800 leads para so
        entao recusar. */
@@ -203,8 +230,18 @@ if ($modo === 'criar') {
     if ($r['resumo']['total'] === 0) {
         cfail(400, 'Nenhuma pessoa entra nesta campanha. Revise os contatos antes.');
     }
+    if ((int) $confirmado !== $r['resumo']['total']) {
+        cfail(409, 'A lista mudou desde que você viu o público: agora são '
+                 . $r['resumo']['total'] . ' pessoas, e não ' . (int) $confirmado . '. '
+                 . 'Confira o público e o custo de novo antes de enviar.');
+    }
 
-    $camp = wa_db_insert('po_wa_campanhas', [
+    /* wa_db_insert_status e nao wa_db_insert: com o indice unico parcial
+       po_wa_campanhas_uma_ativa no banco, o 409 aqui significa "outra aba
+       ganhou a corrida", nao "o banco caiu". Sao mensagens diferentes, e o
+       unique e quem de fato tranca - a conferencia acima le e so depois
+       escreve, e a janela entre as duas coisas cabe um segundo clique. */
+    $ins = wa_db_insert_status('po_wa_campanhas', [
         'nome'                    => mb_substr($nome, 0, 120),
         'roteiro_slug'            => cpost('roteiro_slug') ?: null,
         'template'                => $template,
@@ -219,10 +256,18 @@ if ($modo === 'criar') {
         // campanha so fica visivel para ele quando a lista estiver inteira.
         'status'                  => 'rascunho',
     ]);
+    if ($ins['status'] === 409) {
+        cfail(409, 'Já existe uma campanha em andamento. Termine ou aguarde o envio dela '
+                 . 'antes de começar outra.');
+    }
+    $camp = $ins['linha'];
     if (!$camp) cfail(502, 'Não consegui criar a campanha. Nada foi enviado.');
 
     $l = wa_camp_reserva_lote($camp['id'], $r['publico']);
-    if ($l['completo']) camp_fecha_reserva($camp['id'], $l['reservados_total'], $custo);
+    /* completo so vale depois de o PATCH passar: a campanha ainda esta em
+       'rascunho' ate ele, e rascunho ninguem drena. */
+    $completo = $l['completo']
+        && camp_fecha_reserva($camp['id'], $l['reservados_total'], $custo);
 
     cok([
         'campanha_id'      => $camp['id'],
@@ -231,7 +276,7 @@ if ($modo === 'criar') {
         'reservados_total' => $l['reservados_total'],
         'faltam'           => $l['faltam'],
         'erros'            => $l['erros'],
-        'completo'         => $l['completo'],
+        'completo'         => $completo,
         'custo_centavos'   => $custo,
     ]);
 }
@@ -254,7 +299,8 @@ if ($modo === 'reservar') {
 
     list($leads, $r, $custo) = camp_calcula();
     $l = wa_camp_reserva_lote($id, $r['publico']);
-    if ($l['completo']) camp_fecha_reserva($id, $l['reservados_total'], $custo);
+    $completo = $l['completo']
+        && camp_fecha_reserva($id, $l['reservados_total'], $custo);
 
     cok([
         'campanha_id'      => $id,
@@ -263,7 +309,7 @@ if ($modo === 'reservar') {
         'reservados_total' => $l['reservados_total'],
         'faltam'           => $l['faltam'],
         'erros'            => $l['erros'],
-        'completo'         => $l['completo'],
+        'completo'         => $completo,
     ]);
 }
 
@@ -282,6 +328,24 @@ if ($modo === 'drenar') {
        fora, sem nada dizendo quem ficou. */
     if (($c[0]['status'] ?? '') !== 'enviando') {
         cfail(409, 'Esta campanha não está pronta para enviar.');
+    }
+
+    /* Espacamento do dreno manual. Le o envio mais recente DESTA campanha;
+       leitura que falha recusa o disparo em vez de liberar - na duvida, o
+       lado barato e nao mandar, porque o cron manda de qualquer jeito. */
+    $ult = wa_db_select_estrito('po_wa_envios',
+        'select=enviado_at&campanha_id=eq.' . rawurlencode($id)
+        . '&status=in.(enviado,entregue,lido)&order=enviado_at.desc&limit=1');
+    if ($ult === null) cfail(502, 'Não consegui conferir o último envio. Nada foi enviado.');
+    if ($ult && !empty($ult[0]['enviado_at'])) {
+        $quando = strtotime((string) $ult[0]['enviado_at']);
+        // Data ilegivel conta como recente: na duvida, nao mandar.
+        if ($quando === false || (time() - $quando) < CAMP_INTERVALO_MANUAL) {
+            cfail(429, 'O lote anterior saiu há menos de '
+                     . (int) (CAMP_INTERVALO_MANUAL / 60) . ' minutos. O envio sai em lotes '
+                     . 'espaçados de propósito, para o WhatsApp não rebaixar o número da '
+                     . 'agência. O próximo lote sai sozinho, de hora em hora.');
+        }
     }
 
     /* wa_camp_drena_campanha, nao wa_camp_drena: e o mesmo caminho do cron,

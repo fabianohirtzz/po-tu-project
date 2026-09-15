@@ -437,6 +437,13 @@ wa_camp_reserva('CSEMTPL', [['lead_id'=>'LS1', 'wa_id'=>'+5548999990111', 'nome'
 $d = wa_camp_drena('CSEMTPL', 10);
 ok($d['enviados'] === 0 && $d['restam'] === -1,
    'campanha sem template nao envia nada (deu enviados=' . $d['enviados'] . ' restam=' . $d['restam'] . ')');
+/* restam=-1 sozinho junta duas causas com conserto OPOSTO: banco fora do ar
+   pede "tente de novo em instantes"; template faltando pede ir a Meta aprovar
+   o modelo - e essa e a causa mais provavel no primeiro uso real. Sem o
+   motivo, a tela manda a cliente repetir o clique a tarde inteira. */
+ok(($d['motivo'] ?? null) === 'sem_template',
+   'a falta de template se identifica, para a tela nao mandar "tente de novo" (deu: '
+   . var_export($d['motivo'] ?? null, true) . ')');
 $linha_s = wa_test_acha_envio($DB, 'LS1');
 ok($linha_s && $linha_s['status'] === 'reservado',
    'a linha continua reservada, a fila NAO e queimada quando falta template');
@@ -669,6 +676,25 @@ ok($l3['completo'] === true, 'so entao a reserva esta completa');
 ok($l3['reservados_total'] === 5, 'e o total reservado bate com o publico (deu: ' . $l3['reservados_total'] . ')');
 ok(count(array_filter($DB['po_wa_envios'], fn($e) => $e['campanha_id'] === 'CLOTE')) === 5,
    'as cinco linhas estao no banco, sem duplicata');
+
+/* O PUBLICO MUDA ENTRE CHAMADAS, e ninguem pode ser pulado. E o motivo de a
+   reserva escolher QUEM FALTA em vez de avancar por posicao na lista: alguem
+   responde SAIR no meio da reserva, a lista encolhe, e quem avanca por
+   `array_slice($publico, count($ja))` pula exatamente uma pessoa por saida -
+   em silencio, e para sempre, porque a rodada seguinte parte de um offset
+   ainda maior. No caminho feliz as duas formas coincidem, entao so este
+   cenario separa as duas. */
+$DB['po_wa_envios'] = [];
+$p1 = wa_camp_reserva_lote('CMUDA', $publico5, 2);
+ok($p1['reservados'] === 2, 'primeira rodada reserva dois (deu: ' . $p1['reservados'] . ')');
+
+// LL1 sai da lista (respondeu SAIR depois de ja ter sido reservado).
+$publico_menor = array_values(array_filter($publico5, fn($p) => $p['lead_id'] !== 'LL1'));
+$p2 = wa_camp_reserva_lote('CMUDA', $publico_menor, 2);
+ok($p2['reservados'] === 2, 'a segunda rodada reserva dois (deu: ' . $p2['reservados'] . ')');
+ok(wa_test_acha_envio($DB, 'LL3') !== null,
+   'LL3 NAO pode ser pulado so porque a lista encolheu antes da segunda rodada');
+ok(wa_test_acha_envio($DB, 'LL4') !== null, 'e LL4 tambem entra');
 
 // Reserva que NAO escreveu nada nunca pode se parecer com reserva terminada:
 // e o mesmo achado I1, agora no caminho que autoriza a campanha a enviar.

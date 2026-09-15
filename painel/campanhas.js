@@ -207,7 +207,14 @@ async function poCampEnviar() {
   poCampMsg('#camp-erro', '');
   poCampMsg('#camp-progresso', 'Separando os destinatários...');
   try {
-    const c = await poCampPost('criar', { nome: nome, template: template, corpo: corpo });
+    /* total_confirmado e o numero que ela ACABOU de ver e confirmar. O
+       servidor recusa se a lista tiver mudado: sem ele o aviso de custo
+       existe mas nao prende ninguem, e com duas abas abertas a campanha sai
+       com outro publico e outro custo. */
+    const c = await poCampPost('criar', {
+      nome: nome, template: template, corpo: corpo,
+      total_confirmado: String(PO_CAMP_PREVIA.total)
+    });
     await poCampReservaAteOFim(c.campanha_id, c);
   } catch (e) {
     poCampMsg('#camp-erro', e.message || 'Falha ao criar a campanha.');
@@ -226,6 +233,12 @@ async function poCampReservaAteOFim(id, passo) {
       'Separando os destinatários: ' + (atual.reservados_total || 0) +
       ' de ' + (atual.total || 0) + '.');
     atual = await poCampPost('reservar', { campanha_id: id });
+    /* Rodada que nao reservou ninguem E nao achou ninguem ja reservado nao
+       avancou nada, e insistir so repete o mesmo erro: com a escrita falhando
+       seriam duzentas leituras da base inteira e quarenta mil POSTs contra um
+       Supabase que ja esta mal. Para na primeira rodada parada. */
+    if (atual && !atual.completo &&
+        !(Number(atual.reservados) > 0) && !(Number(atual.ja_existiam) > 0)) break;
   }
   if (atual && atual.completo) {
     poCampMsg('#camp-progresso',
@@ -269,6 +282,13 @@ async function poCampDrenar() {
     if (d.lote === 0) {
       poCampMsg('#camp-progresso',
         'O limite de envios de hoje já foi atingido. O resto sai amanhã, sozinho.');
+    } else if (d.motivo === 'sem_template') {
+      /* Causa mais provavel no primeiro uso real, e o conserto e outro: ir a
+         Meta aprovar o modelo. Dizer "tente de novo em instantes" aqui faria
+         a cliente repetir o clique a tarde inteira. */
+      poCampMsg('#camp-progresso',
+        'O modelo desta campanha não está preenchido ou não foi aceito. ' +
+        'Confira o nome do modelo aprovado na Meta. Ninguém recebeu nada e a fila está intacta.');
     } else if (d.restam < 0) {
       poCampMsg('#camp-progresso',
         'Não consegui falar com o banco agora. Nada se perdeu: tente de novo em instantes.');
@@ -304,7 +324,7 @@ async function poCampCancelar() {
   await poRenderCampanhas();
 }
 
-document.addEventListener('DOMContentLoaded', function () {
+function poCampLiga() {
   const b1 = document.querySelector('#camp-enviar');
   const b2 = document.querySelector('#camp-continuar');
   const b3 = document.querySelector('#camp-drenar');
@@ -313,4 +333,14 @@ document.addEventListener('DOMContentLoaded', function () {
   if (b2) b2.onclick = poCampContinuar;
   if (b3) b3.onclick = poCampDrenar;
   if (b4) b4.onclick = poCampCancelar;
-});
+}
+
+/* Guarda de readyState, no padrao do painel/importar-contatos.js. Hoje o
+   script e classico e esta no fim do corpo, entao o evento ainda vem; no dia
+   em que alguem puser `defer` ou mover a tag, o DOMContentLoaded ja terá
+   passado e NENHUM botao da aba responderia, em silencio. */
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', poCampLiga);
+} else {
+  poCampLiga();
+}

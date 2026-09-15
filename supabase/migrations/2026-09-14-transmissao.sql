@@ -64,6 +64,16 @@ create table if not exists public.po_wa_envios (
 create unique index if not exists po_wa_envios_camp_lead_uniq
   on public.po_wa_envios (campanha_id, lead_id);
 
+-- UMA campanha ativa por vez, garantido pelo BANCO e nao so pela aplicacao.
+-- camp_em_andamento() le e so depois wa_db_insert escreve: duas abas do painel, ou
+-- um retry, cabem na janela entre as duas coisas e criam duas campanhas - com a base
+-- inteira cobrada em dobro. Mesmo remedio que po_roteiros_slug_ativo_uniq e que o
+-- unique em hash do lote de importacao, onde a regra ja esta escrita: o unique e o
+-- lock. O indice e sobre uma constante, entao ele admite no maximo UMA linha que
+-- satisfaca o predicado.
+create unique index if not exists po_wa_campanhas_uma_ativa
+  on public.po_wa_campanhas ((true)) where status in ('rascunho', 'enviando');
+
 -- Por onde o recibo de entrega acha o envio. E aqui que a idempotencia de
 -- ENTREGA vive, e nao em po_wa_mensagens: o wamid de um evento `status` E o
 -- wamid da mensagem original, e po_wa_mensagens.wamid e unique, entao recibo

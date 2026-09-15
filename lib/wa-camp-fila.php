@@ -117,7 +117,11 @@ function wa_camp_drena($campanha_id, $limite) {
        corrigida. */
     if ($template === '') {
         error_log('wa_camp_drena: campanha sem template, fila intacta | ' . $campanha_id);
-        return ['enviados' => 0, 'falhas' => 0, 'restam' => -1];
+        /* 'motivo' porque restam=-1 sozinho junta duas causas com conserto
+           OPOSTO: banco fora do ar pede "tente de novo em instantes", e
+           template faltando pede ir a Meta aprovar o modelo - que e o caso
+           mais provavel no primeiro uso real. A tela precisa separar as duas. */
+        return ['enviados' => 0, 'falhas' => 0, 'restam' => -1, 'motivo' => 'sem_template'];
     }
 
     // Antes de ler a fila: solta quem ficou preso em 'enviando' de um dreno

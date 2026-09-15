@@ -21,6 +21,19 @@ assert.ok(/create table if not exists public\.po_wa_envios/.test(sql),
 assert.ok(/create unique index if not exists po_wa_envios_camp_lead_uniq\s+on\s+public\.po_wa_envios\s*\(campanha_id, lead_id\)/.test(sql),
   'po_wa_envios tem unique (campanha_id, lead_id), que e o cadeado da reserva');
 
+/* UMA campanha ativa por vez, garantida pelo BANCO. A conferencia do
+   campanha.php le e so depois escreve, e duas abas do painel (ou um retry)
+   cabem na janela entre as duas coisas: nascem duas campanhas e a base
+   inteira sai cobrada em dobro. Mesmo remedio de po_roteiros_slug_ativo_uniq
+   e do unique em hash do lote de importacao - o unique e o lock.
+
+   O `((true))` faz parte da assercao: um indice unico sobre uma COLUNA
+   qualquer com o mesmo predicado nao limita a uma linha, so impede repetir
+   aquele valor. O predicado tambem entra: sem ele o indice proibiria mais de
+   uma campanha na historia inteira da agencia. */
+assert.ok(/create unique index if not exists po_wa_campanhas_uma_ativa\s+on\s+public\.po_wa_campanhas\s*\(\(true\)\)\s*where status in \('rascunho', ?'enviando'\)/.test(sql),
+  'po_wa_campanhas admite no maximo UMA campanha em rascunho ou enviando');
+
 // A chave do recibo de entrega da Task 7, tambem presa a tabela.
 assert.ok(/create unique index if not exists po_wa_envios_wamid_uniq\s+on\s+public\.po_wa_envios\s*\(wamid\)\s*where wamid is not null/.test(sql),
   'po_wa_envios tem unique parcial em wamid, que e por onde o recibo acha o envio');

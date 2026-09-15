@@ -76,11 +76,68 @@ assert.ok(iValida < iPost, 'a validacao do corpo vem ANTES de criar a campanha')
 assert.ok(iAviso  < iPost, 'a confirmacao com pessoas e custo vem ANTES de criar a campanha');
 assert.ok(/confirm\(/.test(passo), 'o envio passa por uma confirmacao explicita');
 
+/* O numero confirmado tem que VIAJAR para o servidor. Sem ele o aviso de
+   custo existe mas nao prende ninguem: a tela confirma sobre uma previa que
+   so e recalculada ao entrar na aba, e o servidor refaz a conta do zero. Com
+   duas abas abertas, ela confirma um numero e a campanha sai com outro. */
+/* O `:` faz parte da assercao. Sem ele o teste casava o COMENTARIO que
+   explica o campo, e apagar o campo de verdade deixava a suite verde. */
+assert.ok(/total_confirmado\s*:/.test(passo),
+  'o clique manda o total que a cliente confirmou, para o servidor recusar se a lista mudou');
+
 /* A reserva e retomavel: o endpoint devolve o publico em pedacos e a tela
    continua ate 'completo'. Sem o laco, uma base de 800 pessoas viraria
    campanha com publico parcial e ninguem saberia quem ficou de fora. */
 assert.ok(/poCampPost\(\s*['"]reservar['"]/.test(src),
   'a tela sabe continuar a reserva em lotes');
+
+/* ---------- o laco de reserva nao pode insistir sem progresso ----------
+   Com a escrita falhando, cada rodada devolve reservados:0, ja_existiam:0 e
+   completo:false. Insistir as 200 voltas sao 200 leituras da base inteira e
+   40 mil POSTs contra o mesmo Supabase que ja esta mal. */
+const pegaAsync = n => {
+  const m = src.match(new RegExp(String.raw`async function ${n}\([\s\S]*?\n\}`));
+  if (!m) throw new Error('nao achei ' + n);
+  return m[0];
+};
+const fabricaLaco = (post) => new Function('poCampPost', 'poCampMsg', 'toast',
+  pegaAsync('poCampReservaAteOFim') + ';return poCampReservaAteOFim;')(
+    post, () => {}, () => {});
+
+let chamadas = 0;
+const paradoLaco = fabricaLaco(async () => {
+  chamadas++;
+  return { completo: false, reservados: 0, ja_existiam: 0, faltam: 5,
+           total: 5, reservados_total: 0 };
+});
+await paradoLaco('C1', { completo: false, reservados: 0, ja_existiam: 0,
+                         faltam: 5, total: 5, reservados_total: 0 });
+assert.equal(chamadas, 1,
+  'rodada que nao reservou ninguem para o laco na hora, em vez de insistir 200 vezes');
+
+// E o caminho que AVANCA continua indo ate o fim.
+let passos = 0;
+const andandoLaco = fabricaLaco(async () => {
+  passos++;
+  return passos < 3
+    ? { completo: false, reservados: 2, ja_existiam: 0, faltam: 2, total: 6, reservados_total: 2 * passos }
+    : { completo: true,  reservados: 2, ja_existiam: 0, faltam: 0, total: 6, reservados_total: 6 };
+});
+await andandoLaco('C1', { completo: false, reservados: 2, ja_existiam: 0,
+                          faltam: 4, total: 6, reservados_total: 2 });
+assert.equal(passos, 3, 'o laco que avanca segue ate a lista fechar');
+
+/* A ligacao dos botoes precisa da guarda de readyState, no padrao do
+   painel/importar-contatos.js. Hoje o script e classico e esta no fim do
+   corpo, entao o DOMContentLoaded ainda vem; no dia em que alguem puser
+   `defer` ou mover a tag, o evento ja terá passado e NENHUM botao da aba
+   responderia - em silencio, sem erro no console. */
+assert.ok(/document\.readyState\s*===\s*['"]loading['"]/.test(src),
+  'a ligacao dos botoes tem a guarda de readyState');
+assert.ok(/addEventListener\(\s*['"]DOMContentLoaded['"]\s*,\s*poCampLiga\s*\)/.test(src),
+  'e ainda liga no DOMContentLoaded quando o documento esta carregando');
+assert.ok(/\}\s*else\s*\{[\s\S]{0,40}?poCampLiga\(\);/.test(src),
+  'e liga na hora quando o documento ja carregou');
 
 // O painel e servido com cache de 1 mes: arquivo novo precisa de ?v=.
 const painel = readFileSync(join(raiz, 'painel/index.html'), 'utf8');
