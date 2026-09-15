@@ -651,6 +651,51 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
   - **A tela de Textos** deixa a cliente escrever as 7 mensagens do robô sem SQL. São elas
     que viram os **templates submetidos à Meta**. A linha `saudacao` continua no banco e o
     motor **nunca a lê** (resíduo do seed, decisão de não apagar).
+- **PLANO 4 DE 4 — TRANSMISSÃO: FEITO, MERGEADO E NO AR, PORÉM INERTE (14/09).**
+  8 tarefas em TDD; a suíte foi de 33 para **42 arquivos**. Novos: `campanha.php`,
+  `lib/wa-camp.php`, `lib/wa-camp-fila.php`, `lib/wa-camp-recibo.php`,
+  `painel/campanhas.js`, migration `2026-09-14-transmissao.sql` (**já rodada**).
+  Pendências e as 24 decisões da execução:
+  `docs/superpowers/reviews/2026-09-14-transmissao-pendencias.md`.
+  - **Está no ar e não pode disparar.** `WA_PHONE_ID` está vazio (o número só ganha
+    id depois de conectado em convivência) e **o cron não foi cadastrado no cPanel**.
+    O `campanha.php` **recusa criar e drenar** enquanto o número não estiver conectado:
+    sem ele todo envio falharia, e `falha` é **terminal**, então uma campanha criada
+    agora queimaria a base sem possibilidade de reenvio.
+  - **Regras permanentes deste subsistema:**
+    - **O cadeado da campanha é por FICHA e por NÚMERO.** A Meta cobra por número e a
+      base tem ficha repetida da mesma pessoa (CRM antigo mais agenda). Só o índice
+      por ficha deixava o mesmo telefone ser cobrado duas vezes.
+    - **Quem pede SAIR é excluído por NÚMERO, não por ficha.** `wa_lead()` acha só por
+      `wa_id` e as fichas importadas não têm esse campo, então o SAIR criava ficha nova
+      enquanto a antiga continuava recebendo — com a tela dizendo que não.
+    - **Reserve antes de enviar, e tome posse antes de chamar a Meta.** São duas travas
+      diferentes: a primeira impede duplicar a LINHA, a segunda impede duplicar o ENVIO.
+      A posse é um PATCH que casa `status=eq.reservado`; quem escreve primeiro leva.
+    - **Linha em `enviando` conta como pendente.** Contar só `reservado` fazia a campanha
+      ser concluída com gente sem receber, e a recuperação de órfãs só roda enquanto
+      alguém drena.
+    - **`falha` é terminal e fica no TOPO da escada de status.** Sem posto, caía no
+      degrau zero e um recibo reentregue depois de uma falha ressuscitava o envio.
+    - **Contador de entrega não vira coluna.** `enviados`/`entregues`/`lidos`/`falhas`
+      são contados de `po_wa_envios` na hora de mostrar. Contador copiado desanda no
+      primeiro webhook fora de ordem.
+    - **Trava no PONTO DE CHAMADA.** Vale para o `select=` do `campanha.php`, a fiação
+      do `wa-cron.php` e a idempotência do webhook. Três defeitos deste plano foram
+      exatamente isso: a função pura travada e o chamador livre.
+    - **Teste que fabrica resposta que o servidor não manda não é teste.** Um dublê
+      inventava um campo e metade de uma guarda estava morta com a suíte verde.
+    - **`WA_CAMP_TETO_DIARIO` está em 250**, que é o piso da Meta para número novo.
+      Subir exige conferir o tier real no painel dela, não editar a constante.
+  - **Antes do primeiro disparo pago:** ensaio com um destinatário; conferir que o
+    template aprovado tem **exatamente uma variável** (`{{1}}` = nome), senão a campanha
+    inteira vira falha terminal; conferir o tier do número; e conferir a lista contra
+    estrangeiro discado com `00`.
+- **`git checkout --` altera fim de linha neste repo** (`core.autocrlf=true`). O teste de
+  cache-buster hasheia conteúdo **normalizado** por causa disso — hashear bytes crus fazia
+  o lock depender de como o arquivo tinha sido materializado, e o merge do plano 4 ficou
+  vermelho com o `painel.css` idêntico. Para restaurar arquivo em rodada de mutação, use
+  cópia de bytes.
 - **Falta:** o plano 4 (transmissão), a conexão real com a Meta,
   a homologação, e a **conferência visual do painel com login real** — seis tarefas
   mexeram em `painel/app.js`, `index.html` e `painel.css`, e nenhum agente conseguiu
