@@ -23,8 +23,19 @@ const raiz   = join(dirname(fileURLToPath(import.meta.url)), '..');
 const painel = readFileSync(join(raiz, 'painel/index.html'), 'utf8');
 const lock   = JSON.parse(readFileSync(join(raiz, 'painel/assets-lock.json'), 'utf8'));
 
-const sha = arq =>
-  createHash('sha256').update(readFileSync(join(raiz, 'painel', arq))).digest('hex').slice(0, 16);
+/* O hash e calculado sobre o conteudo NORMALIZADO, com os CR removidos.
+   Motivo: este repo roda com core.autocrlf=true no Windows, entao o git guarda LF
+   e materializa CRLF no disco - e um `git checkout` ou um merge pode trocar o fim
+   de linha sem ninguem ter tocado no arquivo. Hashear os bytes crus fazia o lock
+   registrar valores que dependiam de COMO o arquivo tinha sido materializado, e o
+   teste acusava mudanca onde nao houve nenhuma. Aconteceu de verdade no merge do
+   plano 4: o painel.css ficou vermelho com o conteudo identico.
+   Fim de linha nao muda o comportamento de CSS nem de JS no navegador, entao
+   normalizar nao enfraquece a trava: arquivo com conteudo alterado continua
+   mudando de hash. */
+const sha = arq => createHash('sha256')
+  .update(readFileSync(join(raiz, 'painel', arq), 'utf8').split('\r').join(''))
+  .digest('hex').slice(0, 16);
 
 // O que o index.html realmente pede, lido do HTML e nao de uma lista paralela
 // que envelhece sozinha.

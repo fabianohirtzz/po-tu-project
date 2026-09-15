@@ -1,13 +1,43 @@
 {
   "_leia": "Trava de cache-buster. O .htaccess cacheia JS/CSS por 1 mes e o deploy e FTP manual, arquivo a arquivo. Se um destes arquivos muda e o ?v= do index.html NAO sobe, o navegador da cliente segue rodando a versao velha e o painel quebra em silencio. Ao alterar um arquivo daqui: suba o ?v= no index.html e rode `php tests/run.php` - o teste imprime o sha novo para colar aqui. E SUBA O ARQUIVO NO FTP.",
-  "painel.css": { "v": 9, "sha": "ff40a098ce8a71bd" },
-  "fone.js": { "v": 2, "sha": "6eb275cdceb0c936" },
-  "app.js": { "v": 10, "sha": "e4aefc7c19879325" },
-  "clientes.js": { "v": 2, "sha": "8b12876643eeface" },
-  "funil.js": { "v": 1, "sha": "e8e8739e3696e90f" },
-  "conversa.js": { "v": 1, "sha": "36772691224741f9" },
-  "importar-contatos.js": { "v": 5, "sha": "1dd0383f72d9e353" },
-  "revisao.js": { "v": 2, "sha": "17af1b8191f5c93a" },
-  "textos.js": { "v": 2, "sha": "2365ce5f2f1f6eaa" },
-  "campanhas.js": { "v": 1, "sha": "e239f22a12cb7c62" }
+  "painel.css": {
+    "v": 9,
+    "sha": "c8c9d2ac798b52a5"
+  },
+  "fone.js": {
+    "v": 2,
+    "sha": "b7a74d030ddfa10b"
+  },
+  "app.js": {
+    "v": 10,
+    "sha": "e37bb9bcc122715d"
+  },
+  "clientes.js": {
+    "v": 2,
+    "sha": "0806538ef48c7e75"
+  },
+  "funil.js": {
+    "v": 1,
+    "sha": "2bc701fcbb9c9b8c"
+  },
+  "conversa.js": {
+    "v": 1,
+    "sha": "5c8be1f3e66b993d"
+  },
+  "importar-contatos.js": {
+    "v": 5,
+    "sha": "70a43b8de60bfc75"
+  },
+  "revisao.js": {
+    "v": 2,
+    "sha": "80838db9a900b60e"
+  },
+  "textos.js": {
+    "v": 2,
+    "sha": "f2f31e600e9b1dfa"
+  },
+  "campanhas.js": {
+    "v": 1,
+    "sha": "e239f22a12cb7c62"
+  }
 }
