@@ -130,6 +130,20 @@ function camp_fecha_reserva($id, $reservados_total, $custo_estimado) {
     ]) === true;
 }
 
+/* Numero da Meta nao configurado = sistema INERTE, e inerte de proposito.
+   WA_PHONE_ID so existe depois que o numero da agencia for conectado em
+   convivencia. Sem ele, wa_send_template monta a URL sem o id e TODO envio
+   falha - e falha e TERMINAL em po_wa_envios, entao uma campanha criada agora
+   queimaria a base inteira sem possibilidade de reenvio, de graca mas sem volta.
+
+   Mesma filosofia do resto do projeto: segredo vazio nunca autoriza. Aqui a
+   ausencia do numero nao e um detalhe de configuracao, e a diferenca entre o
+   sistema estar no ar e estar ligado. */
+function camp_numero_configurado() {
+    $c = wa_config();
+    return trim((string) ($c['WA_PHONE_ID'] ?? '')) !== '';
+}
+
 $modo = cpost('modo');
 if ($modo === '') $modo = 'previa';
 if (!in_array($modo, ['previa', 'criar', 'reservar', 'drenar', 'cancelar', 'estado'], true)) {
@@ -182,6 +196,10 @@ if ($modo === 'previa') {
 
 /* ---------------------------------------------------------- criar */
 if ($modo === 'criar') {
+    if (!camp_numero_configurado()) {
+        cfail(409, 'O numero da agencia ainda nao esta conectado a Meta. '
+                 . 'Enquanto isso nenhuma campanha pode ser criada nem enviada.');
+    }
     $nome     = cpost('nome');
     $template = cpost('template');
     $corpo    = cpost('corpo');
@@ -325,6 +343,10 @@ if ($modo === 'reservar') {
 
 /* ---------------------------------------------------------- drenar */
 if ($modo === 'drenar') {
+    if (!camp_numero_configurado()) {
+        cfail(409, 'O numero da agencia ainda nao esta conectado a Meta. '
+                 . 'Enquanto isso nenhuma campanha pode ser criada nem enviada.');
+    }
     $id = cpost('campanha_id');
     if ($id === '') cfail(400, 'Campanha não informada.');
 

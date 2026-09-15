@@ -37,6 +37,12 @@ function ce_base() {
 /* ============================================================
    FILHO: monta a requisicao e roda o endpoint.
 ============================================================ */
+/* Devolve o numero fake, ou vazio quando o cenario e justamente o de numero
+   ausente. Uma variavel de ambiente porque cada cenario roda em processo proprio. */
+function ce_getenv_phone_id() {
+    return getenv('CE_SEM_NUMERO') === '1' ? '' : '111222333444555';
+}
+
 function ce_filho($caso) {
     global $RAIZ;
     $chamadas = [];
@@ -51,6 +57,11 @@ function ce_filho($caso) {
     $GLOBALS['SUPABASE_URL']         = 'https://teste.local';
     $GLOBALS['SUPABASE_ANON_KEY']    = 'anon-de-teste';
     $GLOBALS['SUPABASE_SERVICE_KEY'] = 'service-de-teste';
+    /* O endpoint recusa criar e drenar enquanto o numero da agencia nao estiver
+       conectado a Meta. Os cenarios abaixo exercitam o caminho NORMAL, entao eles
+       precisam de um numero configurado; o cenario que testa a propria guarda
+       apaga esta variavel de proposito. */
+    $GLOBALS['WA_PHONE_ID'] = ce_getenv_phone_id();
 
     po_auth_set_verificador(fn($u, $a, $t) => $caso !== 'sem-auth' && $t === 'tok.valido');
 
@@ -180,9 +191,14 @@ if (isset($argv[1]) && $argv[1] !== '') { ce_filho($argv[1]); exit; }
 /* ============================================================
    PAI: roda cada caso num processo e confere o que saiu.
 ============================================================ */
-function ce_roda($caso) {
+function ce_roda($caso, $sem_numero = false) {
     $out = []; $cod = 0;
+    /* CE_SEM_NUMERO=1 faz o filho nascer sem WA_PHONE_ID, que e como o servidor
+       esta hoje: as chaves da Meta ja subiram, mas o numero da agencia ainda nao
+       foi conectado em convivencia. */
+    if ($sem_numero) { putenv('CE_SEM_NUMERO=1'); } else { putenv('CE_SEM_NUMERO=0'); }
     exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__FILE__) . ' ' . escapeshellarg($caso) . ' 2>&1', $out, $cod);
+    putenv('CE_SEM_NUMERO=0');
     $txt = implode("\n", $out);
     ok(strpos($txt, '@@CODIGO@@') !== false, "caso $caso respondeu (saida: " . substr($txt, 0, 300) . ')');
     list($corpo, $resto)  = explode('@@CODIGO@@', $txt, 2);
@@ -355,6 +371,23 @@ ok($r['codigo'] === 429,
    'com o lote inteiro falhado a cadencia continua de pe (deu: ' . $r['codigo'] . ')');
 ok(!ce_escreveu($r), 'e nenhuma tentativa nova sai por cima de um numero que ja esta mal');
 
+/* ---------- SEM NUMERO CONECTADO, NADA PODE COMECAR ----------
+   WA_PHONE_ID so existe depois que o numero da agencia for conectado a Meta em
+   convivencia. Sem ele, wa_send_template monta a URL sem o id e TODO envio falha
+   - e `falha` e TERMINAL em po_wa_envios, entao uma campanha criada agora
+   queimaria a base inteira sem possibilidade de reenvio. De graca, mas sem volta.
+   O endpoint recusa ANTES de escrever qualquer coisa. */
+$r = ce_roda('criar', true);
+ok($r['codigo'] === 409,
+   'sem numero conectado, criar campanha e recusado (deu: ' . $r['codigo'] . ')');
+ok(!ce_escreveu($r),
+   'e a recusa acontece ANTES de escrever: campanha meia-criada bloquearia a proxima');
+
+$r = ce_roda('drenar-espacado', true);
+ok($r['codigo'] === 409,
+   'sem numero conectado, drenar e recusado (deu: ' . $r['codigo'] . ')');
+ok(!ce_escreveu($r), 'e nada e enviado nem marcado');
+
 /* ---------- ASSERCAO DE FONTE: as colunas que alimentam as defesas ----------
    wa_camp_motivo_fora() esta bem travada como funcao pura, mas ela so ve o
    que o endpoint traz do banco. Tirar UMA palavra do select= aqui desliga uma
@@ -374,6 +407,10 @@ foreach ([
     'wa_id'      => 'sem esta coluna quem so tem wa_id fica de fora',
     'id'         => 'sem o id nao ha como reservar ninguem',
     'nome'       => 'o nome e o parametro {{1}} do template',
+    // Sem payload_import a suite fica VERDE e o alerta de estrangeiro salvo com
+    // 00 morre em silencio: wa_camp_ddi_suspeito() passa a receber null sempre.
+    // E a conferencia que o CLAUDE.md manda fazer antes do primeiro disparo pago.
+    'payload_import' => 'sem esta coluna o alerta de numero estrangeiro morre calado',
 ] as $col => $porque) {
     ok(in_array($col, $cols, true),
        'o select= da base carrega "' . $col . '" (' . $porque . '). Veio: ' . $ms[1]);
