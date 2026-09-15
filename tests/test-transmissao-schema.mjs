@@ -34,6 +34,22 @@ assert.ok(/create unique index if not exists po_wa_envios_camp_lead_uniq\s+on\s+
 assert.ok(/create unique index if not exists po_wa_campanhas_uma_ativa\s+on\s+public\.po_wa_campanhas\s*\(\(true\)\)\s*where status in \('rascunho', ?'enviando'\)/.test(sql),
   'po_wa_campanhas admite no maximo UMA campanha em rascunho ou enviando');
 
+/* O SEGUNDO cadeado, por NUMERO. O unique de lead_id impede a mesma ficha
+   entrar duas vezes; a cobranca da Meta e por numero, e a base tem ficha
+   repetida da mesma pessoa (CRM antigo + agenda do celular). Sem ele, duas
+   fichas do mesmo telefone entram as duas e o numero e cobrado em dobro. */
+assert.ok(/create unique index if not exists po_wa_envios_camp_waid_uniq\s+on\s+public\.po_wa_envios\s*\(campanha_id, ?wa_id\)/.test(sql),
+  'po_wa_envios tem unique (campanha_id, wa_id): o dinheiro e por numero, nao por ficha');
+
+/* po_wa_campanhas e SO LEITURA para o painel, igual a po_wa_envios. Escrita
+   ampla ali deixaria uma sessao do painel marcar campanha meio reservada como
+   'enviando' (o dreno comeca a mandar para lista incompleta) ou mexer no preco
+   congelado. Toda escrita passa pelo endpoint com a service_role. */
+assert.ok(/create policy po_wa_campanhas_auth on public\.po_wa_campanhas\s+for select to authenticated/.test(sql),
+  'po_wa_campanhas e so leitura para o painel');
+assert.ok(!/create policy po_wa_campanhas_auth[\s\S]{0,120}?for all to authenticated/.test(sql),
+  'po_wa_campanhas NAO da escrita ampla a usuario autenticado');
+
 // A chave do recibo de entrega da Task 7, tambem presa a tabela.
 assert.ok(/create unique index if not exists po_wa_envios_wamid_uniq\s+on\s+public\.po_wa_envios\s*\(wamid\)\s*where wamid is not null/.test(sql),
   'po_wa_envios tem unique parcial em wamid, que e por onde o recibo acha o envio');

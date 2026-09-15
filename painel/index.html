@@ -411,7 +411,13 @@
         <div class="hint">O modelo precisa estar aprovado na Meta antes do envio, e o texto
         aqui tem que ser o mesmo que foi aprovado lá. A frase
         <b>"Responda SAIR para não receber mais"</b> é obrigatória: é ela que evita que o
-        descadastro vire denúncia e derrube o número da agência.</div>
+        descadastro vire denúncia e derrube o número da agência.
+        <!-- wa_camp_envia() manda sempre UM parametro. Modelo com zero ou dois faz a
+             Meta recusar TODO destinatario, e falha e terminal: o indice unico impede
+             re-reservar, entao a campanha inteira queima e so resta recriar. -->
+        O modelo aprovado na Meta tem que ter <b>exatamente uma variável</b>, que é o nome
+        da pessoa. Com zero ou com duas, a Meta recusa todos os envios e a campanha
+        precisa ser recriada do zero.</div>
         <div class="field-2" style="margin-top:14px">
           <div class="field">
             <label>Nome da campanha (só você vê)</label>

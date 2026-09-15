@@ -186,6 +186,21 @@ assert.ok(/addEventListener\(\s*['"]DOMContentLoaded['"]\s*,\s*poCampLiga\s*\)/.
 assert.ok(/\}\s*else\s*\{[\s\S]{0,40}?poCampLiga\(\);/.test(src),
   'e liga na hora quando o documento ja carregou');
 
+/* wa_camp_envia() manda SEMPRE um parametro. Modelo aprovado na Meta com zero
+   ou com dois faz a Graph recusar TODO destinatario, e falha e terminal: o
+   indice unico impede re-reservar, entao a campanha inteira queima e so resta
+   recriar. Nao custa dinheiro, mas custa a campanha - e a unica defesa
+   possivel e a tela dizer isso antes. */
+const painelHtml = readFileSync(join(raiz, 'painel/index.html'), 'utf8');
+assert.ok(/exatamente uma vari/i.test(painelHtml),
+  'a aba avisa que o modelo da Meta precisa ter exatamente uma variavel');
+
+/* Falha e TERMINAL. Sem esta frase a cliente olharia "3 com falha" e esperaria
+   por um conserto automatico que nao existe: nenhuma varredura reenvia, porque
+   o indice unico (campanha, pessoa) impede reservar a mesma pessoa de novo. */
+assert.ok(/não é reenviado|nao e reenviado/i.test(src),
+  'a tela avisa que quem ficou com falha nao e reenviado por esta campanha');
+
 // O painel e servido com cache de 1 mes: arquivo novo precisa de ?v=.
 const painel = readFileSync(join(raiz, 'painel/index.html'), 'utf8');
 assert.ok(/src="campanhas\.js\?v=\d+"/.test(painel), 'campanhas.js entra com cache-buster');

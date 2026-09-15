@@ -60,6 +60,47 @@ ok($r['resumo']['duplicados']  === 1, 'a duplicata e contada');
 ok($r['resumo']['nao_cliente'] === 1, 'quem ficou de fora e contado por motivo');
 ok($r['resumo']['total']       === 2, 'o total do resumo e o tamanho do publico');
 
+/* ---------- o SAIR vale pelo NUMERO, nao pela ficha ----------
+   Defesa 3 da spec 8.1, e o ciclo completo que quebrava entre as pecas:
+
+     1) a campanha manda para a ficha antiga, que tem telefone e wa_id NULO
+        (nenhuma fonte de importacao carrega wa_id);
+     2) a pessoa responde SAIR;
+     3) wa_lead() procura so por wa_id, nao acha ninguem, e o motor INSERE uma
+        ficha nova com o opt_out_at - que ja viola a regra 3 do Armando;
+     4) a ficha antiga continua com opt_out_at nulo;
+     5) na campanha seguinte ela vem primeiro (created_at.asc), vence a
+        deduplicacao por numero e RECEBE - com a tela dizendo, sobre aquele
+        mesmo numero, "1 pediu SAIR e fica de fora".
+
+   Aqui as duas fichas do mesmo numero entram na base: o publico tem que sair
+   VAZIO e o balde 'saiu' tem que contar. */
+$saiu_ciclo = [
+    // A ficha velha, do CRM: telefone preenchido, wa_id nulo, sem opt_out.
+    ['id'=>'VELHA', 'nome'=>'Maria', 'telefone'=>'+5548999990077', 'wa_id'=>null,
+     'cliente'=>true, 'revisado'=>true, 'opt_out_at'=>null],
+    // A ficha que o motor criou quando ela respondeu SAIR: so wa_id.
+    ['id'=>'NOVA',  'nome'=>'Maria', 'telefone'=>null, 'wa_id'=>'+5548999990077',
+     'cliente'=>true, 'revisado'=>true, 'opt_out_at'=>'2026-09-14T10:00:00Z'],
+];
+$rs = wa_camp_publico($saiu_ciclo);
+ok(count($rs['publico']) === 0,
+   'quem pediu SAIR nao recebe, mesmo com a ficha antiga limpa (entraram: '
+   . count($rs['publico']) . ')');
+ok($rs['resumo']['saiu'] === 2,
+   'as duas fichas do numero caem no balde SAIU, que e o que a cliente le para conferir '
+   . 'a defesa (deu: ' . $rs['resumo']['saiu'] . ')');
+ok($rs['resumo']['duplicados'] === 0,
+   'e nenhuma delas vira "duplicado", que esconderia justamente o que ela foi conferir');
+
+// O mesmo numero, sem nenhum opt_out em lugar nenhum, continua recebendo: a
+// exclusao e do NUMERO QUE SAIU, nao de todo numero repetido.
+$sem_saida = $saiu_ciclo;
+$sem_saida[1]['opt_out_at'] = null;
+$rn = wa_camp_publico($sem_saida);
+ok(count($rn['publico']) === 1 && $rn['resumo']['duplicados'] === 1,
+   'sem opt_out nenhum, as duas fichas do mesmo numero viram UM destinatario');
+
 /* ---------- custo ----------
    Spec 8.2: a tela mostra quantas pessoas e quanto custa ANTES do envio.
    Em centavos inteiros: float de dinheiro acumula erro e o numero que a
@@ -122,6 +163,11 @@ ok(wa_camp_lote_permitido(400, 0, 1000)   === 400, 'com o dia livre, o lote e o 
 ok(wa_camp_lote_permitido(400, 800, 1000) === 200, 'perto do teto, o lote encolhe');
 ok(wa_camp_lote_permitido(400, 1000, 1000) === 0,  'no teto, nao sai nada');
 ok(wa_camp_lote_permitido(400, 1200, 1000) === 0,  'acima do teto nunca devolve negativo');
-ok(WA_CAMP_TETO_DIARIO === 1000, 'o teto proprio padrao e 1000 por dia');
+/* 250, nao 1000: e o piso do tier de mensageria da Meta para numero novo. A
+   verificacao da empresa libera o teto POTENCIAL, nao o tier do numero. E como
+   a escada limita o tamanho do LOTE e nao o total do dia, um teto de 1.000 com
+   o cron de hora em hora deixaria o primeiro dia de um numero frio chegar a mil
+   mensagens - o contrario da defesa 2 da spec 8.1. */
+ok(WA_CAMP_TETO_DIARIO === 250, 'o teto proprio padrao e 250 por dia, o piso da Meta para numero novo');
 
 echo "test-wa-camp OK\n";

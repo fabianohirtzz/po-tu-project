@@ -172,7 +172,14 @@ async function poCampCarregaAndamento() {
     emReserva
       ? ('Montando a lista: ' + e.reservados + ' de ' + c.total + ' pessoas separadas. ' +
          'Continue para terminar - nada é enviado antes disso.')
-      : (e.enviados + ' enviadas · ' + e.pendentes + ' na fila · ' + e.falhas + ' com falha'));
+      : (e.enviados + ' enviadas · ' + e.pendentes + ' na fila · ' + e.falhas + ' com falha' +
+         /* Falha e TERMINAL: o índice único (campanha, pessoa) impede reservar
+            a mesma pessoa de novo, então nenhuma varredura reenvia. Sem esta
+            frase a cliente esperaria pelo conserto sozinho, que não vem. */
+         (e.falhas > 0
+           ? '. Quem ficou com falha não é reenviado por esta campanha: para alcançar ' +
+             'essas pessoas, cancele e crie a campanha de novo depois de corrigir o modelo.'
+           : '')));
 
   const bReserva = document.querySelector('#camp-continuar');
   const bDrena   = document.querySelector('#camp-drenar');

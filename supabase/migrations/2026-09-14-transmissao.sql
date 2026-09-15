@@ -74,6 +74,13 @@ create unique index if not exists po_wa_envios_camp_lead_uniq
 create unique index if not exists po_wa_campanhas_uma_ativa
   on public.po_wa_campanhas ((true)) where status in ('rascunho', 'enviando');
 
+-- O cadeado de lead_id impede a mesma FICHA entrar duas vezes. Mas a cobranca da Meta
+-- e por NUMERO, e a base tem ficha repetida da mesma pessoa (CRM antigo mais agenda do
+-- celular). Sem este segundo unique, duas fichas do mesmo telefone entram as duas e o
+-- numero e cobrado em dobro. Mesma ferramenta e mesma razao do indice acima.
+create unique index if not exists po_wa_envios_camp_waid_uniq
+  on public.po_wa_envios (campanha_id, wa_id);
+
 -- Por onde o recibo de entrega acha o envio. E aqui que a idempotencia de
 -- ENTREGA vive, e nao em po_wa_mensagens: o wamid de um evento `status` E o
 -- wamid da mensagem original, e po_wa_mensagens.wamid e unique, entao recibo
@@ -97,9 +104,14 @@ create index if not exists po_leads_opt_out_idx
 alter table public.po_wa_campanhas enable row level security;
 alter table public.po_wa_envios    enable row level security;
 
+-- SO LEITURA para o painel, igual a po_wa_envios e pela mesma razao. Toda escrita
+-- passa pelo campanha.php com a service_role: uma sessao do painel que pudesse
+-- escrever aqui marcaria uma campanha meio reservada como 'enviando' (e o dreno
+-- comecaria a mandar para uma lista incompleta) ou mexeria no preco congelado, que
+-- e o que faz o relatorio antigo bater com a fatura daquele mes.
 drop policy if exists po_wa_campanhas_auth on public.po_wa_campanhas;
 create policy po_wa_campanhas_auth on public.po_wa_campanhas
-  for all to authenticated using (true) with check (true);
+  for select to authenticated using (true);
 
 -- Envios sao SO LEITURA para o painel: quem escreve e o dreno, com a
 -- service_role. Painel que pudesse marcar 'enviado' na mao mentiria no

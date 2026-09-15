@@ -506,7 +506,10 @@ $DB['po_wa_campanhas'][] = ['id' => 'CENVIANDO', 'template' => 'modelo_generico'
 $DB['po_wa_envios'][] = [
     'id' => 'EPRESA1', 'campanha_id' => 'CENVIANDO', 'lead_id' => 'LPR1',
     'wa_id' => '+5548999990190', 'nome' => 'Presa Recente', 'status' => 'enviando',
-    'enviando_at' => gmdate('c', time() - 5),   // 5s atras: bem dentro do prazo de 30min
+    // 1 minuto atras. Valor ABSOLUTO, nao derivado da constante: derivar do
+    // proprio WA_CAMP_POSSE_LEASE faria o teste passar com qualquer prazo,
+    // inclusive um menor que o tempo limite da chamada a Meta.
+    'enviando_at' => gmdate('c', time() - 60),
 ];
 $d = wa_camp_drena('CENVIANDO', 10);
 ok($d['restam'] === 1,
@@ -522,16 +525,27 @@ ok($d['restam'] === 1,
    duplicado que a tomada de posse (C1) fechou. */
 $DB['po_wa_envios'] = [];
 $DB['po_wa_campanhas'][] = ['id' => 'CORFA', 'template' => 'modelo_generico'];
+/* Os dois carimbos sao ABSOLUTOS de proposito: ativa ha 1 minuto, orfa ha 1
+   hora. Derivar da propria constante (o que este teste fazia) so provava que
+   o prazo e diferente de zero - com WA_CAMP_POSSE_LEASE = 10 o teste passava
+   verde, e 10 segundos e MENOR que os 15 do tempo limite da chamada a Meta:
+   a posse seria roubada de um dreno ainda dentro da chamada, e isso e reenvio
+   pago. Com valores absolutos, um prazo curto demais fica vermelho aqui. */
 $DB['po_wa_envios'][] = [
     'id' => 'EATIVA', 'campanha_id' => 'CORFA', 'lead_id' => 'LAT1',
     'wa_id' => '+5548999990200', 'nome' => 'Ativa', 'status' => 'enviando',
-    'enviando_at' => gmdate('c', time() - 5),
+    'enviando_at' => gmdate('c', time() - 60),
 ];
 $DB['po_wa_envios'][] = [
     'id' => 'EORFA', 'campanha_id' => 'CORFA', 'lead_id' => 'LOR1',
     'wa_id' => '+5548999990201', 'nome' => 'Orfa', 'status' => 'enviando',
-    'enviando_at' => gmdate('c', time() - WA_CAMP_POSSE_LEASE - 120),
+    'enviando_at' => gmdate('c', time() - 3600),
 ];
+/* E o piso, dito em numero: o prazo tem que ser folgado o bastante para so
+   alcancar processo que morreu de verdade, nunca um que ainda esta na chamada. */
+ok(WA_CAMP_POSSE_LEASE >= 900,
+   'o prazo da posse e folgado (>= 15 min), senao a posse e roubada de quem ainda envia (deu: '
+   . WA_CAMP_POSSE_LEASE . ')');
 $mandados_orfa = [];
 wa_camp_set_enviador(function ($wa_id, $nome) use (&$mandados_orfa) {
     $mandados_orfa[] = $wa_id;

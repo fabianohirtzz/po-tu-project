@@ -340,15 +340,27 @@ if ($modo === 'drenar') {
         cfail(409, 'Esta campanha não está pronta para enviar.');
     }
 
-    /* Espacamento do dreno manual. Le o envio mais recente DESTA campanha;
-       leitura que falha recusa o disparo em vez de liberar - na duvida, o
-       lado barato e nao mandar, porque o cron manda de qualquer jeito. */
+    /* Espacamento do dreno manual, ancorado na ultima TENTATIVA e nao no
+       ultimo sucesso. `enviando_at` e o carimbo da tomada de posse, gravado
+       antes da chamada a Meta e mantido na linha depois dela: existe tanto no
+       envio que deu certo quanto no que virou falha.
+
+       Olhar `enviado_at` deixava a cadencia sumir justo quando o lote INTEIRO
+       falhou - nao havia envio bem sucedido, a leitura voltava vazia, e a
+       cliente podia clicar em sequencia queimando a fila na velocidade maxima.
+       Esse e o cenario em que a Meta esta rejeitando, ou seja, exatamente a
+       hora de desacelerar.
+
+       `nullslast` porque o desc do Postgres poe NULL na frente, e linha ainda
+       nao tentada tem enviando_at nulo. Leitura que falha recusa o disparo em
+       vez de liberar: na duvida o lado barato e nao mandar, porque o cron
+       manda de qualquer jeito. */
     $ult = wa_db_select_estrito('po_wa_envios',
-        'select=enviado_at&campanha_id=eq.' . rawurlencode($id)
-        . '&status=in.(enviado,entregue,lido)&order=enviado_at.desc&limit=1');
+        'select=enviando_at&campanha_id=eq.' . rawurlencode($id)
+        . '&order=enviando_at.desc.nullslast&limit=1');
     if ($ult === null) cfail(502, 'Não consegui conferir o último envio. Nada foi enviado.');
-    if ($ult && !empty($ult[0]['enviado_at'])) {
-        $quando = strtotime((string) $ult[0]['enviado_at']);
+    if ($ult && !empty($ult[0]['enviando_at'])) {
+        $quando = strtotime((string) $ult[0]['enviando_at']);
         // Data ilegivel conta como recente: na duvida, nao mandar.
         if ($quando === false || (time() - $quando) < CAMP_INTERVALO_MANUAL) {
             cfail(429, 'O lote anterior saiu há menos de '

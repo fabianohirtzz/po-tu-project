@@ -510,6 +510,13 @@ ok(count($ENVIADAS) === 1, 'uma confirmacao e enviada');
 ok(stripos($ENVIADAS[0][2], 'não') !== false
    || stripos($ENVIADAS[0][2], 'nao') !== false,
    'a confirmacao diz que a pessoa nao recebera mais');
+/* E NAO promete a volta. Nada em lugar nenhum limpa opt_out_at - nem o motor,
+   nem o painel, nem o endpoint da transmissao -, entao "se um dia quiser
+   voltar, e so escrever aqui" era promessa a um cliente que o sistema nao
+   cumpre: ela escreve, nada acontece, e a agencia fica com a conta. Se algum
+   dia existir o caminho de volta, esta linha cai junto com ele. */
+ok(!preg_match('/quiser voltar|voltar a receber/i', $ENVIADAS[0][2]),
+   'a confirmacao NAO promete um retorno que nenhum codigo do projeto executa');
 
 /* SAIR tem que valer mesmo com o robo JA silenciado naquele contato: o
    silencio existe para o robo nao falar por cima da humana, nao para a

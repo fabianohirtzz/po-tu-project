@@ -83,6 +83,8 @@ function ce_filho($caso) {
                                           'campanha_id'=>'CJA']; break;
         case 'drenar-espacado': $_POST = ['sb_token'=>'tok.valido', 'modo'=>'drenar',
                                           'campanha_id'=>'CJA']; break;
+        case 'drenar-lote-falhou': $_POST = ['sb_token'=>'tok.valido', 'modo'=>'drenar',
+                                          'campanha_id'=>'CJA']; break;
         case 'cancelar':        $_POST = ['sb_token'=>'tok.valido', 'modo'=>'cancelar',
                                           'campanha_id'=>'CJA']; break;
     }
@@ -106,7 +108,7 @@ function ce_filho($caso) {
                 }
                 // Campanha ainda montando a lista: nao pode ser drenada, e
                 // PODE ser cancelada (e a saida de emergencia).
-                if (in_array($caso, ['drenar-recente', 'drenar-espacado'], true)) {
+                if (in_array($caso, ['drenar-recente', 'drenar-espacado', 'drenar-lote-falhou'], true)) {
                     return ['status'=>200, 'body'=>json_encode([[
                         'id'=>'CJA', 'nome'=>'Rodando', 'status'=>'enviando',
                         'template'=>'po_roteiro_novo', 'total'=>10]])];
@@ -132,15 +134,22 @@ function ce_filho($caso) {
 
         if (strpos($url, 'po_wa_envios') !== false) {
             if ($metodo === 'GET') {
-                // O ultimo envio desta campanha, que e o que espaca o dreno manual.
+                /* A ultima TENTATIVA desta campanha, que e o que espaca o
+                   dreno manual. A consulta por enviado_at responde SEMPRE
+                   vazio de proposito: e o cenario do lote inteiro falhado, e
+                   e o que separa "ancorado na tentativa" de "ancorado no
+                   sucesso". Quem ler o sucesso acha vazio e libera o clique. */
                 if (strpos($url, 'order=enviado_at.desc') !== false) {
-                    if ($caso === 'drenar-recente') {
+                    return ['status'=>200, 'body'=>'[]'];
+                }
+                if (strpos($url, 'order=enviando_at.desc') !== false) {
+                    if ($caso === 'drenar-recente' || $caso === 'drenar-lote-falhou') {
                         return ['status'=>200, 'body'=>json_encode(
-                            [['enviado_at'=>gmdate('c', time() - 60)]])];
+                            [['enviando_at'=>gmdate('c', time() - 60)]])];
                     }
                     if ($caso === 'drenar-espacado') {
                         return ['status'=>200, 'body'=>json_encode(
-                            [['enviado_at'=>gmdate('c', time() - 3600)]])];
+                            [['enviando_at'=>gmdate('c', time() - 3600)]])];
                     }
                 }
                 return ['status'=>200, 'body'=>'[]', 'headers'=>['content-range'=>'*/0']];
@@ -336,6 +345,39 @@ ok(!ce_escreveu($r), 'e nada sai: nenhuma mensagem paga no clique repetido');
 
 $r = ce_roda('drenar-espacado');
 ok($r['codigo'] === 200, 'com uma hora desde o ultimo envio o dreno manual passa (deu: ' . $r['codigo'] . ')');
+
+/* O LOTE INTEIRO FALHOU: nao existe envio bem sucedido, so tentativas. Se a
+   cadencia se ancorasse no sucesso, a leitura voltaria vazia e nao haveria
+   espacamento nenhum - justo no cenario em que a Meta esta rejeitando, que e
+   a hora de desacelerar, e nao de deixar clicar em sequencia. */
+$r = ce_roda('drenar-lote-falhou');
+ok($r['codigo'] === 429,
+   'com o lote inteiro falhado a cadencia continua de pe (deu: ' . $r['codigo'] . ')');
+ok(!ce_escreveu($r), 'e nenhuma tentativa nova sai por cima de um numero que ja esta mal');
+
+/* ---------- ASSERCAO DE FONTE: as colunas que alimentam as defesas ----------
+   wa_camp_motivo_fora() esta bem travada como funcao pura, mas ela so ve o
+   que o endpoint traz do banco. Tirar UMA palavra do select= aqui desliga uma
+   defesa inteira com a suite verde: sem opt_out_at, todo mundo que pediu para
+   sair volta a receber, pago; sem revisado, contato nao revisado entra em
+   campanha. E a regra permanente do projeto - a trava fica no PONTO DE
+   CHAMADA, nao so na funcao pura -, e o projeto ja pagou por ela duas vezes. */
+$src_camp = file_get_contents(__DIR__ . '/../campanha.php');
+ok(preg_match("/wa_db_select_estrito\(\s*'po_leads',\s*'select=([^'&]*)/", $src_camp, $ms) === 1,
+   'campanha.php le a base com um select= explicito');
+$cols = array_map('trim', explode(',', $ms[1]));
+foreach ([
+    'opt_out_at' => 'defesa 3: sem esta coluna, quem pediu SAIR volta a receber, pago',
+    'revisado'   => 'defesa 1: sem esta coluna, contato nao revisado entra em campanha',
+    'cliente'    => 'defesa 1: sem esta coluna, quem nao e cliente entra em campanha',
+    'telefone'   => 'sem esta coluna a base inteira vira "sem telefone"',
+    'wa_id'      => 'sem esta coluna quem so tem wa_id fica de fora',
+    'id'         => 'sem o id nao ha como reservar ninguem',
+    'nome'       => 'o nome e o parametro {{1}} do template',
+] as $col => $porque) {
+    ok(in_array($col, $cols, true),
+       'o select= da base carrega "' . $col . '" (' . $porque . '). Veio: ' . $ms[1]);
+}
 
 /* ---------- ASSERCAO DE FONTE: a fiacao do cron ----------
    O gemeo das travas do modo drenar mora no wa-cron.php e nao passa por

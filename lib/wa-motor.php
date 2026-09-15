@@ -506,9 +506,14 @@ function wa_processar($ev) {
         wa_lead_set($wa_id, ['opt_out_at' => gmdate('c')]);
         $conv = wa_conversa($wa_id);
         if (empty($conv['silenciado_at'])) {
+            /* Nao prometer a volta: NADA limpa opt_out_at, nem o painel nem o
+               motor, entao "e so escrever aqui" e promessa que o sistema nao
+               cumpre - a pessoa escreve, nada acontece, e a agencia fica com a
+               conta. Enquanto nao existir o caminho de volta, a frase diz o que
+               e verdade: o canal continua aberto para falar com a equipe. */
             wa_envia_texto($wa_id,
                 'Tudo bem, você não vai mais receber nossas mensagens sobre viagens. ' .
-                'Se um dia quiser voltar, é só escrever aqui.');
+                'Se precisar de alguma coisa, é só chamar a nossa equipe neste mesmo número.');
             wa_conversa_set($wa_id, ['estado' => 'encerrado']);
         }
         return 'opt_out';

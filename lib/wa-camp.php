@@ -46,6 +46,35 @@ function wa_camp_motivo_fora($lead) {
     return null;
 }
 
+/* Os NUMEROS que pediram para sair, vindos de QUALQUER ficha da base.
+
+   O SAIR nao pode valer pela ficha, tem que valer pelo numero, e o motivo e
+   uma costura entre pecas que so aparece com o sistema inteiro na mesa:
+
+     - wa_lead() acha o lead so por wa_id;
+     - as fichas do CRM e das agendas tem telefone preenchido e wa_id NULO,
+       porque nenhuma fonte de importacao carrega wa_id;
+     - mas o publico da campanha entra por telefone (wa_camp_telefone aceita
+       os dois).
+
+   Entao quem recebe pelo telefone e responde SAIR nao e encontrado, ganha uma
+   ficha NOVA com o opt_out_at, e a ficha velha continua limpa - mais antiga,
+   vence a deduplicacao e volta a receber na campanha seguinte, com a tela
+   dizendo "1 pediu SAIR e fica de fora" sobre exatamente aquele numero.
+
+   Casar por numero fecha o ciclo e ainda resolve a ficha duplicada, sem tirar
+   a pureza da funcao. */
+function wa_camp_saiu_fones($leads) {
+    $fora = [];
+    foreach ($leads as $l) {
+        if (empty($l['opt_out_at'])) continue;
+        // Mesma normalizacao do publico: comparar E.164 com E.164.
+        $f = wa_camp_telefone($l);
+        if ($f !== null) $fora[$f] = true;
+    }
+    return $fora;
+}
+
 /* Monta o publico e o resumo por motivo. A deduplicacao e por E.164, e a
    PRIMEIRA ficha vence: regra 3 do Armando, nunca duplicar. Duas fichas da
    mesma pessoa (uma do CRM, uma da agenda) com o mesmo celular sao um
@@ -56,10 +85,17 @@ function wa_camp_publico($leads) {
     $resumo  = ['total' => 0, 'duplicados' => 0, 'saiu' => 0, 'nao_cliente' => 0,
                 'nao_revisado' => 0, 'sem_telefone' => 0, 'sem_celular' => 0];
 
+    // Primeira passada: os numeros que sairam, em qualquer ficha da base.
+    $saiu = wa_camp_saiu_fones($leads);
+
     foreach ($leads as $l) {
         $motivo = wa_camp_motivo_fora($l);
         if ($motivo !== null) { $resumo[$motivo]++; continue; }
         $fone = wa_camp_telefone($l);
+        /* Este numero saiu por OUTRA ficha. Conta como 'saiu', nunca como
+           duplicado: o balde e o que a cliente le para conferir a defesa 3, e
+           um "duplicado" ali esconderia justamente o que ela foi conferir. */
+        if (isset($saiu[$fone])) { $resumo['saiu']++; continue; }
         if (isset($vistos[$fone])) { $resumo['duplicados']++; continue; }
         $vistos[$fone] = true;
         $publico[] = [
@@ -119,11 +155,17 @@ function wa_camp_ddi_suspeito($payload_import) {
    aqui nao e a campanha, e o telefone da empresa. */
 const WA_CAMP_ESCADA = [50, 150, 400, 1000, 2000];
 
-/* Teto NOSSO, por dia. O teto real e da Meta (250/dia antes da verificacao da
-   empresa, 2.000 depois; a empresa foi verificada em 11/09/2026), mas ele nao
-   e legivel pela API de forma confiavel, entao mantemos um cinto proprio
-   abaixo dele. */
-const WA_CAMP_TETO_DIARIO = 1000;
+/* Teto NOSSO, por dia. 250 e o PISO da Meta para numero novo: a verificacao
+   da empresa (feita em 11/09/2026) libera o teto POTENCIAL, mas o tier de
+   mensageria de um numero recem-registrado comeca em 250/dia e so sobe por
+   qualidade. O tier real nao e legivel pela API de forma confiavel, entao o
+   cinto comeca no piso - subir daqui exige conferir o tier no painel da Meta.
+
+   Este numero e o unico que limita o TOTAL DO DIA. A escada limita o tamanho
+   do LOTE, e o cron roda de hora em hora: com o degrau 50 e o teto em 1.000,
+   o primeiro dia de um numero frio chegaria a mil mensagens - o oposto de "o
+   primeiro envio vai para um grupo pequeno", que e a defesa 2 da spec 8.1. */
+const WA_CAMP_TETO_DIARIO = 250;
 
 /* O degrau da PROXIMA campanha. Sobe com o numero de campanhas concluidas e
    desce um quando a ultima passou de 5% de falha. */
