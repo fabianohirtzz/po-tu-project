@@ -153,7 +153,7 @@ $('#nav-toggle').onclick=()=>{$('#side-nav').classList.contains('on')?fechaSide(
 $$('.nav-item').forEach(b=>b.onclick=()=>{
   $$('.nav-item').forEach(x=>x.classList.remove('active'));b.classList.add('active');
   const v=b.dataset.view;$$('.view').forEach(x=>x.classList.remove('on'));
-  $('#month-box').style.visibility=(v==='roteiros'||v==='importar'||v==='revisao'||v==='textos')?'hidden':'visible';
+  $('#month-box').style.visibility=(v==='roteiros'||v==='importar'||v==='revisao'||v==='textos'||v==='campanhas')?'hidden':'visible';
   if(v==='leads'){$('#view-leads').classList.add('on');$('#top-title').innerHTML='Leads<span>.</span>';renderLeads();}
   else if(v==='reports'){$('#view-reports').classList.add('on');$('#top-title').innerHTML='Relatórios<span>.</span>';renderReports();}
   else if(v==='clientes'){$('#view-clientes').classList.add('on');$('#top-title').innerHTML='Clientes<span>.</span>';if(typeof poRenderClientes==='function')poRenderClientes();}
@@ -164,6 +164,10 @@ $$('.nav-item').forEach(b=>b.onclick=()=>{
      sao 7 linhas curtas, e reler garante que a cliente nunca edite por cima
      de uma versao velha se tiver duas abas do painel abertas. */
   else if(v==='textos'){$('#view-textos').classList.add('on');$('#top-title').innerHTML='Textos do robô<span>.</span>';if(typeof poCarregaTextos==='function')poCarregaTextos();}
+  /* O publico e o custo sao recalculados toda vez que a aba abre, nunca
+     guardados: a base muda (alguem responde SAIR, alguem e revisado) e um
+     numero velho na tela seria um custo velho na confirmacao. */
+  else if(v==='campanhas'){$('#view-campanhas').classList.add('on');$('#top-title').innerHTML='Transmissão<span>.</span>';if(typeof poRenderCampanhas==='function')poRenderCampanhas();}
   else{$('#view-roteiros').classList.add('on');$('#top-title').innerHTML='Roteiros<span>.</span>';renderRoteiros();}
   fechaSide();
 });

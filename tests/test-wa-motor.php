@@ -15,6 +15,46 @@ $DB = ['po_wa_conversas' => [], 'po_wa_contatos' => [], 'po_leads' => [], 'po_wa
        ]];
 $ENVIADAS = [];
 
+/* wa_camp_recibo (chamado por wa_processar no ramo de status, Task 7) usa
+   wa_db_select_estrito/wa_db_update de wa-db.php diretamente, por fora da
+   injecao de dependencia acima (wa_motor_set_deps) - de proposito, e a
+   mesma funcao que tests/test-wa-camp-recibo.php testa isolada. Sem este
+   mock, o teste 19 (evento de status) faria uma chamada de rede DE
+   VERDADE para o Supabase de producao (SUPABASE_URL vem hardcoded em
+   po-data.php mesmo sem config.local.php), violando a regra do projeto de
+   que nenhum teste toca a rede. Devolver lista vazia reproduz o caso real:
+   nenhum wamid deste arquivo e de uma campanha de transmissao.
+
+   Alem de responder, o transporte REGISTRA toda escrita (POST/PATCH) que
+   passar por ele fora da injecao de dependencia. E o que permite ao teste
+   19 flagrar uma escrita em po_wa_mensagens pelo caminho de baixo: hoje
+   nada impede alguem de acrescentar `require_once .../wa-webhook.php` em
+   wa-motor.php e fazer o ramo de status chamar wa_registra_evento - a
+   guarda de whatsapp.php (travada por assercao de fonte em
+   tests/test-wa-webhook.php) fica intacta e o defeito reaparece por
+   dentro do motor, em silencio. */
+$ESCRITAS_MENSAGENS = [];
+wa_db_set_transport(function ($metodo, $url, $corpo) use (&$ESCRITAS_MENSAGENS) {
+    if (in_array($metodo, ['POST', 'PATCH'], true) && strpos($url, 'po_wa_mensagens') !== false) {
+        // Registra em vez de falhar direto: quem acusa isto e a assercao
+        // dedicada do teste 19 (`ok(!$ESCRITAS_MENSAGENS, ...)`), com
+        // mensagem propria explicando o porque.
+        $ESCRITAS_MENSAGENS[] = [$metodo, $url, $corpo];
+        return ['status' => 200, 'body' => '[]'];
+    }
+    /* So po_wa_envios e esperado aqui, pelo recibo de entrega (Task 7): no
+       fluxo correto e a UNICA tabela que chega pela camada crua neste
+       arquivo. Um simulador que responde "200, vazio" para QUALQUER tabela
+       transforma toda chamada direta futura a wa_db_* em sucesso silencioso
+       - foi assim que o vazamento de rede real para o Supabase de producao
+       passou despercebido da primeira vez (ver task-7-report.md). */
+    if (strpos($url, 'po_wa_envios') === false) {
+        fwrite(STDERR, "ASSERT: chamada de banco nao simulada no teste do motor: $metodo $url\n");
+        exit(1);
+    }
+    return ['status' => 200, 'body' => '[]'];
+});
+
 wa_motor_set_deps([
     'roteiros' => function () {
         return [['slug'=>'turquia','titulo'=>'Turquia com Antalia','pdf_url'=>'https://x/t.pdf','data_label'=>'10/05/27'],
@@ -379,6 +419,7 @@ ok(!array_key_exists('qualif_grupo', $DB['po_leads'][0]), 'qualif_grupo nao e gr
    nao substitui a asserção de fonte em tests/test-wa-webhook.php, que
    cuida do ponto de chamada. */
 $DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $DB['po_wa_mensagens'] = []; $ENVIADAS = [];
+$ESCRITAS_MENSAGENS = [];
 $acao = wa_processar([
     'tipo' => 'status', 'wa_id' => $WA, 'wamid' => 'wamid.STATUS1',
     'tipo_msg' => 'status', 'texto' => 'delivered', 'nome' => null,
@@ -388,6 +429,20 @@ ok($acao === 'status', "evento de status devolve 'status' (deu: $acao)");
 ok(count($ENVIADAS) === 0, 'nenhum envio acontece para um evento de status');
 ok($DB['po_wa_conversas'] === [], 'evento de status nao cria nem altera conversa');
 ok($DB['po_leads'] === [], 'evento de status nao cria nem altera lead');
+
+/* Evento de status nao pode ESCREVER em po_wa_mensagens, nunca. O wamid de um
+   status e o da mensagem original e a coluna e unica: gravar ali faz o recibo e o
+   eco disputarem a MESMA linha, o eco vira 'duplicado', o handoff morre e o robo
+   passa a falar por cima da atendente. Hoje isso e impedido em whatsapp.php (e
+   travado la por assercao de fonte), mas nada impediria o motor de reintroduzir o
+   defeito por dentro. Esta assercao impede. */
+ok(!$ESCRITAS_MENSAGENS,
+   'evento de status nao escreve em po_wa_mensagens, nem pelo motor');
+/* A assercao acima olha o transporte cru. Mas o idioma do motor para escrever nesta
+   tabela e wa_call (injecao de dependencia), que no teste grava direto em $DB e nunca
+   passa pelo transporte. Sem esta segunda linha, injetar o defeito real no ramo de
+   status deixa a suite inteira VERDE - foi medido. */
+ok($DB['po_wa_mensagens'] === [], 'nem pela injecao de dependencia');
 
 /* ---------- pontuacao quando o nome vem vazio ----------
    O {nome} sai do perfil do WhatsApp de quem escreve (contacts[0].profile.name
@@ -416,5 +471,66 @@ ok(wa_limpa_pontuacao('Perfeito, Marlene.') === 'Perfeito, Marlene.',
    'com nome presente a virgula do vocativo fica de pe');
 ok(wa_limpa_pontuacao('Leve documento, passagem e seguro.') === 'Leve documento, passagem e seguro.',
    'virgula comum no meio da frase nao e tocada');
+
+/* ---------- SAIR ----------
+   Defesa 3 da spec 8.1. O texto da transmissao promete "Responda SAIR para
+   nao receber mais", e a promessa tem que valer.
+
+   O casamento e ESTRITO: so a palavra sozinha. "cancelar" ficou de fora de
+   proposito - numa agencia de viagem "quero cancelar" quase sempre e
+   cancelar uma RESERVA, e tratar isso como descadastro tiraria da lista
+   justamente quem esta em negociacao. */
+ok(wa_e_saida('SAIR') === true,        'SAIR maiusculo sai');
+ok(wa_e_saida('sair') === true,        'sair minusculo sai');
+ok(wa_e_saida('  Sair. ') === true,    'com espaco e ponto ainda sai');
+ok(wa_e_saida('parar') === true,       'parar tambem sai');
+ok(wa_e_saida('descadastrar') === true,'descadastrar tambem sai');
+ok(wa_e_saida('quero sair do grupo') === false,
+   'a palavra no meio da frase NAO desinscreve: "sair do grupo" e outra coisa');
+ok(wa_e_saida('quero cancelar minha reserva') === false,
+   'cancelar reserva nunca e descadastro');
+/* "cancelar" fica FORA da lista de proposito, e isto e decisao de produto e nao de
+   implementacao: numa agencia de viagem "quero cancelar" quase sempre e cancelar uma
+   RESERVA. Tratar como descadastro tiraria da lista justamente quem esta negociando.
+   A frase inteira ja era barrada pela ancora; esta assercao e o que impede alguem
+   acrescentar a palavra a lista sem perceber o que esta desfazendo. */
+ok(wa_e_saida('cancelar') === false,
+   'a palavra cancelar sozinha NAO descadastra: em viagem, cancelar e sobre reserva');
+ok(wa_e_saida('') === false,           'texto vazio nao desinscreve');
+
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $DB['po_wa_mensagens'] = []; $ENVIADAS = [];
+$acao = wa_processar([
+    'tipo' => 'mensagem', 'wa_id' => $WA, 'wamid' => 'wamid.SAIR1',
+    'tipo_msg' => 'text', 'texto' => 'SAIR', 'nome' => 'Marlene',
+    'ad_id' => null, 'ctwa_clid' => null, 'ts' => time(),
+]);
+ok($acao === 'opt_out', "SAIR devolve 'opt_out' (deu: $acao)");
+ok(!empty($DB['po_leads'][0]['opt_out_at']), 'opt_out_at e carimbado no lead');
+ok(count($ENVIADAS) === 1, 'uma confirmacao e enviada');
+ok(stripos($ENVIADAS[0][2], 'não') !== false
+   || stripos($ENVIADAS[0][2], 'nao') !== false,
+   'a confirmacao diz que a pessoa nao recebera mais');
+/* E NAO promete a volta. Nada em lugar nenhum limpa opt_out_at - nem o motor,
+   nem o painel, nem o endpoint da transmissao -, entao "se um dia quiser
+   voltar, e so escrever aqui" era promessa a um cliente que o sistema nao
+   cumpre: ela escreve, nada acontece, e a agencia fica com a conta. Se algum
+   dia existir o caminho de volta, esta linha cai junto com ele. */
+ok(!preg_match('/quiser voltar|voltar a receber/i', $ENVIADAS[0][2]),
+   'a confirmacao NAO promete um retorno que nenhum codigo do projeto executa');
+
+/* SAIR tem que valer mesmo com o robo JA silenciado naquele contato: o
+   silencio existe para o robo nao falar por cima da humana, nao para a
+   pessoa perder o direito de sair da lista. O carimbo acontece sempre; a
+   RESPOSTA e que nao sai, para nao atropelar a conversa humana. */
+$DB['po_wa_conversas'] = []; $DB['po_leads'] = []; $ENVIADAS = [];
+wa_conversa_set($WA, ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
+$acao = wa_processar([
+    'tipo' => 'mensagem', 'wa_id' => $WA, 'wamid' => 'wamid.SAIR2',
+    'tipo_msg' => 'text', 'texto' => 'sair', 'nome' => 'Marlene',
+    'ad_id' => null, 'ctwa_clid' => null, 'ts' => time(),
+]);
+ok($acao === 'opt_out', 'SAIR vale mesmo com o robo silenciado');
+ok(!empty($DB['po_leads'][0]['opt_out_at']), 'o carimbo acontece mesmo silenciado');
+ok(count($ENVIADAS) === 0, 'mas o robo NAO responde por cima da humana');
 
 echo "test-wa-motor OK\n";

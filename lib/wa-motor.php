@@ -18,6 +18,7 @@ require_once __DIR__ . '/wa-db.php';
 require_once __DIR__ . '/wa-send.php';
 require_once __DIR__ . '/wa-roteiro.php';
 require_once __DIR__ . '/wa-fone.php';
+require_once __DIR__ . '/wa-camp-recibo.php';
 
 const WA_SITE = 'https://pereiraoliveiraturismo.com.br';
 
@@ -280,6 +281,19 @@ function wa_resposta_grupo($texto) {
     return null;
 }
 
+/* Defesa 3 da spec 8.1: "Responda SAIR para nao receber mais".
+
+   O casamento e ESTRITO - a palavra sozinha, com pontuacao e espaco ao
+   redor. Duas razoes:
+
+   1) "quero sair do grupo" e uma pergunta sobre a viagem, nao um descadastro.
+   2) "cancelar" ficou FORA da lista de proposito: numa agencia de viagem
+      "quero cancelar" quase sempre e cancelar uma reserva, e trata-lo como
+      descadastro tiraria da lista justamente quem esta em negociacao. */
+function wa_e_saida($texto) {
+    return (bool) preg_match('/^\s*(sair|parar|descadastrar)[\s.!]*$/iu', (string) $texto);
+}
+
 /* ---------- estado ---------- */
 function wa_conversa($wa_id) {
     $l = wa_call('select', 'po_wa_conversas', 'wa_id=eq.' . rawurlencode($wa_id));
@@ -437,7 +451,15 @@ function wa_processar($ev) {
     $texto = (string) ($ev['texto'] ?? '');
     $nome  = $ev['nome'] ?? '';
 
-    if ($ev['tipo'] === 'status') return 'status';
+    if ($ev['tipo'] === 'status') {
+        /* O recibo atualiza po_wa_envios, e SO ele. Nao passa por
+           wa_registra_evento de proposito: o wamid de um status E o da
+           mensagem original e po_wa_mensagens.wamid e unique, entao recibo e
+           eco competiriam pela mesma linha e o eco viraria 'duplicado' -
+           fazendo o robo nao se calar. */
+        wa_camp_recibo($ev['wamid'] ?? '', $ev['texto'] ?? '');
+        return 'status';
+    }
 
     /* ----- eco: ela falou pelo celular ----- */
     if ($ev['tipo'] === 'eco') {
@@ -474,6 +496,27 @@ function wa_processar($ev) {
 
         if ($acao) return $acao;
         return $ja_humano ? 'ja_humano' : 'silenciou';
+    }
+
+    /* SAIR vem antes de tudo, inclusive do silencio. O silencio existe para
+       o robo nao falar por cima da humana; nao existe para a pessoa perder o
+       direito de sair da lista. Por isso o CARIMBO acontece sempre e so a
+       RESPOSTA respeita o silencio. */
+    if ($ev['tipo'] === 'mensagem' && wa_e_saida($ev['texto'] ?? '')) {
+        wa_lead_set($wa_id, ['opt_out_at' => gmdate('c')]);
+        $conv = wa_conversa($wa_id);
+        if (empty($conv['silenciado_at'])) {
+            /* Nao prometer a volta: NADA limpa opt_out_at, nem o painel nem o
+               motor, entao "e so escrever aqui" e promessa que o sistema nao
+               cumpre - a pessoa escreve, nada acontece, e a agencia fica com a
+               conta. Enquanto nao existir o caminho de volta, a frase diz o que
+               e verdade: o canal continua aberto para falar com a equipe. */
+            wa_envia_texto($wa_id,
+                'Tudo bem, você não vai mais receber nossas mensagens sobre viagens. ' .
+                'Se precisar de alguma coisa, é só chamar a nossa equipe neste mesmo número.');
+            wa_conversa_set($wa_id, ['estado' => 'encerrado']);
+        }
+        return 'opt_out';
     }
 
     /* ----- mensagem do cliente ----- */
