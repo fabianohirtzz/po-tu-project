@@ -391,6 +391,9 @@
         <div class="rev-acoes">
           <button class="btn btn-primary" id="camp-continuar" type="button" hidden>Continuar a lista</button>
           <button class="btn btn-ghost" id="camp-drenar" type="button" hidden>Enviar o próximo lote agora</button>
+          <!-- Sem esta saída, uma campanha travada bloqueia todas as próximas
+               (existe uma por vez) e só teria conserto por SQL no banco. -->
+          <button class="btn btn-danger" id="camp-cancelar" type="button">Cancelar campanha</button>
         </div>
       </div>
 

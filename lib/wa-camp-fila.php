@@ -282,6 +282,10 @@ function wa_camp_reserva_lote($campanha_id, $publico,
     if ($faltam < 0) $faltam = 0;
     $acc['faltam']           = $faltam;
     $acc['reservados_total'] = count($ja) + $acc['reservados'] + $acc['ja_existiam'];
+    /* A segunda condicao e redundante pela aritmetica de hoje (toda falha
+       deixa alguem em $faltam) e fica de proposito: e a INTENCAO escrita, e
+       ela e a unica autorizacao para a campanha comecar a gastar. Se um dia
+       'reservados' passar a contar de outro jeito, a intencao continua aqui. */
     $acc['completo']         = ($faltam === 0 && $acc['erros'] === 0);
     return $acc;
 }

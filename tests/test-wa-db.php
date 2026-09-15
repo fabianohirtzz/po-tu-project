@@ -111,4 +111,51 @@ $insRede = wa_db_insert_status('po_wa_envios', ['campanha_id' => 'C1', 'lead_id'
 ok($insRede['status'] === 0 && $insRede['linha'] === null,
    'insert_status com a rede fora devolve status 0, nao 409');
 
+/* --- conta: o numero que decide se a campanha acabou ---------------------
+   Contar em PHP as linhas trazidas pela rede tem um defeito invisivel: o
+   PostgREST pode ter teto de linhas (db-max-rows) e devolver a leitura
+   capada. No caminho do dreno, isso conclui a campanha cedo, com gente sem
+   receber. Por isso quem conta e o banco, pelo Content-Range. */
+$capt = [];
+wa_db_set_transport(function ($metodo, $url, $corpo, $headers) use (&$capt) {
+    $capt = compact('metodo', 'url', 'corpo', 'headers');
+    // Corpo com UMA linha e total 412: se alguem voltar a contar o corpo, o
+    // numero sai 1 em vez de 412 e este teste fica vermelho.
+    return ['status' => 200, 'body' => '[{"id":"E1"}]',
+            'headers' => ['content-range' => '0-0/412']];
+});
+$n = wa_db_conta('po_wa_envios', 'campanha_id=eq.C1&status=in.(reservado,enviando)');
+ok($n === 412, 'conta le o TOTAL do Content-Range, nao o tamanho do corpo (deu: ' . var_export($n, true) . ')');
+ok($capt['metodo'] === 'GET', 'conta usa GET');
+ok(strpos($capt['url'], 'limit=1') !== false, 'conta pede so uma linha: o que importa e o cabecalho');
+$hs = implode("\n", $capt['headers']);
+ok(strpos($hs, 'Prefer: count=exact') !== false, 'conta pede a contagem exata');
+/* Um SO cabecalho Prefer. Dois dependem de o servidor concatenar, e se ele
+   ficar com o primeiro a contagem nunca vem - e wa_db_conta devolveria null
+   para sempre, travando toda drenagem. */
+ok(substr_count($hs, 'Prefer:') === 1,
+   'conta manda um unico cabecalho Prefer (deu: ' . substr_count($hs, 'Prefer:') . ')');
+
+// Coleta vazia: o PostgREST responde "*/0". Zero aqui e um zero de verdade.
+wa_db_set_transport(function () {
+    return ['status' => 200, 'body' => '[]', 'headers' => ['content-range' => '*/0']];
+});
+ok(wa_db_conta('po_wa_envios', 'campanha_id=eq.C1') === 0, 'coleta vazia conta zero');
+
+/* Sem Content-Range legivel a contagem e DESCONHECIDA, nunca zero: zero seria
+   lido como "fila vazia" e concluiria a campanha com gente sem receber. */
+wa_db_set_transport(function () { return ['status' => 200, 'body' => '[]']; });
+ok(wa_db_conta('po_wa_envios', 'campanha_id=eq.C1') === null,
+   'resposta sem Content-Range devolve null, nunca zero');
+wa_db_set_transport(function () {
+    return ['status' => 200, 'body' => '[]', 'headers' => ['content-range' => '0-24/*']];
+});
+ok(wa_db_conta('po_wa_envios', 'campanha_id=eq.C1') === null,
+   'Content-Range com total desconhecido ("/*") devolve null, nunca zero');
+
+wa_db_set_transport(function () { return ['status' => 500, 'body' => '{}']; });
+ok(wa_db_conta('po_wa_envios', '') === null, 'erro do banco devolve null');
+wa_db_set_transport(function () { return null; });
+ok(wa_db_conta('po_wa_envios', '') === null, 'rede fora devolve null');
+
 echo "test-wa-db OK\n";

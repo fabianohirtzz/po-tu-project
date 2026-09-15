@@ -73,8 +73,9 @@ function poCampValidaCorpo(corpo) {
 
 /* ---------- conversa com o campanha.php ---------- */
 
-let PO_CAMP_PREVIA = null;     // ultima previa recebida do servidor
-let PO_CAMP_OCUPADO = false;   // trava contra o segundo clique
+let PO_CAMP_PREVIA = null;      // ultima previa recebida do servidor
+let PO_CAMP_OCUPADO = false;    // trava contra o segundo clique
+let PO_CAMP_ANDAMENTO = false;  // ja existe campanha rodando
 
 /* O token vem de sb.auth.getSession() na hora, como no importador de
    contatos: guardado numa variavel ele vence sozinho e o endpoint passa a
@@ -135,7 +136,15 @@ async function poRenderCampanhas() {
       previa.suspeitos + ' número(s) podem ser estrangeiros salvos com 00. ' +
       'Confira antes de enviar: cada um custa igual e não entrega.');
   }
-  if (btn) btn.disabled = !poCampPodeEnviar(previa);
+  /* Campanha em andamento trava a criacao de outra: o endpoint recusaria com
+     409 de qualquer forma, e botao que aceita clique para dar erro e pior que
+     botao desabilitado com o motivo escrito ao lado. */
+  if (PO_CAMP_ANDAMENTO) {
+    poCampMsg('#camp-erro',
+      'Termine a campanha em andamento antes de começar outra. Duas ao mesmo tempo ' +
+      'dividiriam o limite diário de envios.');
+  }
+  if (btn) btn.disabled = PO_CAMP_ANDAMENTO || !poCampPodeEnviar(previa);
 }
 
 /* A campanha em andamento fica visivel porque e ela que bloqueia uma nova:
@@ -149,9 +158,11 @@ async function poCampCarregaAndamento() {
     e = await poCampPost('estado', {});
   } catch (err) {
     box.hidden = true;
+    PO_CAMP_ANDAMENTO = false;
     return;
   }
   const c = e.campanha;
+  PO_CAMP_ANDAMENTO = !!c;
   if (!c) { box.hidden = true; return; }
 
   box.hidden = false;
@@ -272,11 +283,34 @@ async function poCampDrenar() {
   await poCampCarregaAndamento();
 }
 
+/* Encerra a campanha atual. E a saida de emergencia: sem ela, uma campanha
+   travada em rascunho bloqueia todas as proximas, porque existe uma por vez.
+   Pede confirmacao porque o que ja saiu esta pago e nao volta. */
+async function poCampCancelar() {
+  const box = document.querySelector('#camp-andamento');
+  const id  = box && box.dataset.id;
+  if (!id || PO_CAMP_OCUPADO) return;
+  if (!confirm('Cancelar esta campanha?\n\n' +
+               'O que já foi enviado continua enviado e já foi cobrado. ' +
+               'O resto da fila para de sair.')) return;
+  PO_CAMP_OCUPADO = true;
+  try {
+    await poCampPost('cancelar', { campanha_id: id });
+    toast('Campanha cancelada.');
+  } catch (e) {
+    poCampMsg('#camp-erro', e.message || 'Falha ao cancelar.');
+  }
+  PO_CAMP_OCUPADO = false;
+  await poRenderCampanhas();
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   const b1 = document.querySelector('#camp-enviar');
   const b2 = document.querySelector('#camp-continuar');
   const b3 = document.querySelector('#camp-drenar');
+  const b4 = document.querySelector('#camp-cancelar');
   if (b1) b1.onclick = poCampEnviar;
   if (b2) b2.onclick = poCampContinuar;
   if (b3) b3.onclick = poCampDrenar;
+  if (b4) b4.onclick = poCampCancelar;
 });

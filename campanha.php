@@ -6,6 +6,7 @@
      modo=criar     -> cria a campanha e comeca a RESERVAR. NAO envia.
      modo=reservar  -> reserva o proximo pedaco do publico. NAO envia.
      modo=drenar    -> manda o proximo lote (o wa-cron chama o mesmo caminho).
+     modo=cancelar  -> encerra a campanha atual. A saida de emergencia.
      modo=estado    -> o andamento da campanha atual, so para a tela mostrar.
 
    Criar, reservar e drenar sao separados de proposito:
@@ -118,7 +119,7 @@ function camp_fecha_reserva($id, $reservados_total, $custo_estimado) {
 
 $modo = cpost('modo');
 if ($modo === '') $modo = 'previa';
-if (!in_array($modo, ['previa', 'criar', 'reservar', 'drenar', 'estado'], true)) {
+if (!in_array($modo, ['previa', 'criar', 'reservar', 'drenar', 'cancelar', 'estado'], true)) {
     cfail(400, 'Modo desconhecido.');
 }
 
@@ -270,11 +271,48 @@ if ($modo === 'reservar') {
 if ($modo === 'drenar') {
     $id = cpost('campanha_id');
     if ($id === '') cfail(400, 'Campanha não informada.');
+
+    $c = wa_db_select_estrito('po_wa_campanhas',
+        'select=id,status&id=eq.' . rawurlencode($id) . '&limit=1');
+    if ($c === null) cfail(502, 'Não consegui ler a campanha agora. Nada foi enviado.');
+    if (!$c)         cfail(404, 'Campanha não encontrada.');
+    /* So 'enviando' e drenavel, a mesma condicao do cron. Uma campanha em
+       'rascunho' ainda esta montando a lista: drenar ali mandaria para o
+       pedaco ja reservado e concluiria a campanha com o resto da base de
+       fora, sem nada dizendo quem ficou. */
+    if (($c[0]['status'] ?? '') !== 'enviando') {
+        cfail(409, 'Esta campanha não está pronta para enviar.');
+    }
+
     /* wa_camp_drena_campanha, nao wa_camp_drena: e o mesmo caminho do cron,
        com a escada, o teto do dia e o encerramento no mesmo lugar. Duas telas
        decidindo sozinhas quando concluir uma campanha e como essa regra
        apodrece. */
     cok(wa_camp_drena_campanha($id));
+}
+
+/* ---------------------------------------------------------- cancelar */
+/* A saida de emergencia. Sem ela, uma campanha travada em 'rascunho' (a
+   reserva morreu no meio e nao volta) bloqueia TODA campanha futura, porque
+   existe uma por vez - e nao haveria caminho no painel para destravar, so
+   SQL no banco. Tambem serve para parar um envio no meio: o que ja saiu esta
+   pago, mas o resto da fila para de custar. */
+if ($modo === 'cancelar') {
+    $id = cpost('campanha_id');
+    if ($id === '') cfail(400, 'Campanha não informada.');
+
+    $c = wa_db_select_estrito('po_wa_campanhas',
+        'select=id,status&id=eq.' . rawurlencode($id) . '&limit=1');
+    if ($c === null) cfail(502, 'Não consegui ler a campanha agora.');
+    if (!$c)         cfail(404, 'Campanha não encontrada.');
+    if (!in_array($c[0]['status'] ?? '', ['rascunho', 'enviando'], true)) {
+        cfail(409, 'Esta campanha já foi encerrada.');
+    }
+    if (!wa_db_update('po_wa_campanhas', 'id=eq.' . rawurlencode($id),
+            ['status' => 'cancelada', 'concluida_at' => gmdate('c')])) {
+        cfail(502, 'Não consegui cancelar a campanha. Tente de novo.');
+    }
+    cok(['campanha_id' => $id, 'cancelada' => true]);
 }
 
 cfail(400, 'Modo desconhecido.');

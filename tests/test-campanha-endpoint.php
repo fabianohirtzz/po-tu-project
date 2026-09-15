@@ -68,6 +68,10 @@ function ce_filho($caso) {
         case 'criar-duplicada': $_POST = array_merge($_POST, $criar); break;
         case 'criar-vazio':     $_POST = array_merge($_POST, $criar); break;
         case 'base-fora':       $_POST = array_merge($_POST, $criar); break;
+        case 'drenar-rascunho': $_POST = ['sb_token'=>'tok.valido', 'modo'=>'drenar',
+                                          'campanha_id'=>'CJA']; break;
+        case 'cancelar':        $_POST = ['sb_token'=>'tok.valido', 'modo'=>'cancelar',
+                                          'campanha_id'=>'CJA']; break;
     }
 
     wa_db_set_transport(function ($metodo, $url, $corpo, $headers) use ($caso, &$chamadas) {
@@ -79,6 +83,12 @@ function ce_filho($caso) {
                 if ($caso === 'criar-duplicada') {
                     return ['status'=>200, 'body'=>json_encode([[
                         'id'=>'CJA', 'nome'=>'Ja rodando', 'status'=>'enviando', 'total'=>10]])];
+                }
+                // Campanha ainda montando a lista: nao pode ser drenada, e
+                // PODE ser cancelada (e a saida de emergencia).
+                if ($caso === 'drenar-rascunho' || $caso === 'cancelar') {
+                    return ['status'=>200, 'body'=>json_encode([[
+                        'id'=>'CJA', 'nome'=>'Montando', 'status'=>'rascunho', 'total'=>0]])];
                 }
                 return ['status'=>200, 'body'=>'[]', 'headers'=>['content-range'=>'*/0']];
             }
@@ -216,5 +226,20 @@ $patches = array_values(array_filter($r['chamadas'],
 ok(count($patches) === 1, 'a lista completa fecha a campanha');
 ok(json_decode($patches[0]['corpo'], true)['status'] === 'enviando',
    'e so entao ela vira enviando, liberada para o dreno');
+
+/* ---------- drenar so aceita campanha com a lista fechada ---------- */
+$r = ce_roda('drenar-rascunho');
+ok($r['codigo'] === 409, 'campanha em rascunho nao pode ser drenada (deu: ' . $r['codigo'] . ')');
+ok(!ce_escreveu($r),
+   'e nada e enviado: drenar uma lista pela metade concluiria a campanha com o resto da base de fora');
+
+/* ---------- cancelar: a saida de emergencia ----------
+   Sem ela, uma campanha travada em rascunho bloqueia TODA campanha futura
+   (existe uma por vez) e so teria conserto por SQL no banco. */
+$r = ce_roda('cancelar');
+ok($r['codigo'] === 200 && $r['json']['cancelada'] === true, 'a campanha travada pode ser cancelada');
+$pt = array_values(array_filter($r['chamadas'], fn($c) => $c['metodo'] === 'PATCH'));
+ok(count($pt) === 1 && json_decode($pt[0]['corpo'], true)['status'] === 'cancelada',
+   'e o status vai para cancelada, que o dreno do cron nao pega');
 
 echo "test-campanha-endpoint OK\n";
