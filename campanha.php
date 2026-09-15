@@ -273,6 +273,11 @@ if ($modo === 'criar') {
         'campanha_id'      => $camp['id'],
         'total'            => $r['resumo']['total'],
         'reservados'       => $l['reservados'],
+        // O painel LE este campo: uma rodada que nao reservou ninguem mas
+        // encontrou gente ja reservada avancou (outra aba pegou o lote). Sem
+        // ele, Number(undefined) > 0 e sempre falso e a tela para no meio de
+        // uma reserva que esta indo bem, dizendo que a lista ficou incompleta.
+        'ja_existiam'      => $l['ja_existiam'],
         'reservados_total' => $l['reservados_total'],
         'faltam'           => $l['faltam'],
         'erros'            => $l['erros'],
@@ -306,6 +311,11 @@ if ($modo === 'reservar') {
         'campanha_id'      => $id,
         'total'            => $r['resumo']['total'],
         'reservados'       => $l['reservados'],
+        // O painel LE este campo: uma rodada que nao reservou ninguem mas
+        // encontrou gente ja reservada avancou (outra aba pegou o lote). Sem
+        // ele, Number(undefined) > 0 e sempre falso e a tela para no meio de
+        // uma reserva que esta indo bem, dizendo que a lista ficou incompleta.
+        'ja_existiam'      => $l['ja_existiam'],
         'reservados_total' => $l['reservados_total'],
         'faltam'           => $l['faltam'],
         'erros'            => $l['erros'],

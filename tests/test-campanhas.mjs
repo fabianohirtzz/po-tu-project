@@ -104,16 +104,38 @@ const fabricaLaco = (post) => new Function('poCampPost', 'poCampMsg', 'toast',
   pegaAsync('poCampReservaAteOFim') + ';return poCampReservaAteOFim;')(
     post, () => {}, () => {});
 
+/* O duble devolve EXATAMENTE os campos do cok() de reservar. Fabricar um
+   campo aqui e o jeito mais facil de escrever um teste que afirma
+   comportamento que o codigo real nao produz - foi assim que a metade
+   `ja_existiam` desta guarda nasceu morta e passou verde. */
+const respostaReservar = (extra) => Object.assign(
+  { campanha_id: 'C1', total: 5, reservados: 0, ja_existiam: 0,
+    reservados_total: 0, faltam: 5, erros: 0, completo: false }, extra);
+
 let chamadas = 0;
 const paradoLaco = fabricaLaco(async () => {
   chamadas++;
-  return { completo: false, reservados: 0, ja_existiam: 0, faltam: 5,
-           total: 5, reservados_total: 0 };
+  return respostaReservar({});
 });
-await paradoLaco('C1', { completo: false, reservados: 0, ja_existiam: 0,
-                         faltam: 5, total: 5, reservados_total: 0 });
+await paradoLaco('C1', respostaReservar({}));
 assert.equal(chamadas, 1,
   'rodada que nao reservou ninguem para o laco na hora, em vez de insistir 200 vezes');
+
+/* OUTRA ABA AVANCOU. A aba B ve 500 faltando, pede 200, e a aba A ja tinha
+   pegado esses 200: volta reservados=0 com ja_existiam=200. A lista esta indo
+   bem, entao o laco TEM que continuar - parar aqui escreveria "a lista ficou
+   incompleta e nada foi enviado" no meio de uma reserva saudavel. E o cenario
+   de duas abas, que e o mesmo desta rodada inteira de correcao. */
+let voltas = 0;
+const outraAbaLaco = fabricaLaco(async () => {
+  voltas++;
+  return voltas < 3
+    ? respostaReservar({ reservados: 0, ja_existiam: 200, faltam: 300, reservados_total: 200 * voltas })
+    : respostaReservar({ reservados: 0, ja_existiam: 300, faltam: 0, reservados_total: 500, completo: true });
+});
+await outraAbaLaco('C1', respostaReservar({ reservados: 200, ja_existiam: 0, faltam: 300 }));
+assert.equal(voltas, 3,
+  'rodada em que OUTRA ABA reservou (ja_existiam > 0) e progresso: o laco continua');
 
 // E o caminho que AVANCA continua indo ate o fim.
 let passos = 0;
@@ -126,6 +148,31 @@ const andandoLaco = fabricaLaco(async () => {
 await andandoLaco('C1', { completo: false, reservados: 2, ja_existiam: 0,
                           faltam: 4, total: 6, reservados_total: 2 });
 assert.equal(passos, 3, 'o laco que avanca segue ate a lista fechar');
+
+/* ---------- o duble nao pode inventar campo que o endpoint nao manda ----------
+   Este e o defeito que o plano inteiro vem cacando: teste que afirma
+   comportamento que o codigo real nao produz. A guarda acima le atual.X; se o
+   cok() de `reservar` nao mandar X, Number(undefined) > 0 e sempre falso e
+   metade da guarda nasce morta - com o teste verde, porque o duble fabricou o
+   campo. Aqui o contrato e conferido contra o FONTE do endpoint. */
+const php = readFileSync(join(raiz, 'campanha.php'), 'utf8');
+const laco = pegaAsync('poCampReservaAteOFim');
+const lidos = [...new Set([...laco.matchAll(/\batual\.([a-z_]+)/g)].map(m => m[1]))];
+assert.ok(lidos.length >= 4, 'o laco le varios campos da resposta (achou: ' + lidos + ')');
+
+
+// Os cok() da reserva sao os que carregam reservados_total.
+const blocos = [...php.matchAll(/cok\(\[[\s\S]*?\n\s*\]\);/g)]
+  .map(m => m[0]).filter(b => b.includes("'reservados_total'"));
+assert.equal(blocos.length, 2, 'criar e reservar respondem o andamento da reserva');
+for (const bloco of blocos) {
+  const mandados = [...bloco.matchAll(/'([a-z_]+)'\s*=>/g)].map(m => m[1]);
+  for (const campo of lidos) {
+    assert.ok(mandados.includes(campo),
+      'o laco le "' + campo + '" e o endpoint NAO manda esse campo: a guarda fica morta ' +
+      'em producao e verde no teste. Campos mandados: ' + mandados.join(', '));
+  }
+}
 
 /* A ligacao dos botoes precisa da guarda de readyState, no padrao do
    painel/importar-contatos.js. Hoje o script e classico e esta no fim do
