@@ -17,6 +17,13 @@ function wa_config() {
         'WA_APP_SECRET'        => '',
         'WA_VERIFY_TOKEN'      => '',
         'WA_CRON_KEY'          => '',
+        // Embedded Signup (conectar-numero.php). O APP_ID e o CONFIG_ID nao sao
+        // segredo - vao no HTML, a Meta os le do navegador -, mas moram aqui
+        // junto do resto para o deploy nao precisar de uma segunda rodada de FTP
+        // so para preencher dois numeros. A WA_ES_KEY e segredo.
+        'WA_ES_APP_ID'         => '',
+        'WA_ES_CONFIG_ID'      => '',
+        'WA_ES_KEY'            => '',
     ];
     $out = po_config();
     foreach ($defaults as $k => $v) {
