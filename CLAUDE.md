@@ -691,6 +691,54 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     template aprovado tem **exatamente uma variável** (`{{1}}` = nome), senão a campanha
     inteira vira falha terminal; conferir o tier do número; e conferir a lista contra
     estrangeiro discado com `00`.
+- **CONEXAO EM CONVIVENCIA: a pagina existe e esta publicada (07/10/2026).**
+  Novos: `conectar-numero.php`, `lib/wa-es.php`, `tests/test-wa-es.php`
+  (suite de 42 para **43** arquivos). Ainda **nao conectado**: falta a Lais
+  com o celular na mao.
+  - **A convivencia nao tem tela no WhatsApp Manager.** O unico caminho
+    documentado pela Meta e o **Embedded Signup**, um popup que so abre a
+    partir de uma pagina **nossa**, com o SDK do Facebook, em dominio
+    cadastrado no app. O caminho "Adicionar numero de telefone" do Manager e
+    o fluxo normal, que **tira o numero do celular** e nao se desfaz.
+  - **A diferenca entre convivencia e migracao e um parametro:**
+    `extras.featureType = 'whatsapp_business_app_onboarding'`. Perder essa
+    palavra **nao da erro em tela**: abre o outro fluxo. Por isso ela mora em
+    `wa_es_extras()`, no PHP, e o teste confere o **HTML servido**, nao so a
+    funcao pura. O valor antigo `coexistence` foi invalidado em 29/05/2025.
+  - **Construida na v4.** A Meta desliga o Embedded Signup v2 e v3 em
+    **15/10/2026**. Na v4 quem decide o fluxo e a **configuracao do Login do
+    Facebook para Empresas**, e `sessionInfoVersion` **nao vai mais** no
+    extras.
+  - **Nao exige revisao de app da Meta** (fecha a duvida que estava aberta
+    aqui): a revisao e para quem conecta numero de TERCEIROS. Sao os nossos
+    proprios ativos, com o app em modo de desenvolvimento, entao basta que
+    quem roda o fluxo tenha papel no app e administre o portfolio verificado.
+  - **O `phone_number_id` chega pelo evento `WA_EMBEDDED_SIGNUP`**, no
+    `window.addEventListener('message')`, **nao** no retorno do `FB.login`.
+    Sem esse ouvinte o fluxo conecta e o numero que o sistema precisa morre
+    junto com a janela.
+  - A pagina fica atras de `WA_ES_KEY` (piso de 16 caracteres) e **nao
+    imprime uma linha de html antes de conferir a chave** - senao contaria a
+    estranhos em que pe esta a instalacao. `WA_ES_APP_ID` e `WA_ES_CONFIG_ID`
+    tambem vivem no `config.local.php`, por comodidade de deploy; segredo
+    de verdade ali e so a `WA_ES_KEY`.
+  - **Apagar `conectar-numero.php` do servidor depois de conectar.** A
+    convivencia e uma vez so.
+  - **Sincronizacao de contatos e de historico: UMA vez cada, e a janela e de
+    24 horas** depois do fluxo. Perdida, so desconectando e refazendo tudo.
+  - **O que a convivencia tira do celular dela para sempre:** a lista de
+    transmissao do app (que e o motivo de existir o plano 4), as mensagens
+    temporarias nas conversas individuais, e os dispositivos vinculados
+    Windows/WearOS. Grupos, chamadas, localizacao ao vivo e "ver uma vez"
+    continuam no app, mas o robo **nao os enxerga**. Vazao fixa em 20 msg/s.
+  - **Depois de conectar, o usuario de sistema precisa ganhar acesso a nova
+    conta do WhatsApp** nas configuracoes do portfolio, senao o `WA_TOKEN`
+    que ja esta no servidor nao alcanca o numero.
+- **`WA_GRAPH` esta em `v21.0` e essa versao expira em 21/01/2027.** Quando
+  uma versao do Graph expira a Meta **nao devolve erro**: ela redireciona a
+  chamada em silencio para outra versao. Subir de versao e uma linha em
+  `lib/wa-send.php`, mas exige conferir o formato das respostas que o motor le.
+
 - **`git checkout --` altera fim de linha neste repo** (`core.autocrlf=true`). O teste de
   cache-buster hasheia conteúdo **normalizado** por causa disso — hashear bytes crus fazia
   o lock depender de como o arquivo tinha sido materializado, e o merge do plano 4 ficou
