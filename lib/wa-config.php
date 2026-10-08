@@ -24,6 +24,9 @@ function wa_config() {
         'WA_ES_APP_ID'         => '',
         'WA_ES_CONFIG_ID'      => '',
         'WA_ES_KEY'            => '',
+        // Conta do WhatsApp Business. So existe depois do numero conectado;
+        // sem ela wa_tpl_cria recusa em vez de chamar a Meta sem destino.
+        'WA_WABA_ID'           => '',
     ];
     $out = po_config();
     foreach ($defaults as $k => $v) {
