@@ -709,10 +709,18 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     **15/10/2026**. Na v4 quem decide o fluxo e a **configuracao do Login do
     Facebook para Empresas**, e `sessionInfoVersion` **nao vai mais** no
     extras.
-  - **Nao exige revisao de app da Meta** (fecha a duvida que estava aberta
-    aqui): a revisao e para quem conecta numero de TERCEIROS. Sao os nossos
-    proprios ativos, com o app em modo de desenvolvimento, entao basta que
-    quem roda o fluxo tenha papel no app e administre o portfolio verificado.
+  - **O app precisa ser PROVEDOR DE TECNOLOGIA antes de existir configuracao
+    de convivencia.** Conferido no console em 08/10/2026: o assistente de
+    configuracao do Login do Facebook para Empresas oferece **so a variacao
+    "Geral"**, e a tela de ativos nao lista "contas do WhatsApp". Sem o ativo
+    do WhatsApp nao ha Embedded Signup, e sem Embedded Signup nao ha
+    convivencia. A leitura anterior aqui (de que revisao de app nao seria
+    exigida por serem nossos proprios ativos) vale para o uso comum da Cloud
+    API, **nao** para o Embedded Signup. O cadastro fica em Casos de uso >
+    WhatsApp > Personalizar > integracao de provedor de tecnologia, e pede
+    verificacao de negocio (ja feita) mais revisao de app com acesso avancado
+    a `whatsapp_business_messaging` e `whatsapp_business_management`, com dois
+    videos demonstrando envio e criacao de template.
   - **O `phone_number_id` chega pelo evento `WA_EMBEDDED_SIGNUP`**, no
     `window.addEventListener('message')`, **nao** no retorno do `FB.login`.
     Sem esse ouvinte o fluxo conecta e o numero que o sistema precisa morre
