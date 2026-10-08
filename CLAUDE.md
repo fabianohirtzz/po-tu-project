@@ -832,6 +832,49 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     verbatim.** Copiar esses blocos na mao produz a pagina com o menu
     atrasado em relacao as outras.
 
+- **ANALISE DE APP SUBMETIDA A META (08/10/2026).** App `4057725214358864`,
+  portfolio da Pereira Oliveira (nao da Freela In Home: a agencia nao tem
+  negocio verificado e este trabalho e sob medida para esta cliente). Pedido
+  de **Independent Tech Provider**, com `whatsapp_business_messaging`,
+  `whatsapp_business_management` e `public_profile`.
+  - **Sem isso nao ha convivencia.** O assistente de configuracao do Login
+    para Empresas so oferece a variacao "Geral" e nao lista contas do
+    WhatsApp nos ativos enquanto o app nao for provedor aprovado. Sem esse
+    ativo nao ha Embedded Signup, e sem ele nao ha convivencia.
+  - **Os dois videos foram gravados no numero de TESTE**, nunca no da
+    agencia: envio de `hello_world` com o WhatsApp Web ao lado, e criacao de
+    modelo pelo painel. Modelos `teste_analise_meta` e `teste_analise_meta_2`
+    ficaram na conta de teste (modelo nao se apaga nem se renomeia na Meta).
+  - **Nunca gravar passando pela aba Leads.** Ela mostra nome, telefone e
+    e-mail de cliente real, e o video vai para um revisor terceiro. A
+    gravacao comeca com a aba Modelos ja aberta.
+  - **Credencial de revisor foi RECUSADA, com justificativa.** O painel nao
+    tem nivel de acesso reduzido: quem entra ve as 786 fichas, com CPF e
+    passaporte. A recusa cita a propria politica de privacidade publicada, com
+    link. Isso e mais defensavel que inventar um usuario de teste.
+  - **`fblogin-web-1` foi respondida NAO.** O produto esta configurado, mas a
+    pagina de conexao devolve 403 (a chave nao existe e a configuracao do
+    Login so pode ser criada depois da aprovacao). Revisor que testa e bate em
+    erro recusa. O texto das instrucoes declara isso explicitamente, entao nao
+    ha contradicao escondida.
+  - **A sugestao de texto da IA da Meta nao foi usada, nas tres permissoes.**
+    Ela afirmava que o app integra contas de clientes empresariais terceiros,
+    que nao existem aqui, e vinha com `[Your Name]` e com o proprio rascunho
+    dela no fim do texto.
+  - **Operadores declarados:** ereHost (Brasil), Supabase (EUA) e Freela In
+    Home (Brasil), todos na categoria de solucoes e servicos de TI.
+    Controlador: Pereira Oliveira Consultoria em Turismo e Viagens LTDA.
+  - **`requests-4` foi marcada com analise de legitimidade e minimizacao, e a
+    politica de privacidade ganhou a secao "Pedidos de autoridades" NO MESMO
+    DIA** para a declaracao ter lastro. Contestacao judicial e livro de
+    registro ficaram desmarcados: a agencia nao faz nem um nem outro, e
+    declarar o que nao se faz e pior que declarar menos.
+  - **PENDENCIA IMEDIATA: `whatsapp_business_messaging` estava em "0 de 1
+    chamada de API obrigatoria"** no momento do envio. O medidor do
+    `whatsapp_business_management` ja estava "Concluida" com as mesmas nossas
+    chamadas, entao e atraso (a tela avisa que leva ate 24h). Se nao acender,
+    o caminho e o link "WhatsApp Try it out" da propria tela.
+
 - **`git checkout --` altera fim de linha neste repo** (`core.autocrlf=true`). O teste de
   cache-buster hasheia conteúdo **normalizado** por causa disso — hashear bytes crus fazia
   o lock depender de como o arquivo tinha sido materializado, e o merge do plano 4 ficou
