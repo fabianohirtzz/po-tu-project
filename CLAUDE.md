@@ -798,6 +798,23 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     saindo por ele depois da convivencia, e o ensaio com um destinatario no
     numero REAL - exigido antes do primeiro disparo pago - nunca aconteceria,
     com todo mundo vendo "enviado". A rodada de mutacao achou isto.
+  - **MODELO E IDENTIFICADO POR NOME + IDIOMA, nao so por nome.** O nome
+    certo com o idioma errado devolve `#132001 Template name does not exist
+    in the translation` e **nao entrega** - para um destinatario ou para a
+    base inteira, do mesmo jeito. O `hello_world` que a Meta cria junto com
+    a conta de teste existe **so em en_US**, e foi assim que isto apareceu.
+    O ensaio pergunta o idioma a conta antes de enviar; a campanha confere
+    o modelo na Meta no `criar` (aprovado? no idioma certo?) e recusa em
+    400, porque descobrir isso no envio significa a base inteira marcada
+    como `falha`, que e terminal. **`WA_CAMP_IDIOMA` e lida pelo criar E
+    pelo envio**: lados que leem valores diferentes aprovam o que o outro
+    recusa. Meta fora do ar na conferencia vira **502, nunca "modelo
+    invalido"** - a cliente iria cacar um erro de digitacao que nao existe.
+  - **Numero novo da Meta nasce `status=PENDING` e nao envia.** O numero de
+    teste criado pela Etapa 1 do console devolvia `#133010 Account not
+    registered` ate receber um `POST /{phone_id}/register` com um PIN de 6
+    digitos (usamos `135790` no de teste). Depois disso ele fica
+    `platform_type=CLOUD_API` e `status=CONNECTED`.
   - **`templates.php` nao carrega o `lib/wa-db.php` e nao conhece `po_leads`**,
     e um teste de fonte trava isso: o ensaio manda para um numero digitado na
     hora e nao pode ganhar caminho para varrer a base.
