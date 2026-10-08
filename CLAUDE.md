@@ -742,10 +742,47 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
   - **Depois de conectar, o usuario de sistema precisa ganhar acesso a nova
     conta do WhatsApp** nas configuracoes do portfolio, senao o `WA_TOKEN`
     que ja esta no servidor nao alcanca o numero.
-- **`WA_GRAPH` esta em `v21.0` e essa versao expira em 21/01/2027.** Quando
-  uma versao do Graph expira a Meta **nao devolve erro**: ela redireciona a
-  chamada em silencio para outra versao. Subir de versao e uma linha em
-  `lib/wa-send.php`, mas exige conferir o formato das respostas que o motor le.
+- **`WA_GRAPH` SUBIU PARA `v26.0` (08/10/2026), e a validade virou TESTE.**
+  Antes estava em `v21.0`, que expira em 21/01/2027. Versao expirada da Graph
+  **nao devolve erro**: a Meta redireciona a chamada em silencio e segue
+  respondendo, entao o motor pode ler um formato diferente, dar o envio como
+  feito e avancar o estado da conversa sem nada ter saido.
+  - **O despertador agora e `tests/test-wa-graph.php`.** `WA_GRAPH_VALIDADE`
+    (em `lib/wa-send.php`) guarda a data de expiracao de cada versao, e o
+    teste fica **vermelho 90 dias antes** do vencimento da versao pinada.
+    Versao fora do catalogo tambem e vermelho, que e o caso de alguem subir o
+    numero e esquecer de trazer a data nova. Rodada de mutacao: 6 de 6 mortas.
+    Suite de 46 para **47** arquivos.
+  - **A versao e lida do proprio `WA_GRAPH`** por regex ancorada em `/$`, que
+    e o que trava a **barra final**: sem ela o id do numero cola na versao
+    (`.../v26.0123456/messages`) e a Meta recusa.
+  - **v26.0 foi a mais nova medida no proprio endpoint** em 08/10/2026 (a
+    v27.0 ainda nao existe) e a Meta ainda nao publicou expiracao para ela.
+    Datas das outras: v22 20/05/2027 · v23 08/10/2027 · v24 18/02/2028 ·
+    v25 29/07/2028.
+  - **Conferido contra a conta de verdade, nao contra o changelog:** o GET
+    `message_templates` devolve `data[]` com `name`/`status`/`language`/
+    `category`/`components`/`id` **identicos** na v21 e na v26 (7 modelos), e
+    o POST `/messages` devolve o mesmo envelope `error.message` nas duas (a
+    sonda manda corpo vazio, que a Meta recusa na validacao, entao **nada e
+    entregue a ninguem**). O envelope de SUCESSO (`messages[0].id`) nao tem
+    como ser conferido sem entregar mensagem: fica para o ensaio com um
+    destinatario, que ja e passo obrigatorio antes do primeiro disparo.
+  - **O SDK do navegador em `conectar-numero.php` e um dial SEPARADO** e
+    segue em `v25.0` (expira 29/07/2028). Nao foi mexido de proposito: a
+    convivencia e uma vez so e acontece em dias, e mudar a versao do dialogo
+    de login as vesperas nao compra nada.
+  - **A versao do WEBHOOK e um terceiro dial**, que mora no console da Meta
+    (Webhooks do app), nao no `WA_GRAPH`. O payload que `lib/wa-webhook.php`
+    le (`entry[].changes[].value.messages[]` e `.statuses[]`) obedece a ela.
+    Para v24.0+ a Meta parou de mandar o objeto `conversation` nos status
+    fora de janela de entrada gratuita - **o codigo nao le `conversation` nem
+    `pricing`**, entao nao quebra, mas conferir a versao escolhida la quando
+    o webhook for ligado.
+  - **`wa_tpl_lista` pede `limit=50` e NAO pagina.** A conta tem 7 modelos
+    hoje; passando de 50, um modelo da segunda pagina seria lido como
+    inexistente e o `campanha.php` recusaria criar a campanha (502/400, nunca
+    envio errado). Falha segura, mas e divida.
 
 - **ABA MODELOS + POLITICA DE PRIVACIDADE (08/10/2026).** Novos:
   `painel/modelos.js`, `templates.php`, `lib/wa-template.php`,

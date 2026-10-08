@@ -1,6 +1,7 @@
 <?php
 /* ============================================================
-   Envio pela Cloud API (Graph v21).
+   Envio pela Cloud API. A versao da Graph mora em WA_GRAPH, logo abaixo,
+   junto com a data em que ela morre.
 
    O transporte e injetavel de proposito: e o que permite construir e
    testar o motor inteiro contra um simulador, antes de a conta da Meta
@@ -14,7 +15,55 @@
 require_once __DIR__ . '/wa-config.php';
 require_once __DIR__ . '/wa-fone.php';
 
-const WA_GRAPH = 'https://graph.facebook.com/v21.0/';
+/* A VERSAO DA GRAPH E DATADA, E EXPIRAR NAO DA ERRO. Quando a versao chamada
+   vence, a Meta nao devolve 400: ela REDIRECIONA a chamada em silencio para
+   uma versao que ela escolhe, e o formato das respostas pode mudar debaixo do
+   motor sem nada acender em tela nem no log.
+
+   Por isso a data de validade mora aqui do lado, e tests/test-wa-graph.php
+   fica VERMELHO 90 dias antes de a versao pinada vencer. Datas publicadas
+   pela Meta em developers.facebook.com/docs/graph-api/changelog. Versao com
+   data vazia e versao que a Meta ainda nao agendou para morrer.
+
+   Subir de versao nao e so trocar o numero: e conferir que os campos que o
+   motor LE continuam existindo. Hoje sao `messages[0].id` e `error.message`
+   no envio, e `id`, `status`, `name`, `language` em message_templates. */
+const WA_GRAPH = 'https://graph.facebook.com/v26.0/';
+
+const WA_GRAPH_VALIDADE = [
+    'v21.0' => '2027-01-21',
+    'v22.0' => '2027-05-20',
+    'v23.0' => '2027-10-08',
+    'v24.0' => '2028-02-18',
+    'v25.0' => '2028-07-29',
+    'v26.0' => '',          // lancada em 29/07/2026, expiracao nao publicada
+];
+
+/* A versao pinada, lida do proprio WA_GRAPH. Guardar o numero tambem numa
+   segunda constante criaria o caso em que as duas discordam e ninguem sabe
+   qual vale. A ancora no fim do padrao exige a BARRA FINAL: sem ela a
+   concatenacao viraria ".../v26.0123456/messages", que a Meta recusa. */
+function wa_graph_versao() {
+    return preg_match('~^https://graph\.facebook\.com/(v\d+\.\d+)/$~', WA_GRAPH, $m) ? $m[1] : '';
+}
+
+/* Dias que faltam para a versao expirar.
+   null  = a Meta nao publicou data para ela, nada a fazer;
+   false = a versao NAO esta no catalogo acima - que e exatamente o que
+           acontece quando alguem sobe o numero e esquece de trazer a data
+           nova junto, e e o caso que o teste precisa pegar. */
+function wa_graph_dias($hoje = null, $versao = null) {
+    $v = $versao === null ? wa_graph_versao() : (string) $versao;
+    if (!array_key_exists($v, WA_GRAPH_VALIDADE)) return false;
+
+    $d = WA_GRAPH_VALIDADE[$v];
+    if ($d === '') return null;
+
+    // Em UTC de proposito: meia-noite local em dia de horario de verao faz a
+    // divisao por 86400 errar um dia.
+    $hoje = $hoje === null ? gmdate('Y-m-d') : (string) $hoje;
+    return (int) floor((strtotime($d . ' UTC') - strtotime($hoje . ' UTC')) / 86400);
+}
 
 function wa_set_transport($f) { $GLOBALS['WA_TRANSPORT'] = $f; }
 
