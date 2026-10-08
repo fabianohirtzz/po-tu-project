@@ -917,11 +917,51 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
   o lock depender de como o arquivo tinha sido materializado, e o merge do plano 4 ficou
   vermelho com o `painel.css` idêntico. Para restaurar arquivo em rodada de mutação, use
   cópia de bytes.
-- **Falta:** o plano 4 (transmissão), a conexão real com a Meta,
-  a homologação, e a **conferência visual do painel com login real** — seis tarefas
-  mexeram em `painel/app.js`, `index.html` e `painel.css`, e nenhum agente conseguiu
-  passar do login do Supabase. O deploy foi validado por sintaxe, testes (19 arquivos),
-  hash do conteúdo servido e status HTTP; **a tela em si ninguém viu logada**.
+- **Falta:** a conexão real com a Meta e a homologação. (O plano 4 saiu, e a
+  conferência visual do painel logado foi feita em 08/10/2026 — ver abaixo.)
+
+- **CONFERENCIA VISUAL DO PAINEL LOGADO: FEITA (08/10/2026).** Era a pendência
+  mais antiga aberta: seis tarefas mexeram em `painel/app.js`, `index.html` e
+  `painel.css` e **ninguém nunca tinha visto a tela logada**. As 10 abas foram
+  abertas com a sessão real da Laís. **Todas renderizam.**
+  - **Nenhuma tela do painel pode ser julgada por screenshot imediato.** Três
+    "defeitos" que apareceram nesta rodada eram todos a mesma coisa: a aba
+    pinta a moldura na hora e preenche depois do fetch. A aba Textos apareceu
+    **sem nenhum campo** (eram 7, chegaram depois), a Transmissão ficou em
+    "Calculando o público..." (resolveu), e os cards de Roteiros ficaram
+    **cinza** (as capas são ~600 KB cada, 6 delas, ~2,5 MB na primeira
+    pintura). Esperar de 5 a 10 segundos antes de concluir qualquer coisa.
+  - **Clique sintético de automação some durante o boot do painel.** Um
+    `left_click` do navegador controlado no primeiro segundo **não chega nem
+    como `pointerdown`** (confirmado com listener de captura: log vazio). Não
+    é bug do painel - o handler está ligado e funciona. Para trocar de aba por
+    automação, use `document.querySelector('[data-view="..."]').click()`.
+  - **DIVERGENCIA REAL, a decidir:** o mesmo lead é contado em caixas
+    diferentes em duas telas. `painel/funil.js:13` dobra `semresposta` dentro
+    de **"Contato feito"** (que é a regra escrita deste subsistema), mas
+    `painel/app.js:495` lista `semresposta` como **coluna própria** no funil
+    dos Relatórios. Hoje, com 1 lead: o Funil mostra "Contato feito 1" e os
+    Relatórios mostram "Contato feito 0 / Sem resposta 1". Nenhum dado está
+    errado; o que confunde é o rótulo igual com número diferente.
+  - **Transmissão calcula certo e bate com a base:** R$ 6,82 estimado, **22
+    pessoas recebem**, 17 não são clientes, **753 estão sem telefone** - os
+    mesmos 22 celulares que o plano 3 mediu.
+  - **A aba Modelos lista pela Graph v26.0 de ponta a ponta** (painel →
+    `templates.php` → Meta, com o token e a WABA reais): 7 modelos, os 2 de
+    teste em EM ANÁLISE **sem** botão de usar, os 5 aprovados **com** botão.
+    É a prova de que a subida de versão funciona no servidor.
+  - **Clientes mostra contato de EMPRESA vindo da agenda** ("VIVO INTERNET",
+    "VIVO CELULARES", "Vital Card"). Todos sem telefone, então não entram em
+    campanha nem custam nada - mas sujam a lista de pessoas.
+  - **Celular NAO foi verificado.** A janela do Chrome desta máquina não
+    encolhe abaixo de ~1440px (maximizada; o `resize_window` responde sucesso
+    e o `innerWidth` não muda), então o ponto de quebra de 980px, onde a barra
+    lateral vira gaveta, continua sem ninguém ter visto. Testar no celular de
+    verdade, que é onde a Laís usa.
+  - **O formulário do site está produzindo:** entrou um lead orgânico em
+    08/10/2026 às 05:45 (Chile e Deserto do Atacama, Balneário Camboriú), o
+    primeiro desde que a base foi zerada. Ele aparece em Leads, em Clientes e
+    no Funil, e o KPI ignora a base importada, como foi desenhado.
 - **Aberto:** se o Embedded Signup da coexistência exige revisão de app da Meta. Se exigir,
   entra uma etapa a mais antes de conectar.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
