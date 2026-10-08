@@ -133,7 +133,14 @@ if ($modo === 'ensaio') {
         tfail(400, 'Telefone inválido. Escreva com DDD, por exemplo 48999999999.');
     }
 
-    $r = wa_send_template($destino, $modelo, $params, 'pt_BR', $pid);
+    /* O idioma vem da PROPRIA conta, nao de um padrao fixo. Modelo e
+       identificado por nome + idioma: o nome certo com o idioma errado
+       devolve "#132001 ... does not exist in the translation" e nao entrega.
+       O hello_world da conta de teste existe so em en_US. */
+    $idioma = wa_tpl_idioma($modelo);
+    if ($idioma === null) $idioma = 'pt_BR';
+
+    $r = wa_send_template($destino, $modelo, $params, $idioma, $pid);
     if (empty($r['ok'])) {
         tfail(502, 'A Meta não entregou: ' . ($r['erro'] ?? 'motivo não informado') . '.');
     }

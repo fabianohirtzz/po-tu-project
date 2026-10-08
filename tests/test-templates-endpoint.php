@@ -65,6 +65,14 @@ function te_filho($caso) {
             ]])];
         }
         if ($caso === 'listar-fora') return ['status' => 500, 'body' => 'erro'];
+        /* O ensaio pergunta o idioma a conta antes de enviar. O hello_world
+           que a Meta cria junto com a conta de teste existe SO em en_US. */
+        if (strpos($caso, 'ensaio') === 0) {
+            return ['status' => 200, 'body' => json_encode(['data' => [
+                ['name' => 'hello_world', 'status' => 'APPROVED',
+                 'category' => 'UTILITY', 'language' => 'en_US'],
+            ]])];
+        }
         return ['status' => 200, 'body' => json_encode(['id' => '9988', 'status' => 'PENDING'])];
     });
 
@@ -238,20 +246,38 @@ ok($r['codigo'] === 502, 'Meta fora na listagem vira 502, nao lista vazia (deu: 
 /* ============================================================
    ENSAIO: uma mensagem, um numero, longe da base
 ============================================================ */
+
+/* O ensaio faz duas chamadas: pergunta o idioma a conta e depois envia. As
+   assercoes olham a de ENVIO, achada pela url, e nao "a primeira" - que
+   mudaria de posicao a cada ajuste. */
+function te_envio($r) {
+    foreach ($r['chamadas'] as $c) {
+        if (strpos($c['url'], '/messages') !== false) return $c;
+    }
+    return null;
+}
 $r = te_roda('ensaio');
 ok($r['codigo'] === 200, 'o ensaio envia (deu: ' . $r['codigo'] . ')');
 ok($r['json']['wamid'] === 'wamid.TESTE123', 'devolve o wamid, que prova a entrega');
-ok(count($r['chamadas']) === 1, 'uma mensagem so');
+$e = te_envio($r);
+ok($e !== null, 'houve uma chamada de envio');
+ok(count(array_filter($r['chamadas'],
+     fn($c) => strpos($c['url'], '/messages') !== false)) === 1, 'uma mensagem so');
 /* A assercao que protege a base: o ensaio sai pelo numero de TESTE. Se ele
    dependesse do WA_PHONE_ID, alguem preencheria aquela chave para fazer o
    ensaio funcionar - e aquela chave vazia e o que mantem o campanha.php
    inerte. Campanha disparada pelo numero de teste falha para a base inteira
    de uma vez, e falha e terminal. */
-ok(strpos($r['chamadas'][0]['url'], '/888teste/messages') !== false,
-   'o ensaio sai pelo numero de TESTE (url: ' . $r['chamadas'][0]['url'] . ')');
-ok(strpos($r['chamadas'][0]['url'], '777agencia') === false,
+ok(strpos($e['url'], '/888teste/messages') !== false,
+   'o ensaio sai pelo numero de TESTE (url: ' . $e['url'] . ')');
+ok(strpos($e['url'], '777agencia') === false,
    'e nunca pelo numero da agencia');
-$env = json_decode($r['chamadas'][0]['payload'], true);
+$env = json_decode($e['payload'], true);
+/* A correcao do #132001: modelo e identificado por nome + IDIOMA, e o idioma
+   vem da conta, nao de um pt_BR fixo. */
+ok($env['template']['language']['code'] === 'en_US',
+   'o envio usa o idioma em que o modelo EXISTE (veio: '
+   . json_encode($env['template']['language']) . ')');
 ok($env['type'] === 'template', 'o ensaio manda um modelo, que e o que a campanha manda');
 ok($env['template']['name'] === 'hello_world', 'o modelo escolhido');
 ok($env['template']['components'][0]['parameters'][0]['text'] === 'Maria',
@@ -262,16 +288,16 @@ ok($env['template']['components'][0]['parameters'][0]['text'] === 'Maria',
    pago. Sem este caminho ele deixaria de existir na hora que mais importa. */
 $r = te_roda('ensaio-so-agencia');
 ok($r['codigo'] === 200, 'sem numero de teste, o ensaio usa o da agencia');
-ok(strpos($r['chamadas'][0]['url'], '/777agencia/messages') !== false,
-   'e sai por ele (url: ' . $r['chamadas'][0]['url'] . ')');
+ok(strpos(te_envio($r)['url'], '/777agencia/messages') !== false,
+   'e sai por ele (url: ' . te_envio($r)['url'] . ')');
 
 /* O cenario que decide a ORDEM, e o unico em que ela aparece: com os dois
    numeros configurados, o ensaio tem que sair pelo da AGENCIA. E o estado do
    servidor depois da convivencia, com o WA_TEST_PHONE_ID ainda no arquivo. */
 $r = te_roda('ensaio-ambos');
 ok($r['codigo'] === 200, 'com os dois numeros, o ensaio envia');
-ok(strpos($r['chamadas'][0]['url'], '/777agencia/messages') !== false,
-   'e sai pelo numero da AGENCIA, nao pelo de teste (url: ' . $r['chamadas'][0]['url'] . ')');
+ok(strpos(te_envio($r)['url'], '/777agencia/messages') !== false,
+   'e sai pelo numero da AGENCIA, nao pelo de teste (url: ' . te_envio($r)['url'] . ')');
 
 /* Modelo SEM variavel, como o hello_world que a Meta cria junto com a conta
    de teste. A Graph conta os parametros e recusa quando o numero nao bate,
@@ -279,24 +305,24 @@ ok(strpos($r['chamadas'][0]['url'], '/777agencia/messages') !== false,
    simples que existe - o que a gente usa para o primeiro teste de todos. */
 $r = te_roda('ensaio-sem-var');
 ok($r['codigo'] === 200, 'modelo sem variavel envia (deu: ' . $r['codigo'] . ')');
-$semvar = json_decode($r['chamadas'][0]['payload'], true);
+$semvar = json_decode(te_envio($r)['payload'], true);
 ok(!isset($semvar['template']['components']),
    'e vai SEM components: parametro a mais faz a Meta recusar (veio: '
    . json_encode($semvar['template']) . ')');
 
 $r = te_roda('ensaio-sem-numero');
 ok($r['codigo'] === 409, 'sem numero nenhum, 409 (deu: ' . $r['codigo'] . ')');
-ok($r['chamadas'] === [], 'e nada e enviado');
+ok(te_envio($r) === null, 'e nada e enviado');
 
 $r = te_roda('ensaio-sem-modelo');
 ok($r['codigo'] === 400, 'ensaio sem modelo, 400 (deu: ' . $r['codigo'] . ')');
-ok($r['chamadas'] === [], 'e nada e enviado');
+ok(te_envio($r) === null, 'e nada e enviado');
 
 /* Telefone que nao normaliza viraria "to": null no payload e a Graph
    aceitaria a chamada assim mesmo. */
 $r = te_roda('ensaio-fone-ruim');
 ok($r['codigo'] === 400, 'telefone invalido, 400 (deu: ' . $r['codigo'] . ')');
-ok($r['chamadas'] === [], 'e nada e enviado');
+ok(te_envio($r) === null, 'e nada e enviado');
 
 $r = te_roda('ensaio-recusado');
 ok($r['codigo'] === 502, 'recusa da Meta no ensaio vira 502 (deu: ' . $r['codigo'] . ')');

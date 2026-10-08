@@ -32,7 +32,9 @@ function wa_camp_envia($wa_id, $nome, $template) {
     if (isset($GLOBALS['WA_CAMP_ENVIADOR']) && $GLOBALS['WA_CAMP_ENVIADOR']) {
         return call_user_func($GLOBALS['WA_CAMP_ENVIADOR'], $wa_id, $nome);
     }
-    return wa_send_template($wa_id, $template, [$nome]);
+    // Idioma explicito, nao o padrao da funcao: e o mesmo valor que o
+    // campanha.php confere na Meta antes de deixar criar a campanha.
+    return wa_send_template($wa_id, $template, [$nome], WA_CAMP_IDIOMA);
 }
 
 /* Reserva uma linha por destinatario. Conflito (409) significa que a pessoa

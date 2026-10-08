@@ -15,6 +15,7 @@ $RAIZ = dirname(__DIR__);
 require_once $RAIZ . '/lib/wa-db.php';      // carrega wa-config -> po-data -> config.local
 require_once $RAIZ . '/lib/po-auth.php';
 require_once $RAIZ . '/lib/wa-camp-fila.php';
+require_once $RAIZ . '/lib/wa-template.php';   // o criar confere o modelo na Meta
 
 function ok($cond, $msg) { if (!$cond) { fwrite(STDERR, "ASSERT: $msg\n"); exit(1); } }
 
@@ -62,8 +63,23 @@ function ce_filho($caso) {
        precisam de um numero configurado; o cenario que testa a propria guarda
        apaga esta variavel de proposito. */
     $GLOBALS['WA_PHONE_ID'] = ce_getenv_phone_id();
+    // O criar confere o modelo na Meta, e a conferencia precisa saber em que
+    // conta olhar. Sem isto wa_tpl_lista() devolve null e tudo vira 502.
+    $GLOBALS['WA_WABA_ID']  = '555000111';
 
     po_auth_set_verificador(fn($u, $a, $t) => $caso !== 'sem-auth' && $t === 'tok.valido');
+
+    /* O criar confere o modelo na Meta antes de deixar a campanha existir.
+       Sem este duble o teste iria a rede - e o projeto nao permite isso. */
+    wa_tpl_set_transport(function ($url, $payload, $h) use ($caso) {
+        if ($caso === 'meta-fora') return null;
+        $lang = ($caso === 'tpl-idioma') ? 'en_US' : 'pt_BR';
+        $st   = ($caso === 'tpl-pendente') ? 'PENDING' : 'APPROVED';
+        return ['status' => 200, 'body' => json_encode(['data' => [
+            ['name' => 'po_roteiro_novo', 'status' => $st,
+             'category' => 'MARKETING', 'language' => $lang],
+        ]])];
+    });
 
     /* total_confirmado = 1 porque so um lead da ce_base entra (os outros sao
        opt-out e fixo). E o numero que a tela mostrou e a cliente confirmou. */
@@ -86,6 +102,11 @@ function ce_filho($caso) {
         case 'criar-sem-confirmado':
             $_POST = array_merge($_POST, $criar); unset($_POST['total_confirmado']); break;
         case 'criar-campanhas-ilegivel': $_POST = array_merge($_POST, $criar); break;
+        case 'tpl-pendente':    $_POST = array_merge($_POST, $criar); break;
+        case 'tpl-idioma':      $_POST = array_merge($_POST, $criar); break;
+        case 'tpl-inexistente': $_POST = array_merge($_POST, $criar,
+                                          ['template'=>'nome_que_nao_existe']); break;
+        case 'meta-fora':       $_POST = array_merge($_POST, $criar); break;
         case 'criar-gemea-no-banco':     $_POST = array_merge($_POST, $criar); break;
         case 'criar-fecha-falha':        $_POST = array_merge($_POST, $criar); break;
         case 'drenar-rascunho': $_POST = ['sb_token'=>'tok.valido', 'modo'=>'drenar',
@@ -388,6 +409,35 @@ ok($r['codigo'] === 409,
    'sem numero conectado, drenar e recusado (deu: ' . $r['codigo'] . ')');
 ok(!ce_escreveu($r), 'e nada e enviado nem marcado');
 
+/* ---------- o modelo e conferido na META antes de a campanha existir ----------
+   wa_camp_envia manda com WA_CAMP_IDIOMA, e modelo e identificado por nome +
+   IDIOMA. Nome errado, modelo nao aprovado ou idioma diferente fazem TODO
+   destinatario falhar, e `falha` e terminal: o indice unico impede
+   re-reservar, entao a base inteira queima de uma vez. Antes disto dava para
+   digitar o nome errado e descobrir depois de a base estar marcada. */
+$r = ce_roda('tpl-pendente');
+ok($r['codigo'] === 400,
+   'modelo ainda em analise nao cria campanha (deu: ' . $r['codigo'] . ')');
+ok(!ce_escreveu($r), 'e nada e criado');
+
+$r = ce_roda('tpl-idioma');
+ok($r['codigo'] === 400,
+   'modelo aprovado em OUTRO idioma nao cria campanha (deu: ' . $r['codigo'] . ')');
+ok(!ce_escreveu($r), 'e nada e criado');
+
+$r = ce_roda('tpl-inexistente');
+ok($r['codigo'] === 400,
+   'nome de modelo que nao existe na conta nao cria campanha (deu: ' . $r['codigo'] . ')');
+ok(!ce_escreveu($r), 'e nada e criado');
+
+/* Meta fora NAO vira "modelo invalido": a cliente ouviria que o nome esta
+   errado e iria cacar um problema que nao existe. Mesma regra do
+   wa_db_select_estrito. */
+$r = ce_roda('meta-fora');
+ok($r['codigo'] === 502,
+   'Meta fora na conferencia vira 502, nao recusa do modelo (deu: ' . $r['codigo'] . ')');
+ok(!ce_escreveu($r), 'e nada e criado');
+
 /* ---------- ASSERCAO DE FONTE: as colunas que alimentam as defesas ----------
    wa_camp_motivo_fora() esta bem travada como funcao pura, mas ela so ve o
    que o endpoint traz do banco. Tirar UMA palavra do select= aqui desliga uma
@@ -441,5 +491,15 @@ ok(strpos($src_cron, 'wa_camp_drena_campanha(') !== false,
    'o cron drena pelo mesmo caminho do painel, e nao por wa_camp_drena direto');
 ok(strpos($src_cron, "require_once __DIR__ . '/lib/wa-camp-fila.php'") !== false,
    'o cron carrega a fila da transmissao');
+
+/* ---------- ASSERCAO DE FONTE: um idioma so, nos dois lados ----------
+   O criar confere o idioma do modelo na Meta e o envio manda o idioma. Se os
+   dois lerem valores diferentes, a conferencia aprova o que o envio recusa -
+   e a recusa do envio e terminal para a base inteira. */
+$src_fila = file_get_contents(__DIR__ . '/../lib/wa-camp-fila.php');
+ok(strpos($src_fila, 'WA_CAMP_IDIOMA') !== false,
+   'wa_camp_envia manda o idioma pela constante, nao pelo padrao da funcao');
+ok(strpos($src_camp, 'WA_CAMP_IDIOMA') !== false,
+   'e o criar confere contra a MESMA constante');
 
 echo "test-campanha-endpoint OK\n";

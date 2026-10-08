@@ -28,6 +28,7 @@ require_once __DIR__ . '/lib/po-auth.php';
 require_once __DIR__ . '/lib/wa-camp.php';
 require_once __DIR__ . '/lib/wa-camp-fila.php';
 require_once __DIR__ . '/lib/wa-db.php';     // ja carrega o lib/wa-config.php
+require_once __DIR__ . '/lib/wa-template.php';   // conferencia do modelo na Meta
 
 const CAMP_PAGINA = 1000;   // paginacao da leitura da base
 
@@ -216,6 +217,37 @@ if ($modo === 'criar') {
     if (!preg_match('/\bSAIR\b/', $corpo)) {
         cfail(400, 'O texto precisa conter a frase com a palavra SAIR, '
                  . 'que é como a pessoa sai da lista.');
+    }
+
+    /* O MODELO E CONFERIDO NA META ANTES DE A CAMPANHA EXISTIR.
+
+       wa_camp_envia() manda com WA_CAMP_IDIOMA, e modelo e identificado por
+       nome + IDIOMA: o nome certo com o idioma errado devolve
+       "#132001 Template name does not exist in the translation". Modelo nao
+       aprovado devolve outro erro. Nos dois casos TODO destinatario falha, e
+       `falha` e terminal - o indice unico impede re-reservar, entao a base
+       inteira queima de uma vez e so resta recriar a campanha do zero.
+
+       Vem DEPOIS das checagens locais de proposito: elas sao de graca e esta
+       custa uma ida a Meta. Erro de digitacao no texto nao precisa de rede
+       para ser apontado.
+
+       Lista ilegivel NAO vira "modelo invalido": com a Meta fora do ar a
+       cliente ouviria que o nome esta errado e iria caçar um problema que
+       nao existe. */
+    $cat = wa_tpl_lista();
+    if ($cat === null) {
+        cfail(502, 'Não consegui conferir o modelo na Meta agora. Nada foi criado.');
+    }
+    if (wa_tpl_aprovado($template, $cat) !== true) {
+        cfail(400, 'O modelo "' . $template . '" não está aprovado na Meta. '
+                 . 'Confira o nome na aba Modelos.');
+    }
+    $idioma_tpl = wa_tpl_idioma($template, $cat);
+    if ($idioma_tpl !== WA_CAMP_IDIOMA) {
+        cfail(400, 'O modelo "' . $template . '" está no idioma ' . $idioma_tpl
+                 . ' e o envio usa ' . WA_CAMP_IDIOMA . '. '
+                 . 'Crie o modelo em ' . WA_CAMP_IDIOMA . ' na aba Modelos.');
     }
 
     /* O NUMERO QUE ELA CONFIRMOU PRENDE O SERVIDOR (spec 8.2). Sem isto o

@@ -14,6 +14,13 @@ require_once __DIR__ . '/wa-fone.php';
    relevante do sistema: mensagem recebida e mensagem que a cliente digita no
    app sao sempre gratis. O preco e congelado na campanha na hora da criacao,
    porque o da Meta muda e o relatorio antigo tem que continuar batendo. */
+/* Idioma do modelo da campanha. Constante, e nao o padrao de
+   wa_send_template, porque o campanha.php CONFERE contra ela antes de criar:
+   modelo e identificado por nome + idioma, e o nome certo com o idioma errado
+   faz TODO destinatario falhar - e falha e terminal. Os dois lados tem que
+   ler o mesmo valor, senao a conferencia aprova o que o envio recusa. */
+const WA_CAMP_IDIOMA = 'pt_BR';
+
 const WA_CAMP_PRECO_CENTAVOS = 31;
 
 /* O numero com que a pessoa e alcancada. wa_id vence telefone: e o numero

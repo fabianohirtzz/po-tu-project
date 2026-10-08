@@ -219,6 +219,45 @@ ok($CHAMADAS === [], 'e nao chama a Meta');
 $GLOBALS['WA_WABA_ID'] = '555000111';
 
 /* ============================================================
+   IDIOMA E APROVACAO, com a lista dada na mao (sem rede)
+
+   Modelo e identificado por nome + IDIOMA. O nome certo com o idioma errado
+   devolve "#132001 ... does not exist in the translation" e nao entrega -
+   para um destinatario ou para a base inteira, do mesmo jeito.
+============================================================ */
+$LISTA = [
+    ['name' => 'hello_world',   'status' => 'APPROVED', 'language' => 'en_US'],
+    ['name' => 'po_novidade',   'status' => 'APPROVED', 'language' => 'pt_BR'],
+    ['name' => 'po_rascunho',   'status' => 'PENDING',  'language' => 'pt_BR'],
+    ['name' => 'po_recusado',   'status' => 'REJECTED', 'language' => 'pt_BR'],
+];
+
+ok(wa_tpl_idioma('hello_world', $LISTA) === 'en_US', 'acha o idioma do hello_world');
+ok(wa_tpl_idioma('po_novidade', $LISTA) === 'pt_BR', 'e o do modelo em portugues');
+ok(wa_tpl_idioma('nao_existe', $LISTA) === null, 'modelo ausente devolve null');
+ok(wa_tpl_idioma('', $LISTA) === null, 'nome vazio devolve null');
+ok(wa_tpl_idioma('hello_world', 'nao e lista') === null, 'lista invalida devolve null');
+
+ok(wa_tpl_aprovado('po_novidade', $LISTA) === true, 'aprovado e aprovado');
+ok(wa_tpl_aprovado('po_rascunho', $LISTA) === false, 'em analise NAO e aprovado');
+ok(wa_tpl_aprovado('po_recusado', $LISTA) === false, 'recusado NAO e aprovado');
+/* A lista VEIO e o modelo nao esta nela: ele nao existe, e isso e false -
+   diferente de null, que e "nao deu para saber". Confundir os dois deixaria
+   criar campanha com nome de modelo digitado errado, e todo envio falharia
+   de forma terminal. */
+ok(wa_tpl_aprovado('nome_digitado_errado', $LISTA) === false,
+   'modelo que nao esta na lista nao conta como aprovado');
+ok(wa_tpl_aprovado('po_novidade', 'nao e lista') === null, 'lista invalida devolve null');
+
+/* Lista nao passada = a funcao vai buscar. Com a Meta fora, as duas devolvem
+   null - "nao deu para saber", que NAO e "nao aprovado" nem "sem idioma".
+   Quem chama tem que poder distinguir: o campanha.php responde 502 num caso
+   e 400 no outro, e so um deles manda a cliente procurar erro de digitacao. */
+tpl_dubla(null);
+ok(wa_tpl_aprovado('po_novidade') === null, 'Meta fora devolve null, nao false');
+ok(wa_tpl_idioma('po_novidade') === null, 'e o idioma tambem vem null');
+
+/* ============================================================
    ASSERCAO DE FONTE
    A trava fica no PONTO DE CHAMADA. Se a validacao sair de dentro de
    wa_tpl_cria e ficar so na tela, existe caminho que submete sem ela.

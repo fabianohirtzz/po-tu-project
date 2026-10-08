@@ -246,3 +246,41 @@ function wa_tpl_lista($limite = 50) {
     if (!is_array($j) || !isset($j['data']) || !is_array($j['data'])) return null;
     return $j['data'];
 }
+
+/* ------------------------------------------------------------
+   O idioma em que o modelo existe de verdade, perguntado a Meta.
+
+   Modelo e identificado por NOME + IDIOMA, nao so por nome. Mandar o nome
+   certo com o idioma errado devolve "#132001 Template name does not exist in
+   the translation" e NAO entrega - para um destinatario ou para a base
+   inteira, do mesmo jeito. O hello_world que a Meta cria junto com a conta de
+   teste existe so em en_US, entao o primeiro teste de todos cai nisso.
+
+   Devolve null quando nao achou ou nao conseguiu ler: quem chama decide.
+------------------------------------------------------------ */
+function wa_tpl_idioma($nome, $lista = null) {
+    $nome = trim((string) $nome);
+    if ($nome === '') return null;
+    $lista = $lista === null ? wa_tpl_lista() : $lista;
+    if (!is_array($lista)) return null;
+    foreach ($lista as $t) {
+        if ((string) ($t['name'] ?? '') === $nome && ($t['language'] ?? '') !== '') {
+            return (string) $t['language'];
+        }
+    }
+    return null;
+}
+
+/* O modelo esta aprovado? Null quando nao deu para saber - que e diferente de
+   "nao esta", e quem chama nao pode confundir os dois. */
+function wa_tpl_aprovado($nome, $lista = null) {
+    $nome = trim((string) $nome);
+    $lista = $lista === null ? wa_tpl_lista() : $lista;
+    if (!is_array($lista)) return null;
+    foreach ($lista as $t) {
+        if ((string) ($t['name'] ?? '') === $nome) {
+            return strtoupper((string) ($t['status'] ?? '')) === 'APPROVED';
+        }
+    }
+    return false;   // a lista veio e o modelo nao esta nela: nao existe.
+}
