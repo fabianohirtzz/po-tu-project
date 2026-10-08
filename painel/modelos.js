@@ -115,7 +115,9 @@ async function poModeloConfere() {
     const j = await poModeloPost('conferir', c);
     if (cx) cx.innerHTML = poModeloProblemasHtml(j.problemas);
     const nome = document.querySelector('#mdl-nome-previsto');
-    if (nome) nome.textContent = j.nome || '';
+    // Travessao quando ainda nao ha nome: a frase ao redor fica com um buraco
+    // no meio se este espaco vier vazio.
+    if (nome) nome.textContent = j.nome || '—';
     poModeloHabilita((j.problemas || []).length === 0 && (c.titulo || '').trim() !== '');
   } catch (e) {
     if (cx) cx.innerHTML = poModeloProblemasHtml([e.message]);
