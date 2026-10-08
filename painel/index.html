@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="painel.css?v=9">
+<link rel="stylesheet" href="painel.css?v=10">
 </head>
 <body>
 
@@ -66,6 +66,10 @@
       <button class="nav-item" data-view="campanhas">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11l18-8-8 18-2-8-8-2Z"/></svg>
         Transmissão
+      </button>
+      <button class="nav-item" data-view="modelos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6"/></svg>
+        Modelos
       </button>
       <button class="nav-item" data-view="textos">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/><path d="M8 9h8M8 13h5"/></svg>
@@ -439,6 +443,56 @@
         <div class="hint" id="camp-progresso"></div>
       </div>
     </section>
+
+    <section class="view" data-view="modelos" id="view-modelos">
+      <h2 class="ic-h3 txt-h2">Modelos de mensagem</h2>
+      <p class="ic-sub">Mensagem fora da conversa dos últimos dias só sai por um
+      <b>modelo aprovado pela Meta</b>. Aqui o modelo é escrito e enviado para aprovação
+      sem sair do painel. A Meta responde em minutos ou algumas horas.</p>
+
+      <div class="imp-ct-box">
+        <div class="lbl">Escrever um modelo</div>
+        <div class="hint">O texto precisa ter <b>exatamente uma variável</b>, escrita como
+        <code>{{1}}</code>, que é o nome da pessoa. A transmissão manda sempre um dado;
+        modelo com zero ou com dois faz a Meta recusar <b>todos</b> os envios, e a campanha
+        precisa ser recriada do zero.
+        O texto também não pode começar nem terminar com a variável: escreva
+        <code>Oi {{1}}, ...</code> e não <code>{{1}}, ...</code>.</div>
+
+        <div class="field" style="margin-top:14px">
+          <label>Nome do modelo</label>
+          <input id="mdl-titulo" type="text" maxlength="120" placeholder="Ex.: Novidade Portugal 2027">
+          <div class="hint">Na Meta ele vira <code id="mdl-nome-previsto"></code>, sem acento
+          e sem maiúscula. Não dá para renomear depois.</div>
+        </div>
+
+        <div class="field">
+          <label>O texto que a pessoa recebe</label>
+          <textarea id="mdl-corpo" rows="5" maxlength="1024" placeholder="Oi {{1}}, saiu roteiro novo para Portugal em 2027. Responda SAIR para não receber mais."></textarea>
+        </div>
+
+        <div class="field">
+          <label>Exemplo do que entra no lugar de {{1}}</label>
+          <input id="mdl-exemplo" type="text" maxlength="60" placeholder="Maria" value="Maria">
+          <div class="hint">A Meta exige um exemplo para revisar o modelo. Ele não aparece
+          para ninguém, serve só para a análise.</div>
+        </div>
+
+        <div id="mdl-conferencia"></div>
+
+        <div class="rev-acoes">
+          <button class="btn btn-ghost" id="mdl-conferir" type="button">Conferir o texto</button>
+          <!-- Nasce desabilitado: modelo criado não se renomeia nem se apaga de
+               imediato na Meta, então o erro ficaria na conta para sempre. -->
+          <button class="btn btn-primary" id="mdl-criar" type="button" disabled>Enviar para aprovação</button>
+        </div>
+      </div>
+
+      <div class="imp-ct-box">
+        <div class="lbl">Modelos da conta</div>
+        <div id="mdl-lista"><div class="hint">Abra a aba para carregar.</div></div>
+      </div>
+    </section>
   </div>
 </div>
 
@@ -613,7 +667,7 @@
 <script src="config.js"></script>
 <script src="video-encode.js"></script>
 <script src="fone.js?v=2"></script>
-<script src="app.js?v=10"></script>
+<script src="app.js?v=11"></script>
 <script src="clientes.js?v=2"></script>
 <script src="funil.js?v=1"></script>
 <script src="conversa.js?v=1"></script>
@@ -621,5 +675,6 @@
 <script src="revisao.js?v=2"></script>
 <script src="textos.js?v=2"></script>
 <script src="campanhas.js?v=1"></script>
+<script src="modelos.js?v=1"></script>
 </body>
 </html>

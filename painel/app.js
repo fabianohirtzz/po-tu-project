@@ -153,7 +153,7 @@ $('#nav-toggle').onclick=()=>{$('#side-nav').classList.contains('on')?fechaSide(
 $$('.nav-item').forEach(b=>b.onclick=()=>{
   $$('.nav-item').forEach(x=>x.classList.remove('active'));b.classList.add('active');
   const v=b.dataset.view;$$('.view').forEach(x=>x.classList.remove('on'));
-  $('#month-box').style.visibility=(v==='roteiros'||v==='importar'||v==='revisao'||v==='textos'||v==='campanhas')?'hidden':'visible';
+  $('#month-box').style.visibility=(v==='roteiros'||v==='importar'||v==='revisao'||v==='textos'||v==='campanhas'||v==='modelos')?'hidden':'visible';
   if(v==='leads'){$('#view-leads').classList.add('on');$('#top-title').innerHTML='Leads<span>.</span>';renderLeads();}
   else if(v==='reports'){$('#view-reports').classList.add('on');$('#top-title').innerHTML='Relatórios<span>.</span>';renderReports();}
   else if(v==='clientes'){$('#view-clientes').classList.add('on');$('#top-title').innerHTML='Clientes<span>.</span>';if(typeof poRenderClientes==='function')poRenderClientes();}
@@ -168,6 +168,11 @@ $$('.nav-item').forEach(b=>b.onclick=()=>{
      guardados: a base muda (alguem responde SAIR, alguem e revisado) e um
      numero velho na tela seria um custo velho na confirmacao. */
   else if(v==='campanhas'){$('#view-campanhas').classList.add('on');$('#top-title').innerHTML='Transmissão<span>.</span>';if(typeof poRenderCampanhas==='function')poRenderCampanhas();}
+  /* A lista vem da Meta toda vez que a aba abre: o status muda sozinho la
+     (um modelo em analise vira aprovado ou recusado sem ninguem clicar), e
+     status velho na tela faria escolher para a campanha um modelo que a Meta
+     ja recusou - e recusa no envio e terminal. */
+  else if(v==='modelos'){$('#view-modelos').classList.add('on');$('#top-title').innerHTML='Modelos<span>.</span>';if(typeof poRenderModelos==='function')poRenderModelos();}
   else{$('#view-roteiros').classList.add('on');$('#top-title').innerHTML='Roteiros<span>.</span>';renderRoteiros();}
   fechaSide();
 });

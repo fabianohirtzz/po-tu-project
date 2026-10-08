@@ -747,6 +747,54 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
   chamada em silencio para outra versao. Subir de versao e uma linha em
   `lib/wa-send.php`, mas exige conferir o formato das respostas que o motor le.
 
+- **ABA MODELOS + POLITICA DE PRIVACIDADE (08/10/2026).** Novos:
+  `painel/modelos.js`, `templates.php`, `lib/wa-template.php`,
+  `politica-de-privacidade.html`. Suite de 43 para **46** arquivos. No ar.
+  - **Nasceram da analise de app da Meta**, que exige URL de politica de
+    privacidade e um video da **criacao de um modelo de mensagem**. O painel
+    nao criava template: a cliente escrevia na aba "Textos do robo" e alguem
+    copiava para o WhatsApp Manager na mao.
+  - **As regras de template da Meta agora sao codigo** (`wa_tpl_problemas`).
+    A conferencia que o CLAUDE.md mandava fazer na mao antes do primeiro
+    disparo pago parou de depender de alguem lembrar. Alem do numero de
+    variaveis: nao comecar nem terminar com variavel, numeracao em sequencia
+    a partir de {{1}}, chaves sem espaco dentro, duas variaveis nunca
+    coladas, exemplo obrigatorio, e o limite de 1024 contado em
+    **caracteres** (com `strlen`, 900 letras acentuadas seriam recusadas a
+    toa). A Meta so informa isso por recusa generica, horas depois, por
+    e-mail, sem dizer qual regra caiu.
+  - **O modo `conferir` julga pela MESMA funcao do `criar`**, sem gastar
+    chamada. Tela que valida diferente do envio aprova o que a Meta recusa.
+    Por isso a tela **nao** reimplementa as regras em JavaScript, e um teste
+    de fonte impede que alguem o faca.
+  - **A validacao mora dentro de `wa_tpl_cria`**, nao so no endpoint: assim
+    nao existe caminho que submeta sem ela.
+  - **Modelo criado nao se renomeia nem se apaga de imediato na Meta.** Por
+    isso o botao nasce desabilitado e so uma conferencia limpa o habilita, e
+    volta a desabilitar depois de cada envio.
+  - **So modelo `APPROVED` ganha botao de usar na transmissao.** Campanha com
+    modelo em analise faz a Graph recusar todo destinatario, e falha e
+    terminal.
+  - **Erro de leitura da lista nunca vira "nenhum modelo"**: com a Meta fora
+    do ar alguem criaria um duplicado que fica na conta para sempre. Mesma
+    regra do `wa_db_select_estrito`.
+  - **Falta `WA_WABA_ID`** no `config.local.php`, que so existe depois do
+    numero conectado. Sem ela o endpoint recusa em vez de chamar a Meta sem
+    destino.
+  - **A politica de privacidade diz o que vai ser verdade, nao o padrao:**
+    aviso de novos roteiros para quem ja viajou ou ja pediu informacao se
+    apoia em **legitimo interesse** pela relacao existente, nao em
+    consentimento, porque os 775 clientes do CRM antigo nunca assinaram
+    autorizacao de marketing. Escrever "consentimento" ali faria a
+    transmissao contradizer a propria politica no primeiro disparo. **O SAIR
+    deixou de ser detalhe tecnico e virou a contrapartida que sustenta essa
+    base legal**, com quadro proprio na pagina.
+  - Prazos publicados: 5 anos para lead que nao virou viagem, 5 anos apos a
+    viagem para quem viajou. Contato: poturismo@poturismo.com.br.
+  - **Cabecalho, menu e rodape da pagina vem do `contato.html` por script,
+    verbatim.** Copiar esses blocos na mao produz a pagina com o menu
+    atrasado em relacao as outras.
+
 - **`git checkout --` altera fim de linha neste repo** (`core.autocrlf=true`). O teste de
   cache-buster hasheia conteúdo **normalizado** por causa disso — hashear bytes crus fazia
   o lock depender de como o arquivo tinha sido materializado, e o merge do plano 4 ficou

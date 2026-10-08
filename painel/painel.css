@@ -524,3 +524,20 @@ tbody tr:last-child td{border-bottom:none}
 .camp-and-n{font-size:.95rem;font-weight:700;color:var(--ink);margin-top:4px}
 #camp-progresso:empty{display:none}
 #camp-progresso{margin-top:10px}
+
+/* ---------- aba Modelos (templates da Meta) ---------- */
+.mdl-linha{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:10px 0;border-bottom:1px solid var(--border)}
+.mdl-linha:last-child{border-bottom:0}
+.mdl-nome{flex:1;min-width:200px;display:flex;flex-direction:column;gap:2px}
+.mdl-nome code{font-size:.82rem;color:var(--ink)}
+.mdl-meta{font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.mdl-st{font-size:.66rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  padding:3px 9px;border-radius:999px;border:1px solid var(--border)}
+.mdl-st.ok{color:var(--st-venda);border-color:currentColor}
+.mdl-st.aguardando{color:var(--muted)}
+.mdl-st.erro{color:var(--st-perdido);border-color:currentColor}
+.mdl-ok{margin-top:10px;font-size:.78rem;font-weight:600;color:var(--st-venda)}
+.mdl-probs{margin:10px 0 0;padding-left:18px}
+.mdl-probs li{font-size:.78rem;font-weight:600;color:var(--st-perdido);margin-bottom:4px}
+#mdl-conferencia:empty{display:none}
