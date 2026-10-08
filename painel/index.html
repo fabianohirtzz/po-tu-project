@@ -489,6 +489,31 @@
       </div>
 
       <div class="imp-ct-box">
+        <div class="lbl">Enviar um teste</div>
+        <div class="hint">Manda <b>um</b> modelo aprovado para <b>um</b> número, para conferir
+        como a mensagem chega antes de qualquer disparo de verdade. Não encosta na base de
+        clientes e não cria campanha nenhuma.</div>
+        <div class="field-2" style="margin-top:14px">
+          <div class="field">
+            <label>Modelo aprovado</label>
+            <input id="ens-template" type="text" maxlength="512" placeholder="hello_world">
+          </div>
+          <div class="field">
+            <label>Número com DDD</label>
+            <input id="ens-destino" type="text" maxlength="20" placeholder="48999999999">
+          </div>
+        </div>
+        <div class="field">
+          <label>Nome que entra no lugar de {{1}}</label>
+          <input id="ens-nome" type="text" maxlength="60" value="Maria">
+        </div>
+        <div class="rev-acoes">
+          <button class="btn btn-ghost" id="ens-enviar" type="button">Enviar o teste</button>
+        </div>
+        <div class="hint" id="ens-msg"></div>
+      </div>
+
+      <div class="imp-ct-box">
         <div class="lbl">Modelos da conta</div>
         <div id="mdl-lista"><div class="hint">Abra a aba para carregar.</div></div>
       </div>
@@ -675,6 +700,6 @@
 <script src="revisao.js?v=2"></script>
 <script src="textos.js?v=2"></script>
 <script src="campanhas.js?v=1"></script>
-<script src="modelos.js?v=1"></script>
+<script src="modelos.js?v=2"></script>
 </body>
 </html>

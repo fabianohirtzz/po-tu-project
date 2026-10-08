@@ -127,6 +127,19 @@ assert.ok(botao, 'o botao de enviar para aprovacao existe');
 assert.ok(/\bdisabled\b/.test(botao[0]),
   'o botao de enviar para aprovacao nasce desabilitado');
 
+/* O ensaio: uma mensagem, um numero, longe da base. */
+assert.ok(idx.includes('id="ens-enviar"'), 'a aba tem o botao de enviar teste');
+assert.ok(idx.includes('id="ens-template"') && idx.includes('id="ens-destino"'),
+  'e os campos de modelo e numero');
+const corpoEns = src.match(/async function poModeloEnsaio\([\s\S]*?\n\}/);
+assert.ok(corpoEns, 'achei o corpo de poModeloEnsaio');
+/* A guarda, nao so a mencao: a variavel tambem e ATRIBUIDA dentro da funcao,
+   entao procurar o nome dela deixava passar a remocao do if. */
+assert.ok(/if\s*\(\s*PO_ENS_OCUPADO\s*\)\s*return/.test(corpoEns[0]),
+  'o ensaio trava o segundo clique: dois cliques sao duas mensagens');
+assert.ok(corpoEns[0].includes("poModeloPost('ensaio'"),
+  'o ensaio vai pelo endpoint, que escolhe o numero de teste');
+
 const app = readFileSync(new URL('../painel/app.js', import.meta.url), 'utf8');
 assert.ok(app.includes("v==='modelos'"), 'o app.js tem a rota da aba');
 assert.ok(app.includes('poRenderModelos'),

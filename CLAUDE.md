@@ -778,9 +778,29 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
   - **Erro de leitura da lista nunca vira "nenhum modelo"**: com a Meta fora
     do ar alguem criaria um duplicado que fica na conta para sempre. Mesma
     regra do `wa_db_select_estrito`.
-  - **Falta `WA_WABA_ID`** no `config.local.php`, que so existe depois do
-    numero conectado. Sem ela o endpoint recusa em vez de chamar a Meta sem
-    destino.
+  - **`WA_WABA_ID` e `WA_TEST_PHONE_ID` ja estao no servidor** (08/10/2026),
+    apontando para a conta e o numero de TESTE criados pela Etapa 1 do
+    console. Sem `WA_WABA_ID` o endpoint recusa em vez de chamar a Meta sem
+    destino. **Modelo nao se transfere entre contas**: o que for aprovado na
+    conta de teste nao serve para a campanha real.
+  - **ENSAIO (`modo=ensaio`): uma mensagem, um numero, longe da base.** Ele
+    existe porque o vidoe 1 da analise pede o app enviando, e o caminho
+    obvio - a tela de Transmissao - e justamente o proibido.
+    **NUNCA preencher `WA_PHONE_ID` com o numero de teste.** Aquela chave
+    vazia e o que mantem o `campanha.php` inerte; preenchida, uma campanha
+    reservaria as 786 fichas e tentaria enviar pelo numero de teste, que so
+    alcanca 5 destinatarios cadastrados. Todas falhariam, e **falha e
+    terminal**: o indice unico impede re-reservar, entao a base inteira
+    ficaria queimada para campanha em definitivo, sem custar um centavo.
+  - **O ensaio sai pelo numero da AGENCIA quando ele existir, e pelo de teste
+    so enquanto nao existir.** Nesta ordem, e nao na inversa: preferindo o de
+    teste, um `WA_TEST_PHONE_ID` esquecido no config faria o ensaio seguir
+    saindo por ele depois da convivencia, e o ensaio com um destinatario no
+    numero REAL - exigido antes do primeiro disparo pago - nunca aconteceria,
+    com todo mundo vendo "enviado". A rodada de mutacao achou isto.
+  - **`templates.php` nao carrega o `lib/wa-db.php` e nao conhece `po_leads`**,
+    e um teste de fonte trava isso: o ensaio manda para um numero digitado na
+    hora e nao pode ganhar caminho para varrer a base.
   - **A politica de privacidade diz o que vai ser verdade, nao o padrao:**
     aviso de novos roteiros para quem ja viajou ou ja pediu informacao se
     apoia em **legitimo interesse** pela relacao existente, nao em

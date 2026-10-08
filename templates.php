@@ -49,7 +49,7 @@ if (!po_auth_ok($cfg['SUPABASE_URL'] ?? '', $cfg['SUPABASE_ANON_KEY'] ?? '')) {
 }
 
 $modo = tpost('modo');
-if (!in_array($modo, ['conferir', 'criar', 'listar'], true)) {
+if (!in_array($modo, ['conferir', 'criar', 'listar', 'ensaio'], true)) {
     tfail(400, 'Modo inválido.');
 }
 
@@ -94,6 +94,48 @@ if ($modo === 'listar') {
         ];
     }
     tok(['templates' => $limpo]);
+}
+
+/* ------------------------------------------------------------
+   ensaio: UMA mensagem para UM numero, escolhido na hora.
+
+   Sai pelo WA_TEST_PHONE_ID, nunca pelo WA_PHONE_ID da agencia, e esse e o
+   ponto inteiro deste modo. Preencher WA_PHONE_ID com o numero de teste
+   tiraria o campanha.php do estado inerte: uma campanha disparada por ali
+   falharia para as 786 fichas da base de uma vez, e `falha` e terminal - o
+   indice unico impede re-reservar, entao a base ficaria queimada para
+   campanha de forma permanente, sem ter custado um centavo.
+
+   Este arquivo NAO carrega o lib/wa-db.php. O ensaio nao le a base, nao
+   escreve nela e nao sabe que ela existe.
+------------------------------------------------------------ */
+if ($modo === 'ensaio') {
+    /* Numero da AGENCIA quando ele existir; o de teste so enquanto nao
+       existir. Nesta ordem, e nao na inversa: o ensaio com um destinatario
+       que o projeto exige antes do primeiro disparo pago precisa sair pelo
+       numero REAL. Preferindo o de teste, um WA_TEST_PHONE_ID esquecido no
+       config faria o ensaio seguir saindo por ele depois da convivencia, e o
+       ensaio que importa nunca aconteceria - todo mundo veria "enviado". */
+    $pid = trim((string) ($cfg['WA_PHONE_ID'] ?? ''));
+    if ($pid === '') $pid = trim((string) ($cfg['WA_TEST_PHONE_ID'] ?? ''));
+    if ($pid === '') tfail(409, 'Nenhum número conectado para enviar o teste.');
+
+    $modelo  = tpost('template');
+    $destino = tpost('destino');
+    // O {{1}} do modelo. Sem valor, a Meta entrega a mensagem com um buraco.
+    $nomeVar = tpost('nome_var');
+    if ($nomeVar === '') $nomeVar = 'Maria';
+
+    if ($modelo === '')  tfail(400, 'Escolha o modelo aprovado que quer testar.');
+    if (!wa_destino($destino)) {
+        tfail(400, 'Telefone inválido. Escreva com DDD, por exemplo 48999999999.');
+    }
+
+    $r = wa_send_template($destino, $modelo, [$nomeVar], 'pt_BR', $pid);
+    if (empty($r['ok'])) {
+        tfail(502, 'A Meta não entregou: ' . ($r['erro'] ?? 'motivo não informado') . '.');
+    }
+    tok(['wamid' => $r['wamid']]);
 }
 
 /* ------------------------------------------------------------

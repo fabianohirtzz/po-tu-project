@@ -27,6 +27,11 @@ function wa_config() {
         // Conta do WhatsApp Business. So existe depois do numero conectado;
         // sem ela wa_tpl_cria recusa em vez de chamar a Meta sem destino.
         'WA_WABA_ID'           => '',
+        /* Numero de TESTE da Meta, usado SO pelo ensaio. Fica separado de
+           WA_PHONE_ID de proposito: aquela chave vazia e o que mantem o
+           campanha.php inerte, e preenche-la com o numero de teste faria uma
+           campanha falhar para a base inteira de uma vez, em definitivo. */
+        'WA_TEST_PHONE_ID'     => '',
     ];
     $out = po_config();
     foreach ($defaults as $k => $v) {

@@ -158,9 +158,14 @@ async function poRenderModelos() {
       : '<div class="hint">Nenhum modelo criado ainda.</div>';
     box.querySelectorAll('.mdl-usar').forEach(b => {
       b.onclick = () => {
+        // Alimenta os DOIS campos: o do ensaio e o da transmissao. Quem vai
+        // disparar de verdade testa antes, e digitar o nome duas vezes a mao
+        // e onde nasce o erro de digitacao que a Meta recusa.
         const campo = document.querySelector('#camp-template');
         if (campo) campo.value = b.dataset.nome;
-        toast('Modelo "' + b.dataset.nome + '" escolhido para a próxima transmissão.');
+        const ens = document.querySelector('#ens-template');
+        if (ens) ens.value = b.dataset.nome;
+        toast('Modelo "' + b.dataset.nome + '" escolhido. Mande um teste antes de usar.');
       };
     });
   } catch (e) {
@@ -170,11 +175,41 @@ async function poRenderModelos() {
   }
 }
 
+/* ---------- ensaio: uma mensagem, um numero ---------- */
+
+let PO_ENS_OCUPADO = false;   // segundo clique = segunda mensagem
+
+async function poModeloEnsaio() {
+  if (PO_ENS_OCUPADO) return;
+  const alvo = (document.querySelector('#ens-template') || {}).value || '';
+  const fone = (document.querySelector('#ens-destino') || {}).value || '';
+  const nome = (document.querySelector('#ens-nome') || {}).value || '';
+  const msg = document.querySelector('#ens-msg');
+  const bt = document.querySelector('#ens-enviar');
+  PO_ENS_OCUPADO = true;
+  if (bt) bt.disabled = true;
+  if (msg) msg.textContent = 'Enviando...';
+  try {
+    const j = await poModeloPost('ensaio',
+      { template: alvo, destino: fone, nome_var: nome });
+    if (msg) msg.textContent = 'Enviado. Confira o WhatsApp do número ' + fone + '.';
+    toast('Teste enviado.');
+  } catch (e) {
+    if (msg) msg.textContent = '';
+    toast(e.message, true);
+  } finally {
+    PO_ENS_OCUPADO = false;
+    if (bt) bt.disabled = false;
+  }
+}
+
 function poModeloLiga() {
   const b = document.querySelector('#mdl-conferir');
   if (b) b.onclick = poModeloConfere;
   const c = document.querySelector('#mdl-criar');
   if (c) c.onclick = poModeloCria;
+  const e = document.querySelector('#ens-enviar');
+  if (e) e.onclick = poModeloEnsaio;
   // Mexeu no texto, a conferencia anterior nao vale mais.
   ['#mdl-titulo', '#mdl-corpo', '#mdl-exemplo'].forEach(sel => {
     const el = document.querySelector(sel);

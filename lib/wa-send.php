@@ -48,9 +48,18 @@ function wa_http($url, $payload, $headers) {
     return ['status' => $status, 'body' => $body];
 }
 
-function wa_envia($mensagem) {
+/* $phone_id so e passado pelo ENSAIO, que manda uma mensagem para um numero
+   so pelo numero de TESTE da Meta. Ele existe para o ensaio nao depender de
+   WA_PHONE_ID: preencher aquela chave com o numero de teste tiraria o
+   campanha.php do estado inerte, e uma campanha disparada pelo numero de
+   teste falharia para as 786 fichas da base de uma vez - falha e terminal,
+   entao a base ficaria queimada de forma permanente. */
+function wa_envia($mensagem, $phone_id = null) {
     $cfg = wa_config();
-    $url = WA_GRAPH . ($cfg['WA_PHONE_ID'] ?? '') . '/messages';
+    $id  = ($phone_id === null || $phone_id === '')
+         ? (string) ($cfg['WA_PHONE_ID'] ?? '')
+         : (string) $phone_id;
+    $url = WA_GRAPH . $id . '/messages';
     $h   = [
         'Authorization: Bearer ' . ($cfg['WA_TOKEN'] ?? ''),
         'Content-Type: application/json',
@@ -167,7 +176,7 @@ function wa_send_list($para, $corpo, $botao, $itens) {
    Sem parametros, o bloco `components` e OMITIDO: mandar components vazio
    faz a Graph devolver 132000 ("number of parameters does not match") e a
    mensagem inteira nao sai. */
-function wa_send_template($para, $template, $params = [], $idioma = 'pt_BR') {
+function wa_send_template($para, $template, $params = [], $idioma = 'pt_BR', $phone_id = null) {
     $template = trim((string) $template);
     if ($template === '') {
         // Nome vazio viraria 400 na Meta e um destinatario sem nada, em
@@ -198,5 +207,5 @@ function wa_send_template($para, $template, $params = [], $idioma = 'pt_BR') {
             ),
         ]];
     }
-    return wa_envia($msg);
+    return wa_envia($msg, $phone_id);
 }
