@@ -97,6 +97,10 @@ function te_filho($caso) {
             $_POST = ['modo' => 'ensaio', 'sb_token' => 'tok.valido',
                       'template' => 'hello_world', 'destino' => '48999990001',
                       'nome_var' => 'Maria']; break;
+        case 'ensaio-sem-var':
+            $_POST = ['modo' => 'ensaio', 'sb_token' => 'tok.valido',
+                      'template' => 'hello_world', 'destino' => '48999990001',
+                      'nome_var' => '']; break;
         case 'ensaio-sem-modelo':
             $_POST = ['modo' => 'ensaio', 'sb_token' => 'tok.valido',
                       'template' => '', 'destino' => '48999990001']; break;
@@ -268,6 +272,17 @@ $r = te_roda('ensaio-ambos');
 ok($r['codigo'] === 200, 'com os dois numeros, o ensaio envia');
 ok(strpos($r['chamadas'][0]['url'], '/777agencia/messages') !== false,
    'e sai pelo numero da AGENCIA, nao pelo de teste (url: ' . $r['chamadas'][0]['url'] . ')');
+
+/* Modelo SEM variavel, como o hello_world que a Meta cria junto com a conta
+   de teste. A Graph conta os parametros e recusa quando o numero nao bate,
+   entao mandar um "Maria" de cortesia quebraria justamente o modelo mais
+   simples que existe - o que a gente usa para o primeiro teste de todos. */
+$r = te_roda('ensaio-sem-var');
+ok($r['codigo'] === 200, 'modelo sem variavel envia (deu: ' . $r['codigo'] . ')');
+$semvar = json_decode($r['chamadas'][0]['payload'], true);
+ok(!isset($semvar['template']['components']),
+   'e vai SEM components: parametro a mais faz a Meta recusar (veio: '
+   . json_encode($semvar['template']) . ')');
 
 $r = te_roda('ensaio-sem-numero');
 ok($r['codigo'] === 409, 'sem numero nenhum, 409 (deu: ' . $r['codigo'] . ')');

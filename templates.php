@@ -122,16 +122,18 @@ if ($modo === 'ensaio') {
 
     $modelo  = tpost('template');
     $destino = tpost('destino');
-    // O {{1}} do modelo. Sem valor, a Meta entrega a mensagem com um buraco.
+    /* O {{1}} do modelo. Vazio significa modelo SEM variavel, e nao "use um
+       nome qualquer": a Meta conta os parametros e recusa quando o numero
+       nao bate com o modelo (hello_world, por exemplo, nao tem nenhum). */
     $nomeVar = tpost('nome_var');
-    if ($nomeVar === '') $nomeVar = 'Maria';
+    $params  = $nomeVar === '' ? [] : [$nomeVar];
 
     if ($modelo === '')  tfail(400, 'Escolha o modelo aprovado que quer testar.');
     if (!wa_destino($destino)) {
         tfail(400, 'Telefone inválido. Escreva com DDD, por exemplo 48999999999.');
     }
 
-    $r = wa_send_template($destino, $modelo, [$nomeVar], 'pt_BR', $pid);
+    $r = wa_send_template($destino, $modelo, $params, 'pt_BR', $pid);
     if (empty($r['ok'])) {
         tfail(502, 'A Meta não entregou: ' . ($r['erro'] ?? 'motivo não informado') . '.');
     }
