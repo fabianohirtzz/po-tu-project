@@ -14,6 +14,7 @@ function po_sitemap_xml($lista) {
     $x .= $u(PO_BASE . '/roteiros', $hoje, '0.9');
     $x .= $u(PO_BASE . '/nossa-historia.html', $hoje, '0.7');
     $x .= $u(PO_BASE . '/contato.html', $hoje, '0.7');
+    $x .= $u(PO_BASE . '/politica-de-privacidade.html', $hoje, '0.3');
     foreach ($lista as $r) {
         $mod = !empty($r['updated_at']) ? substr((string) $r['updated_at'], 0, 10) : $hoje;
         $x .= $u(PO_BASE . '/roteiros/' . rawurlencode($r['slug']), $mod, '0.8');

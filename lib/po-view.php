@@ -190,6 +190,7 @@ function po_footer() {
           <a href="/nossa-historia.html">Nossa História</a>
           <a href="/roteiros">Roteiros</a>
           <a href="/contato.html">Contato</a>
+          <a href="/politica-de-privacidade.html">Política de Privacidade</a>
         </div>
       </div>
       <div>
