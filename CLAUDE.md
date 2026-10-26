@@ -1171,8 +1171,57 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
 - **RESOLVIDO (26/10/2026):** o Embedded Signup da coexistência **exigia** sim revisão
   de app da Meta, e ela **foi aprovada**. A etapa a mais existiu e está cumprida.
 
+- **CONVIVENCIA ESTABELECIDA (26/10/2026) - E NAO FOI PELA NOSSA PAGINA.**
+  O numero da agencia **ja estava conectado** ao portfolio quando fomos rodar o
+  Embedded Signup. Descoberto em Configuracoes > Contas do WhatsApp, e
+  confirmado pela tela "Plataforma conectada" do app da Lais, que diz
+  textualmente **"O app WhatsApp Business nao sera afetado"** e oferece
+  "Toque para desconectar". Isso e convivencia, nao migracao.
+  - **Os numeros que o sistema precisava** (lidos da Graph, nao da tela):
+    WABA real **`1150774113972883`** (`account_review_status: APPROVED`),
+    `phone_number_id` **`444498328748420`**, +55 48 9604-8882,
+    `status: CONNECTED`, `platform_type: CLOUD_API`, limite 250/24h.
+    Ja gravados: `WA_PHONE_ID` saiu de vazio, e `WA_WABA_ID` saiu da conta de
+    TESTE (`2153684915493165`) para a real.
+  - **O `WA_TOKEN` que ja estava no servidor ALCANCA a WABA nova** (as consultas
+    a `/phone_numbers` e `/subscribed_apps` responderam 200). Entao o passo de
+    "dar acesso do usuario de sistema a conta nova", que este documento previa,
+    **nao e necessario**: a conta nasceu dentro do mesmo portfolio.
+  - **POR QUE O EMBEDDED SIGNUP FALHAVA, e e a licao cara do dia:** com o numero
+    ja conectado, o fluxo tentava criar uma conta NOVA e compartilha-la com
+    `BM - Pereira Oliveira`, que e o proprio portfolio de quem estava logado.
+    Empresa nao compartilha ativo consigo mesma: dai o
+    `#1690130 - 968987612512542 nao e uma identificacao da empresa valida`, e
+    dai a queda no caminho generico, que oferecia **criar numero novo com
+    verificacao por SMS**. **REGRA: antes de rodar o Embedded Signup, abrir
+    Configuracoes > Contas do WhatsApp e ver se o numero ja esta la.** Um
+    clique teria poupado a sessao inteira com a cliente.
+  - **Na convivencia a verificacao e por QR CODE escaneado no app, nunca por
+    SMS ou ligacao.** Tela oferecendo SMS e o fluxo normal, o que tira o numero
+    do aparelho. Foi o sinal que fez parar a tempo.
+  - **A Lais precisa abrir o app ao menos uma vez a cada 14 dias**, senao a
+    conexao cai (aviso da propria tela do aplicativo).
+  - **O app foi PUBLICADO** (saiu do modo de desenvolvimento) em 26/10. Nao era
+    a causa do problema, mas e requisito do Embedded Signup de qualquer forma.
+  - **O QUE AINDA BLOQUEIA O ENVIO, medido na Graph:**
+    1. **`health_status.can_send_message = BLOCKED`**, erro **141006: "There is
+       an error with the payment method. This will block business initiated
+       conversations."** E isto que a tela do celular chama de "Termine a
+       configuracao em BM - Pereira Oliveira". **Sem forma de pagamento na
+       conta, nenhuma conversa iniciada pela empresa sai.**
+    2. **`subscribed_apps` esta VAZIO.** O app nao esta inscrito no webhook
+       desta WABA, entao **nenhuma mensagem de cliente chega no
+       `whatsapp.php`**. Inscrever e `POST /{waba_id}/subscribed_apps`, mas
+       isso **liga o robo para os clientes reais** - decisao da cliente, nao
+       tarefa tecnica.
+    3. **`message_templates` esta VAZIO.** Modelo nao se transfere entre
+       contas: os `teste_analise_meta*` ficaram na conta de teste. Os de
+       verdade precisam ser criados aqui e aprovados pela Meta.
+  - **O piso de 16 caracteres vale so para SEGREDO** (`WA_ES_KEY`,
+    `WA_CRON_KEY`, webhook). `WA_PHONE_ID` tem 15 digitos e isso esta correto.
+
 - **CONFIGURACAO DO LOGIN PARA EMPRESAS CRIADA, E A PAGINA DE CONEXAO ESTA VIVA
-  (26/10/2026).** `WA_ES_CONFIG_ID = 1104813102438169`. As tres chaves do Embedded
+  (26/10/2026).** (Acabou nao sendo o caminho usado - ver o item acima.) `WA_ES_CONFIG_ID = 1104813102438169`. As tres chaves do Embedded
   Signup foram acrescentadas ao `config.local.php` do servidor (as outras 10 variaveis
   conferidas uma a uma, por hash de linha, antes e depois). **`conectar-numero.php`
   saiu do 403**: sem chave 403, com chave errada 403, com a certa 200.
