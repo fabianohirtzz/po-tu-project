@@ -1171,14 +1171,32 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
 - **RESOLVIDO (26/10/2026):** o Embedded Signup da coexistência **exigia** sim revisão
   de app da Meta, e ela **foi aprovada**. A etapa a mais existiu e está cumprida.
 
-- **O QUE FALTA NO `config.local.php` DO SERVIDOR (conferido em 26/10/2026).** Os
-  segredos do motor **já estão todos preenchidos**: `WA_APP_SECRET` (32),
-  `WA_VERIFY_TOKEN` (32), `WA_CRON_KEY` (32) e `WA_TOKEN` (196). Faltam, nesta ordem:
-  - `WA_ES_APP_ID`, `WA_ES_CONFIG_ID`, `WA_ES_KEY` — as três da página de conexão, que
-    por isso segue em 403. O `CONFIG_ID` só existe depois de criada a configuração do
-    Login para Empresas com o ativo de WhatsApp (agora possível).
-  - `WA_PHONE_ID` — só existe depois da convivência, e **continua sendo o que mantém o
-    `campanha.php` inerte**. Nunca preencher com o número de teste.
+- **CONFIGURACAO DO LOGIN PARA EMPRESAS CRIADA, E A PAGINA DE CONEXAO ESTA VIVA
+  (26/10/2026).** `WA_ES_CONFIG_ID = 1104813102438169`. As tres chaves do Embedded
+  Signup foram acrescentadas ao `config.local.php` do servidor (as outras 10 variaveis
+  conferidas uma a uma, por hash de linha, antes e depois). **`conectar-numero.php`
+  saiu do 403**: sem chave 403, com chave errada 403, com a certa 200.
+  - **O que foi marcado no assistente, e por que** (cada tela avisa "nao pode ser
+    alterado depois"): variacao **Cadastro incorporado do WhatsApp** (em 08/10 so
+    existia "Geral" - e a prova de que a aprovacao surtiu efeito); produto **somente
+    WhatsApp Cloud API**, sem a MM Lite (a transmissao manda template pelo `/messages`
+    comum) e sem CTWA/CTD/CTM/Conversions (sao para apps que gerenciam anuncio em nome
+    da empresa, que nao e o caso; conversa vinda de anuncio chega no webhook do mesmo
+    jeito); token de **usuario do sistema** (travado pela variacao, e o que casa com o
+    `response_type: 'code'` da pagina); expiracao **Nunca**; ativo **Contas do WhatsApp**
+    (ja vinha travado), com as outras cinco desmarcadas e as task permissions vazias
+    (a Meta ja atribui "Gerenciar" por padrao, que e o nivel cheio).
+  - **Expiracao "Nunca" foi escolha deliberada, contra o "recomendado" da Meta.** Aquele
+    prazo vale para o token que sairia da troca do `code`, **que este projeto nao troca**:
+    o motor roda com o `WA_TOKEN` permanente do proprio portfolio. Como o token nem chega
+    a ser emitido, "Nunca" nao deixa credencial eterna solta, e evita que uma porta de
+    uso unico ganhe prazo de validade que morreria em silencio.
+  - **Conferido no HTML servido, nao so no codigo:** `featureType` =
+    `whatsapp_business_app_onboarding`, sem o valor antigo `coexistence`, sem
+    `sessionInfoVersion` (que a v4 nao quer), com o `config_id` e o `app_id` certos e
+    com o ouvinte de `WA_EMBEDDED_SIGNUP` presente.
+  - **Falta so `WA_PHONE_ID`** — ele so existe depois da convivencia, e **continua sendo
+    o que mantem o `campanha.php` inerte**. Nunca preencher com o numero de teste.
   - **`WA_WABA_ID` aponta para a conta de TESTE.** Depois de conectar ele tem que
     passar a apontar para a WABA real, e **os modelos têm que ser recriados lá**
     (modelo não se transfere entre contas) e esperar nova aprovação da Meta. Essa
