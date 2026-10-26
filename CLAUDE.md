@@ -477,6 +477,201 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
     indexação de `/roteiros`; **reivindicar o Google Business Profile** (5,0 · 22
     avaliações, provavelmente **não reivindicado** — link "É proprietário desta empresa?";
     é possivelmente o maior retorno de tudo e decide "agência de viagem Florianópolis").
+- **Slug repetido no painel (22/10/2026): CORRIGIDO E NO AR.** A cliente reimportou o
+  "Vietnã completo e Tailândia com Paris" (já salvo oculto mais cedo) e o painel recusou
+  com `duplicate key ... po_roteiros_slug_key`. A migration do slug estável criou o
+  índice parcial `po_roteiros_slug_ativo_uniq`, mas **nunca derrubou o `UNIQUE (slug)`
+  original**, então a regra "edição arquivada mantém o slug" nunca tinha valido. A
+  migration `2026-10-22-slug-sem-unique-global.sql` (**rodada**) derruba a constraint.
+  Quando o índice parcial recusar (dois roteiros **visíveis** no mesmo endereço), o painel
+  agora diz qual roteiro ocupa o endereço (`rotSaveErro`, `app.js?v=12`). Reimportar o
+  mesmo arquivo gera um segundo card oculto: é esperado, basta excluir o repetido.
+- **Status da viagem + importar dentro da gaveta (22/10/2026): FEITO E NO AR.**
+  - Coluna `po_roteiros.status_viagem` (`em_breve` | `em_viagem` | `esgotado` | null,
+    check no banco; migration `2026-10-22-status-viagem.sql`, **rodada**). Separado de
+    `ativo`: `ativo` decide se o roteiro existe no site; o status só informa a situação.
+  - Vira tag colorida (amarelo / verde / vermelho, classe `st-tag--<chave>`) no card da
+    home (canto superior direito), no hero da página do roteiro (acima do `<h1>`), nos
+    cards de `/roteiros` e no card do painel. **A lista vive em três lugares que têm que
+    andar juntos:** `PO_STATUS_VIAGEM` (`lib/po-view.php`), `poStatusTag`
+    (`roteiros-shared.js`) e `STATUS_VIAGEM` (`painel/app.js`); `test-status-tag.mjs`
+    confere PHP x JS. Valor fora da lista não emite tag nem classe.
+  - **Ícones:** relógio (em breve), avião inclinado (em viagem), círculo cortado
+    (esgotado). São SVG em `mask` no `.st-tag::before`, pintados com `currentColor`,
+    então seguem a cor do texto e não exigem markup.
+  - **REGRA: a tag aparece em TODO lugar que mostra roteiro** (pedido do cliente):
+    home, `/roteiros`, hero e "Outros roteiros" da página do roteiro, carrossel da
+    Nossa História, cards do `/link` e painel. O CSS é **um arquivo só**,
+    `assets/css/status-tag.css`, carregado por todas essas páginas (antes era copiado
+    por CSS e faltava onde ninguém copiou). Card novo de roteiro em qualquer lugar =
+    chamar `po_status_tag()`/`poStatusTag()` + carregar o `status-tag.css` + posicionar
+    o seletor lá; `test-status-tag.mjs` confere cada renderizador e cada página.
+  - **O painel limpa o cache do site ao salvar/excluir roteiro** (`limpa-cache.php`,
+    só com login; `po_cache_limpa()`). Antes o status levava até 10 min para aparecer
+    em `/roteiros` e nas páginas dos roteiros.
+  - **"Últimas vagas" (`ultimas_vagas`)** entrou depois (migration
+    `2026-10-22-status-ultimas-vagas.sql`, **rodada**): laranja `#F07C1A` com texto
+    escuro e ícone de chama; vira `LimitedAvailability` no JSON-LD. Ordem da lista =
+    ciclo da viagem: em breve, últimas vagas, esgotado, em viagem. O teste exige a
+    MESMA lista, na mesma ordem, em PHP, `roteiros-shared.js` e painel, e cor + ícone
+    de cada uma no `status-tag.css` e no `painel.css`.
+- **Card do carrossel da home é clicável (22/10/2026).** Imagem e título do card do
+  centro abrem o roteiro (o título é `<a>` de verdade). A regra está em
+  `slideClique()` (`main.js`, `test-home-slide.mjs`): **click até 400 ms depois de um
+  arraste é ignorado**, senão arrastar abriria o roteiro (e antes fazia o carrossel
+  voltar ao card de origem). **Card lateral NÃO recebe clique** e já não recebia antes:
+  no 3D ele fica atrás do `.rail__track`, que leva o clique (`elementFromPoint` dá o
+  trilho). Acesso aos laterais é por setas e arraste.
+- **Trilha "Início > Roteiros > nome" removida (22/10/2026)**, a pedido do cliente.
+  Só existia no hero do `roteiro.php`; o CSS `.hero__crumb` saiu junto e o teste da
+  página trava a ausência. Os `BreadcrumbList` em JSON-LD de Contato e História
+  (invisíveis) ficaram.
+  - **Esgotado vira `SoldOut` no JSON-LD** (antes era `InStock` fixo).
+  - **Cache:** a home lê o banco ao vivo; `/roteiros` e `/roteiros/<slug>` passam pelo
+    cache de 10 min do `po-data.php`, então o status leva até 10 min para aparecer lá.
+  - **O importador saiu da barra e mora na gaveta.** A IA só preenche campo **vazio**
+    (`rotPreenche`, função pura, `test-rot-preenche.mjs`); dia a dia, valores e galeria
+    são um bloco cada e só entram se o bloco estiver vazio. Galeria já com foto nem sobe
+    as imagens do arquivo (ficariam órfãs no storage). Importar não abre gaveta nova.
+- **Pré-visualização do roteiro pelo painel (22/10/2026): NO AR.** O "Ver" do painel
+  abria `/roteiros/<slug>`, que só serve roteiro **ativo**, então todo roteiro oculto
+  dava 404. Agora `rotVer()` (`painel/app.js`) posta `preview_id` + `sb_token` para a
+  mesma URL; o `roteiro.php` confere o login (`po_auth_ok`) e lê **por id, com o token
+  dela** (`po_fetch_roteiro_preview`), então quem libera o rascunho é a RLS, sem
+  `service_role`. Leitura com token **nunca passa pelo cache em disco** (o cache é
+  compartilhado e serviria o rascunho ao próximo anônimo). Resposta `noindex` +
+  `no-store` + faixa "Pré-visualização do painel". Login inválido = o mesmo 404.
+  Por id, não por slug: edições ocultas podem repetir o slug.
+- **Bug que eu introduzi e corrigi no mesmo dia (22/10):** a emenda que pôs a tag de
+  status no card de `/roteiros` colou `<img` no atributo (`<imgsrc=`) e **as fotos
+  sumiram da página**. O teste olhava só a tag. Agora `test-roteiros-page.php` confere
+  `<img src=` de cada card. Lição: ao emendar HTML em string, testar o elemento vizinho.
+- **GEO (buscas com IA), 22/10/2026.** Auditoria no ar: nenhum robô de IA é bloqueado
+  (GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, PerplexityBot, Google-Extended: 200);
+  páginas de roteiro têm ~2.000 palavras sem JS (ótimo); **a home tem 126**.
+  - **`/perguntas-frequentes` (`faq.php` + `assets/css/faq.css`): NO AR.** 11 perguntas
+    em `<details>` nativo; o `FAQPage` do JSON-LD sai da **mesma lista** que o texto
+    visível (`po_faq_itens()`, `test-faq.php` confere item a item). **Regra do conteúdo:
+    só afirmar o que site e banco já publicam**; o que varia por roteiro (aéreo, seguro,
+    acompanhante com número mínimo no Chile) manda para a página do roteiro. Rich result
+    de FAQ o Google só mostra para gov/saúde desde 2023: a marcação é para IA. Link no
+    rodapé de todas as páginas e no sitemap.
+  - **`/llms.txt` (`llms.php`): NO AR**, gerado do banco como o sitemap (roteiro oculto
+    nunca entra). Sem efeito comprovado em buscador grande; custo zero.
+  - **Texto oculto na home: RECUSADO** (spam de "texto oculto" do Google, risco de ação
+    manual no site inteiro). **Feito no lugar: painel "Sobre" (`#sobre` no `index.html`)**,
+    aberto por um link pequeno, mas visível, no canto inferior esquerdo ("Sobre a
+    Pereira Oliveira"). Abre por `:target`, então funciona sem JS; o `main.js` só põe
+    Esc e foco. ~600 palavras escritas a partir de pesquisa de busca do nicho (viagem
+    em grupo saindo de Florianópolis, excursão com coordenador brasileiro, melhor idade,
+    viajar sem companhia, seguro na Europa): dado do MTur (84% dos 60+ preferem grupo)
+    e Schengen (30 mil euros). `test-home-sobre.mjs` trava: link não pode ficar
+    invisível (opacidade >= .5), painel abre por `:target`, **nada de preço/data de
+    roteiro** ali. Título da home virou "Viagens em grupo saindo de Florianópolis ·
+    Pereira Oliveira Turismo" (era o slogan, que ninguém busca).
+    **Reescrito no mesmo dia para ~900 palavras** (cliente achou pouco): como funciona,
+    acompanhante brasileiro, terceira idade/aposentados, viajar sem companhia, "vale a
+    pena viajar em grupo", destinos, cidades de SC (Joinville, Blumenau, BC, Itajaí,
+    Criciúma, São José, Palhoça), seguro/passaporte/visto, pagamento, reserva.
+    **A lista de destinos só cita o que comprovadamente esteve nos roteiros** (banco +
+    slugs do WordPress antigo nos 301): não inventar país.
+  - **A HOME AGORA É SERVIDA POR `index.php` (22/10/2026).** Ele lê o `index.html` e
+    troca o marcador `<!--PO:PROXIMAS-VIAGENS-->` (dentro do painel "Sobre") pela
+    lista dos roteiros **visíveis** (`po_fetch_roteiros()`, cache de 10 min que o
+    painel limpa ao salvar). `.htaccess`: `DirectoryIndex index.php index.html` (antes
+    era o contrário, por medo do `index.php` do WordPress, que não existe mais) e
+    `/index.html` reescrito para o `index.php`. **Editar a home continua sendo editar o
+    `index.html`**; o PHP só injeta a lista. Banco fora: vira link para `/roteiros`.
+    Escolhido no lugar de uma rotina semanal regravando o HTML: o FTP do deploy
+    desfaria a regravação, e a lista ficaria até 7 dias velha. `test-home-index.php`.
+  - **"Coordenador/acompanhante", NÃO "guia".** Guia de turismo é profissão
+    regulamentada (Lei 8.623/93, Cadastur). O site só pode chamar o acompanhante de
+    "guia brasileiro" se ele tiver registro; **perguntado ao cliente em 22/10, sem
+    resposta ainda**. Guias locais: o idioma varia (Turquia português, Chile e Coreia
+    espanhol), então nunca prometer "guia em português" de forma geral.
+  - **Menu ganhou "FAQ"** (→ `/perguntas-frequentes`) em todas as páginas; o rodapé
+    segue com "Perguntas frequentes". FAQ centralizado. O menu da 404 apontava
+    "Roteiros" para `/index.html#inicio`; corrigido para `/roteiros`.
+  - **Search Console (22/10/2026), URL por URL:** 9 roteiros do WordPress em 404
+    ganharam 301 → `/roteiros`; `/india-nepal` e `/tesouros-asiaticos.html` apontavam
+    para roteiros ocultos (404) e agora vão para `/roteiros`; restos do WordPress
+    (`/feed`, `/author`, `/wp-includes`, `/wp-content`, `/wp-json`, `xmlrpc`,
+    `wp-login`) respondem **410**. `test-htaccess-redirects.php` aplica as regex e
+    garante que nenhuma URL do site atual cai nelas. **Chile e Tesouros do Oriente
+    estavam em "Detectada, não indexada" (nunca rastreados)**: pedir indexação manual.
+  - **Pendências:** Bing Webmaster (cliente importando do Search Console); ficha da
+    empresa no JSON-LD sem CEP, coordenadas, horário, e-mail, fundador e `sameAs` além do
+    Instagram (aguardando dados); Google Business Profile ainda sem dono; Cadastur.
+  - **Achado, não corrigido:** o select "Roteiro de interesse" do `contato.html` ainda
+    lista os 5 roteiros aposentados (Mercados de Natal, Grécia etc.).
+- **PROVA SOCIAL: avaliações do Google + Instagram (22/10/2026): NO AR.**
+  - Tabelas `po_avaliacoes` e `po_instagram` (migration `2026-10-22-avaliacoes-instagram.sql`,
+    **rodada**; RLS igual ao `po_roteiros`). Aba **"Prova social"** no painel
+    (`painel/vitrine.js`). Montado no servidor por `lib/po-social.php`:
+    `nossa-historia.php` (lê o `nossa-historia.html` e troca `<!--PO:AVALIACOES-->` e
+    `<!--PO:INSTAGRAM-->`; `/nossa-historia.html` é reescrito para ele) e `index.php`
+    (`<!--PO:AVALIACOES-SOBRE-->`, 3 avaliações + selo no painel Sobre).
+  - **Avaliações:** as 12 foram lidas do perfil do Google pelo navegador e gravadas no
+    banco (nota 5,0, 27 avaliações, todas 5 estrelas em 22/10). **Nome publicado =
+    primeiro nome + inicial (LGPD)**, garantido por `poNomeCurto` no ponto de gravação.
+    **Texto fiel ao Google**, sem corrigir ortografia (só o fim truncado com "…" foi
+    cortado). **A avaliação do Fabiano (desenvolvedor) fica de fora**: prova social
+    de quem fez o site é enganosa. **Sem `AggregateRating`/microdata** (teste trava).
+    Link do perfil: `?cid=10478700579601202326`.
+  - **Instagram = VÍDEOS enviados pelo painel (padrão Casa Angelina).** A 1ª versão
+    (colar o link e buscar a capa pelo `og:image`) foi **recusada pelo cliente** no
+    mesmo dia e removida (`insta-capa.php`, `lib/po-insta.php`, apagados do servidor).
+    Agora: a cliente **sobe o reels**; o painel tira um quadro como capa (canvas → jpg
+    no storage do projeto via `uploadImg`), comprime com o `POVideo` dos roteiros e
+    envia ao `upload-video.php` com **tipo `feed`** e "slug" = id do item `ig-<8hex>`
+    (arquivo `/videos/ig-<id>-feed-<hash>.mp4`, na ereHost, nunca no Supabase). Id por
+    item = excluir/trocar um nunca apaga outro; `poIdDoVideo` só reconhece esse
+    formato, então a exclusão do feed nunca alcança vídeo de roteiro (testado).
+    Colunas `video_url`, `poster_url`, `url` (link do post, **opcional**: sem ele o
+    "Ver no Instagram" vai ao perfil), ordem pelas setas; o site mostra os 12 primeiros.
+    **A grade não tem nenhum `<video>`** (teste trava): só capas; `assets/js/insta-feed.js`
+    toca a prévia muda no hover (desktop) e abre o visualizador com som no clique.
+    Medido: **0 bytes de vídeo antes da interação**. Sem JS, cada capa é link para o
+    post/perfil. Carrossel horizontal 9:16 com setas (mesmo estilo do de roteiros).
+    **Os 9 vídeos iniciais** vieram do Snapinsta pelo Fabiano, comprimidos aqui com
+    ffmpeg (1,2 Mbps, áudio copiado). O 10º era o mesmo reels da Índia repetido em
+    loop (76s = 2×38s) e ficou de fora. `video-encode.js` passou a ter `?v=` e entrou
+    no `assets-lock.json`. **Armadilha:** `md5sum` com caminho Windows prefixa `\` no
+    hash; usar `md5sum < arquivo`.
+  - **Do perfil do Google também saíram:** CEP **88015-601**, coordenadas
+    -27.5887033,-48.5565705 e horário (abre 08:00). Ainda não foram para o JSON-LD.
+- **Painel: "Prova social" virou DUAS abas (23/10/2026): "Avaliações" e "Instagram"**
+  (`data-view` `avaliacoes` e `instagram`, mesmo `painel/vitrine.js` e mesmo
+  `poCarregaVitrine`). **Instagram = só envio de vídeo**: o campo de link do post saiu
+  (o "Ver no Instagram" do site vai ao perfil; `url` fica null). Compressão automática
+  no envio (POVideo, perfil do reels); sem WebCodecs, avisa e manda o original.
+- **URLs sem `.html` (22/10/2026): NO AR.** `/nossa-historia`, `/contato`,
+  `/politica-de-privacidade`, `/link`, `/`. O `.htaccess` dá **301 do `.html` para o
+  limpo** olhando `%{THE_REQUEST}` (o que o navegador pediu), o que impede loop com o
+  rewrite interno de volta para o arquivo; barra no fim também vira 301 (rewrite com
+  barra quebraria os caminhos relativos `assets/...`). **Havia o redirect contrário**
+  (`/nossa-historia` → `.html`, `/contato` → `.html`), removido; `/sobre-nos` agora vai
+  para `/nossa-historia`. Todos os links internos, canonical, og:url, JSON-LD, sitemap
+  e `llms.txt` usam o limpo (`test-urls-limpas.php`). Medido no ar: 1 salto, UTM
+  preservado. **Os arquivos continuam `.html` no disco**; só o endereço mudou.
+- **1967 da Nossa História (22/10/2026):** o número recorta agora a foto do **grupo
+  Ilhatur na Disney** (`turismo2.jpg`, 1440x600, camisetas "30 anos, 1997"), no lugar
+  da foto do fundador entre folhagens; Rubik **900** (peso adicionado ao link do
+  Google Fonts da página) e `letter-spacing:-.055em`. O cliente escolheu a **primeira
+  versão** testada (celular a 30vw); versões que preenchiam mais a largura foram
+  recusadas. O `<figure>` mantém a margem padrão do navegador nessa versão.
+- **Selo do Cadastur (23/10/2026): NO AR.** Certificado de **Agência de Turismo** do
+  Ministério do Turismo (CNPJ, válido de 25/03/2025 a 25/03/2027). Logo **extraído do
+  próprio PDF** (desmistura do fundo azul): `assets/images/cadastur.png`, **branco**, só
+  sobre fundo escuro (rodapé) ou sobre o cartão azul `.cad-selo` (Contato, FAQ). Rodapé de
+  todas as páginas (`po_footer()` + cópias em `contato.html`, `nossa-historia.html`,
+  `politica-de-privacidade.html`), selo no Contato e no FAQ, e uma pergunta nova no FAQ
+  ("é uma agência regularizada?", entra no `FAQPage`). CSS único `assets/css/cadastur.css`.
+  Link = a consulta pública do **QR code do certificado**
+  (`PO_CADASTUR_URL`). **A validade NÃO vai para o site** (data vencida publicada é pior
+  que nenhuma; `test-cadastur.php` trava). **Renovar até 25/03/2027.**
+  **O Cadastur é da EMPRESA:** não libera chamar o acompanhante de "guia", que exige
+  Cadastur de pessoa física, como guia de turismo.
 - **Fase 2 (planejada):** avaliações do Google no site (mãe, roteiro, História), cadastro
   manual pelo painel (permite filtrar negativa). **Sem `AggregateRating`** — a diretriz do
   Google proíbe estrela de review que a própria empresa controla; é violação com risco de
@@ -687,6 +882,14 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
       inventava um campo e metade de uma guarda estava morta com a suíte verde.
     - **`WA_CAMP_TETO_DIARIO` está em 250**, que é o piso da Meta para número novo.
       Subir exige conferir o tier real no painel dela, não editar a constante.
+  - **Perdeu por DATA entra na transmissão (23/10/2026, pedido do cliente).**
+    `wa_camp_perdeu_data()` = `status='perdido'` + `qualif_data=false` (o que o robô
+    grava quando a data não serve). Entra **sem passar pela Revisão** (o lead veio
+    da própria pessoa, não de agenda); SAIR, fixo e "Não é cliente" marcado na
+    Revisão continuam valendo. `#perdeu` manual NÃO conta (não diz o motivo).
+    Para os perdidos à mão, a gaveta do lead tem a caixa **"Perdeu só pela data"**
+    (só aparece com status Perdido) que grava a **mesma coluna**. O resumo da
+    transmissão diz quantos entraram por isso. Em 23/10: 13 perdidos, 0 marcados.
   - **Antes do primeiro disparo pago:** ensaio com um destinatário; conferir que o
     template aprovado tem **exatamente uma variável** (`{{1}}` = nome), senão a campanha
     inteira vira falha terminal; conferir o tier do número; e conferir a lista contra
@@ -906,11 +1109,14 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     DIA** para a declaracao ter lastro. Contestacao judicial e livro de
     registro ficaram desmarcados: a agencia nao faz nem um nem outro, e
     declarar o que nao se faz e pior que declarar menos.
-  - **PENDENCIA IMEDIATA: `whatsapp_business_messaging` estava em "0 de 1
-    chamada de API obrigatoria"** no momento do envio. O medidor do
-    `whatsapp_business_management` ja estava "Concluida" com as mesmas nossas
-    chamadas, entao e atraso (a tela avisa que leva ate 24h). Se nao acender,
-    o caminho e o link "WhatsApp Try it out" da propria tela.
+  - **APROVADA (envio de 22/10/2026, conferido em 26/10).** As tres permissoes
+    em **Aprovado**, e a tela de Verificacao mostra os dois selos verdes:
+    **Verificacao da empresa** (BM - Pereira Oliveira, id `968987612512542`) e
+    **Verificacao do acesso** - "sua empresa foi verificada como uma provedora
+    de tecnologia". O medidor de "0 de 1 chamada de API obrigatoria" que tinha
+    ficado em aberto no envio deixou de ser problema: a analise concluiu.
+    **Com isso cai o unico bloqueio da convivencia** - o assistente do Login
+    para Empresas passa a oferecer o ativo de contas do WhatsApp.
 
 - **`git checkout --` altera fim de linha neste repo** (`core.autocrlf=true`). O teste de
   cache-buster hasheia conteúdo **normalizado** por causa disso — hashear bytes crus fazia
@@ -962,8 +1168,21 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     08/10/2026 às 05:45 (Chile e Deserto do Atacama, Balneário Camboriú), o
     primeiro desde que a base foi zerada. Ele aparece em Leads, em Clientes e
     no Funil, e o KPI ignora a base importada, como foi desenhado.
-- **Aberto:** se o Embedded Signup da coexistência exige revisão de app da Meta. Se exigir,
-  entra uma etapa a mais antes de conectar.
+- **RESOLVIDO (26/10/2026):** o Embedded Signup da coexistência **exigia** sim revisão
+  de app da Meta, e ela **foi aprovada**. A etapa a mais existiu e está cumprida.
+
+- **O QUE FALTA NO `config.local.php` DO SERVIDOR (conferido em 26/10/2026).** Os
+  segredos do motor **já estão todos preenchidos**: `WA_APP_SECRET` (32),
+  `WA_VERIFY_TOKEN` (32), `WA_CRON_KEY` (32) e `WA_TOKEN` (196). Faltam, nesta ordem:
+  - `WA_ES_APP_ID`, `WA_ES_CONFIG_ID`, `WA_ES_KEY` — as três da página de conexão, que
+    por isso segue em 403. O `CONFIG_ID` só existe depois de criada a configuração do
+    Login para Empresas com o ativo de WhatsApp (agora possível).
+  - `WA_PHONE_ID` — só existe depois da convivência, e **continua sendo o que mantém o
+    `campanha.php` inerte**. Nunca preencher com o número de teste.
+  - **`WA_WABA_ID` aponta para a conta de TESTE.** Depois de conectar ele tem que
+    passar a apontar para a WABA real, e **os modelos têm que ser recriados lá**
+    (modelo não se transfere entre contas) e esperar nova aprovação da Meta. Essa
+    espera é o que separa a conexão do primeiro disparo: começar cedo.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro
