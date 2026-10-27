@@ -424,15 +424,23 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
 
     // 6. Texto que a Cloud API recusa: contado no pior caso das variaveis, senao estoura depois de trocar o {roteiro}.
     foreach ($C as $id => $c) {
-        if (!isset(WA_FLUXO_LIMITE[$c['tipo']])) continue;
-        $lim = WA_FLUXO_LIMITE[$c['tipo']];
-        if (trim((string) $c['texto']) === '') {
-            $acha(6, $id, 'O card ' . $nome($id) . ' não tem mensagem escrita. O cliente receberia uma mensagem vazia.');
-        } elseif (($n = wa_fluxo_tam_pior_caso($c['texto'])) > $lim) {
-            $acha(6, $id, 'A mensagem do card ' . $nome($id) . ' pode chegar a ' . $n . ' caracteres (contando o maior nome e roteiro possíveis), e o limite é ' . $lim . '. Encurte o texto.');
+        if (isset(WA_FLUXO_LIMITE[$c['tipo']])) {
+            $lim = WA_FLUXO_LIMITE[$c['tipo']];
+            // Vazio so bloqueia onde a Cloud API exige corpo. Fim, humano e pdf
+            // (legenda) podem ser silenciosos; o tamanho vale para todos.
+            if (in_array($c['tipo'], ['texto', 'botoes', 'lista'], true) && trim((string) $c['texto']) === '') {
+                $acha(6, $id, 'O card ' . $nome($id) . ' não tem mensagem escrita. O WhatsApp não envia esse tipo de card sem texto.');
+            } elseif (($n = wa_fluxo_tam_pior_caso($c['texto'])) > $lim) {
+                $acha(6, $id, 'A mensagem do card ' . $nome($id) . ' pode chegar a ' . $n . ' caracteres (contando o maior nome e roteiro possíveis), e o limite é ' . $lim . '. Encurte o texto.');
+            }
         }
-        if ($c['lembrete_ativo'] && ($n = wa_fluxo_tam_pior_caso($c['lembrete_texto'])) > 4096) {
-            $acha(6, $id, 'O lembrete do card ' . $nome($id) . ' pode chegar a ' . $n . ' caracteres, e o limite é 4096. Encurte o texto.');
+        // Lembrete ligado sem texto: o envio falha, o lembrete nunca e carimbado e a conversa encerra calada.
+        if ($c['lembrete_ativo']) {
+            if (trim((string) $c['lembrete_texto']) === '') {
+                $acha(6, $id, 'O lembrete do card ' . $nome($id) . ' está ligado, mas não tem texto escrito. Escreva a mensagem do lembrete ou desligue-o.');
+            } elseif (($n = wa_fluxo_tam_pior_caso($c['lembrete_texto'])) > 4096) {
+                $acha(6, $id, 'O lembrete do card ' . $nome($id) . ' pode chegar a ' . $n . ' caracteres, e o limite é 4096. Encurte o texto.');
+            }
         }
     }
 

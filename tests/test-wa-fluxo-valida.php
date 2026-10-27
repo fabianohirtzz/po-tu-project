@@ -135,8 +135,6 @@ $pdf = ['id'=>'pdf','fluxo_id'=>'f1','tipo'=>'pdf','titulo'=>'PDF','texto'=>'Seg
   'opcoes'=>[],'config'=>[],'proximo'=>'hum','fallback'=>null,'sem_resposta'=>null,'lembrete_ativo'=>false,'lembrete_texto'=>null];
 $c = $base; $c[0]['opcoes'][0]['destino'] = 'pdf'; $c[] = $pdf;
 ok(in_array(13, bloqueios($fx, $c), true), 'regra 13: pdf sem lista dinamica no caminho');
-$c2 = $c; $c2[] = $lst; $c2[4]['config'] = ['fonte'=>'roteiros']; $c2[0]['opcoes'][0]['destino'] = 'lst'; $c2[4]['proximo'] = 'pdf';
-ok(!in_array(13, bloqueios($fx, $c2), true), 'regra 13: pdf depois de lista dinamica passa');
 $fx_anuncio = array_merge($fx, ['gatilho' => 'anuncio']);
 ok(!in_array(13, bloqueios($fx_anuncio, $c), true), 'regra 13: porta anuncio ja traz o roteiro');
 
@@ -203,7 +201,6 @@ $c = $base; $c[0]['opcoes'][0]['destino'] = 'lst'; $c[] = $lst2; $c[] = $pdf2;
 ok(!in_array(13, bloqueios($fx, $c), true), 'regra 13: pdf logo depois de lista de roteiros passa');
 ok(!in_array(14, bloqueios($fx, $c), true), 'regra 14: {roteiro} depois da escolha passa');
 $c[1]['opcoes'][0]['destino'] = 'pdf';  // ops (fallback da lista) agora pula a escolha
-$c[1]['opcoes'][0]['destino'] = 'pdf';
 ok(in_array(13, bloqueios($fx, $c), true), 'regra 13: um caminho que pula a lista basta para bloquear');
 
 // regra 14: variaveis validas passam; lembrete desligado nao e conferido
@@ -326,6 +323,24 @@ $t = textos_da_regra($fx, $c, 11, [['id'=>'f9','gatilho'=>'chamado','gatilho_val
 ok(count($t) === 1 && strpos($t[0], 'publicado') !== false, 'regra 11: sem versao diz que nao foi publicado');
 $t = textos_da_regra($fx, $c, 11, [['id'=>'f9','gatilho'=>'chamado','gatilho_valor'=>null,'ativo'=>false,'versao_atual'=>'v']]);
 ok(count($t) === 1 && strpos($t[0], 'desligado') !== false, 'regra 11: desligado diz que esta desligado');
+
+// ---- rodada de correcao 1: vazio so onde a API exige corpo; lembrete ligado exige texto
+$c = $base; $c[2]["texto"] = ""; $c[3]["texto"] = null;
+ok(!in_array(6, bloqueios($fx, $c), true), "regra 6: humano e fim sem texto nao bloqueiam");
+$c = $base; $c[0]["opcoes"][0]["destino"] = "pdf"; $c[] = $pdf; $c[4]["texto"] = "";
+ok(!in_array(6, bloqueios($fx_anuncio, $c), true), "regra 6: pdf sem legenda nao bloqueia");
+$c[4]["texto"] = str_repeat("a", 1025);
+ok(in_array(6, bloqueios($fx_anuncio, $c), true), "regra 6: legenda do pdf acima de 1024 bloqueia");
+$c = $base; $c[2]["texto"] = str_repeat("a", 4097);
+ok(in_array(6, bloqueios($fx, $c), true), "regra 6: tamanho do humano segue valendo");
+foreach (["", "   ", null] as $v) {
+    $c = $base; $c[0]["lembrete_texto"] = $v;
+    ok(in_array(6, bloqueios($fx, $c), true), "regra 6: lembrete ligado sem texto (" . json_encode($v) . ")");
+}
+$c = $base; $c[0]["lembrete_ativo"] = false; $c[0]["lembrete_texto"] = ""; $c[0]["sem_resposta"] = "fim";
+ok(!in_array(6, bloqueios($fx, $c), true), "regra 6: lembrete desligado sem texto nao bloqueia");
+$c = $base; $c[0]["texto"] = "";
+ok(in_array(6, bloqueios($fx, $c), true), "regra 6: botoes sem texto segue bloqueando");
 
 // a funcao e PURA
 $antes = $base; wa_fluxo_valida($fx, $base); ok($base === $antes, 'wa_fluxo_valida nao modifica a entrada');
