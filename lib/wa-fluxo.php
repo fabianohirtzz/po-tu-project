@@ -763,7 +763,10 @@ function wa_fluxo_porta($ev, $fluxos) {
       envio devolve ok=false COM terminal preenchido, e a conversa tem que ser
       entregue assim mesmo: senao o robo segue dono de uma conversa que o
       fluxo mandou liberar. O `pdf` sem roteiro no catalogo tambem: ok=false,
-      terminal='humano', sem nada enviado.
+      terminal='humano', sem nada enviado. O mesmo vale para recusa PERMANENTE
+      (texto vazio depois da interpolacao, tipo desconhecido): repetir nao
+      adianta, entao vai para a humana. Falha de envio (timeout) NAO e
+      permanente: ok=false, terminal=null, e a proxima mensagem tenta de novo.
    2) ok=true com `erro` nao nulo significa "andou, mas registre". E o card
       `marca` cuja gravacao falhou: a conversa continua e o erro vai para o
       log. Nao leia `erro` preenchido como falha; so `ok` diz isso.
@@ -779,8 +782,13 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
         return array_merge(['ok' => $ok, 'wamid' => null, 'espera' => false, 'terminal' => null, 'ctx' => $ctx, 'erro' => null], $extra);
     };
     $recusa = function ($motivo) use ($res, $card_id) {
+        // Recusa e PERMANENTE (texto vazio depois da interpolacao, tipo
+        // desconhecido): repetir na proxima mensagem recusa igual, para sempre,
+        // e o cliente fica mudo. Por isso vai para a humana, como o pdf sem
+        // roteiro. Falha de envio (timeout) e outra coisa: e transitoria e
+        // nao passa por aqui.
         error_log('wa_fluxo_executa: card ' . $card_id . ': ' . $motivo);
-        return $res(false, ['erro' => $motivo]);
+        return $res(false, ['erro' => $motivo, 'terminal' => 'humano']);
     };
     $card = $grafo['cards'][$card_id] ?? null;
     if (!is_array($card) || !in_array($card['tipo'] ?? null, WA_CARD_TIPOS, true)) {

@@ -83,7 +83,10 @@ ok(wa_processar(ev('eco', '#proposta')) === 'proposta', 'atalho move o funil');
 ok(conv()['estado'] === 'humano', 'e silencia o robo mesmo vindo de aguardando');
 zera();
 wa_processar(ev('mensagem', 'oi'));
-ok(wa_processar(ev('eco', 'proposta.pdf', ['tipo_msg' => 'document'])) === 'silenciou', 'PDF dela vindo de aguardando silencia');
+// Com o fluxo, "conversa em andamento" e aguardando (o motor nao escreve mais
+// 'qualificado'): o PDF dela ali e proposta, e o funil tem que andar.
+ok(wa_processar(ev('eco', 'proposta.pdf', ['tipo_msg' => 'document'])) === 'proposta', 'PDF dela numa conversa em andamento e proposta');
+ok($DB['po_leads'][0]['status'] === 'negociacao', 'e o funil anda para negociacao sem ela lembrar do #proposta');
 ok(conv()['estado'] === 'humano', 'PDF dela deixa o estado em humano');
 
 /* ============ LEI: SAIR vem antes de tudo, carimba sempre, responde so se nao silenciado ============ */
@@ -133,6 +136,51 @@ quebra('send_buttons');
 ok(wa_processar(ev('mensagem', 'oi')) === 'falha_envio', 'primeira mensagem com envio falhado');
 ok(empty(conv()['card_atual']) && empty(conv()['fluxo_versao_id']), 'nao carimba card nem versao de algo que nao saiu');
 ok($DB['po_wa_mensagens'] === [], 'e nada entra no log de saida');
+
+// Cadeia interrompida: o que SAIU fica registrado (lei 9 = nao registrar o que
+// nao chegou, nao = esquecer o que chegou). Cadeia lista -> pdf -> marca -> data,
+// com o botoes da data falhando: o PDF ja foi entregue.
+zera();
+wa_processar(ev('mensagem', 'oi'));
+wa_processar(clica('rot'));
+$ENVIADAS = [];
+quebra('send_buttons');
+ok(wa_processar(clica('turquia', 'list_reply')) === 'falha_envio', 'a pergunta da data falha depois do PDF');
+ok(tipos() === ['doc'], 'o PDF saiu');
+ok(conv()['card_atual'] === 'data', 'o progresso ate o ultimo envio que saiu fica gravado');
+ok(conv()['estado'] !== 'aguardando', 'mas a cadeia parada NAO e marcada como esperando o cliente (o cron mandaria lembrete)');
+ok(conv()['roteiro_slug'] === 'turquia', 'e o roteiro escolhido segue no contexto');
+fx_instala();
+$ENVIADAS = [];
+ok(wa_processar(ev('mensagem', 'oi?')) === 'fluxo', 'a mensagem seguinte retoma a cadeia');
+ok(!in_array('doc', tipos(), true), 'sem reenviar o documento');
+ok(tipos() === ['buttons'], 'so reenvia o card que tinha falhado');
+ok(conv()['estado'] === 'aguardando' && conv()['card_atual'] === 'data', 'e agora sim espera a resposta');
+// o mesmo na ENTRADA: texto -> pdf -> botoes, com o botoes falhando
+zera();
+wa_motor_set_anuncios(['AD2' => 'turquia']);
+add_fluxo('f-ent', 'anuncio', 'AD2', mini('s1', [
+    's1' => fx_card('s1', 'texto', ['texto' => 'Ola!', 'proximo' => 's2']),
+    's2' => fx_card('s2', 'pdf', ['texto' => 'Segue.', 'proximo' => 's3']),
+    's3' => fx_card('s3', 'botoes', ['texto' => 'Serve?', 'fallback' => 's3',
+        'opcoes' => [['id' => 'a', 'rotulo' => 'Sim', 'destino' => 's3']]]),
+]));
+quebra('send_buttons');
+ok(wa_processar(ev('mensagem', 'oi', ['ad_id' => 'AD2'])) === 'falha_envio', 'entrada interrompida no ultimo card');
+ok(conv()['card_atual'] === 's3' && conv()['fluxo_versao_id'] === 'v-f-ent', 'grava o card e a versao ate onde chegou');
+fx_instala(); wa_motor_set_anuncios(['AD2' => 'turquia']);
+$ENVIADAS = [];
+wa_processar(ev('mensagem', 'oi de novo'));
+ok(tipos() === ['buttons'], 'a proxima mensagem NAO repete saudacao nem PDF');
+
+// Recusa permanente (texto vazio depois da interpolacao: o nome do perfil
+// do WhatsApp chega vazio) nao pode deixar a conversa muda para sempre.
+zera();
+add_fluxo('f-vazio', 'palavra', 'vazio', mini('v1', ['v1' => fx_card('v1', 'texto', ['texto' => '{nome}'])]));
+$ENVIADAS = [];
+ok(wa_processar(ev('mensagem', 'vazio', ['nome' => ''])) === 'fluxo', 'card que expande para vazio e tratado');
+ok(conv()['estado'] === 'humano' && $ENVIADAS === [], 'vai para a humana, nada enviado');
+ok(count($DB['po_leads'][0]['notas'] ?? []) === 1, 'e a ficha diz por que');
 
 // A EXCECAO documentada: o terminal. ok=false com terminal='humano' entrega
 // a conversa assim mesmo, senao o robo segue dono de uma conversa liberada.

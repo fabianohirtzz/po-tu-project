@@ -277,7 +277,10 @@ function wa_nota_lead($wa_id, $txt) {
     wa_lead_set($wa_id, ['notas' => $notas]);
 }
 
-/* Quantas mensagens o cliente mandou depois de o roteiro sair. O webhook
+/* @deprecated Plano A: sem chamador desde que o fluxo decide quando chamar a humana
+   (o fallback dos cards). Fica ate o Plano A estar no ar e verificado.
+
+   Quantas mensagens o cliente mandou depois de o roteiro sair. O webhook
    grava a mensagem em po_wa_mensagens ANTES de chamar o motor, entao a que
    esta sendo processada agora ja esta contada: duas ou mais significa que
    ele voltou a escrever sem ter respondido as perguntas.
@@ -413,7 +416,7 @@ function wa_processar($ev) {
         // proposta, com alta confianca no fluxo dela. Cobre o esquecimento
         // do atalho.
         if (!$acao && ($ev['tipo_msg'] ?? '') === 'document'
-            && in_array($conv['estado'] ?? '', ['qualificado', 'humano'], true)) {
+            && in_array($conv['estado'] ?? '', ['aguardando', 'humano'], true)) {
             wa_lead_set($wa_id, ['status' => 'negociacao', 'proposta_at' => gmdate('c')]);
             $acao = 'proposta';
         }
@@ -493,7 +496,13 @@ function wa_processar($ev) {
         $conv = wa_conversa($wa_id);
     }
 
-    $espera = ($conv['estado'] ?? '') === 'aguardando' && !empty($conv['card_atual']);
+    /* Conversa com ponto marcado: 'aguardando' (o card ja foi entregue e
+       espera a resposta) ou 'novo' com card_atual (cadeia interrompida por
+       falha de envio: o card_atual e o PROXIMO A EXECUTAR e ninguem esta
+       sendo aguardado, por isso o estado nao e 'aguardando': a varredura de
+       timeout trataria como "o cliente calou"). */
+    $estado  = $conv['estado'] ?? '';
+    $espera = in_array($estado, ['aguardando', 'novo'], true) && !empty($conv['card_atual']);
 
     /* ----- conversa parada num card que espera -----
        A porta NAO e resolvida aqui (spec 6.11): mensagem que chega com a
@@ -520,12 +529,19 @@ function wa_processar($ev) {
             wa_entrega_humana($wa_id, 'O robô perdeu o ponto da conversa (o card em que ela estava não existe mais no fluxo). Entregue para atendimento humano.');
             return 'card_perdido';
         }
+        $ctx = ['roteiro_slug' => $conv['roteiro_slug'] ?? null, 'tentativas' => (int) ($conv['tentativas'] ?? 0)];
+        /* Retomada: o card_atual ainda nao foi entregue (cadeia interrompida)
+           ou nao e de um tipo que espera. Roteia-lo pularia o card que falhou,
+           e o cliente nunca receberia a pergunta. A mensagem dele nao decide
+           nada aqui: so reabre a cadeia de onde parou, sem repetir o que saiu. */
+        if ($estado === 'novo' || !in_array($grafo['cards'][$atual]['tipo'] ?? '', WA_CARD_ESPERA, true)) {
+            return wa_fluxo_percorre($wa_id, $nome, $grafo, $versao_id, $atual, $ctx, false);
+        }
         // So o clique (botao ou linha de lista) carrega o id de uma opcao.
         // Texto digitado nao e escolha: se "turquia" valesse como slug, quem
         // escreve em vez de tocar na lista escolheria um roteiro sem querer.
         $clique   = in_array($ev['tipo_msg'] ?? '', ['list_reply', 'button_reply', 'button'], true);
         $resposta = $clique ? $texto : '';
-        $ctx = ['roteiro_slug' => $conv['roteiro_slug'] ?? null, 'tentativas' => (int) ($conv['tentativas'] ?? 0)];
         $p = wa_fluxo_proximo($grafo, $atual, $resposta, $ctx);
         if ($p['card'] === null) {
             error_log('wa_processar: card ' . $atual . ' sem saida (' . $p['motivo'] . ') | ' . $wa_id);
@@ -617,6 +633,7 @@ function wa_entrega_humana($wa_id, $nota) {
 function wa_fluxo_percorre($wa_id, $nome, $grafo, $versao_id, $card, $ctx, $estampar) {
     $fluxos = null;   // carregado so se houver salto
     $passos = 0;
+    $progresso = false;   // algum card desta cadeia ja SAIU
     while (true) {
         if ($passos >= WA_FLUXO_MAX_PASSOS) {
             error_log('wa_fluxo_percorre: teto de ' . WA_FLUXO_MAX_PASSOS . ' passos | ' . $wa_id);
@@ -639,7 +656,9 @@ function wa_fluxo_percorre($wa_id, $nome, $grafo, $versao_id, $card, $ctx, $esta
             if (!$r['ok']) error_log('wa_fluxo_percorre: card ' . $card . ' terminal ' . $r['terminal'] . ' sem o aviso enviado (' . $r['erro'] . '), conversa entregue assim mesmo | ' . $wa_id);
             if ($r['terminal'] === 'humano') {
                 wa_conversa_set($wa_id, $grava + ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
-                wa_nota_lead($wa_id, 'O fluxo entregou a conversa para atendimento humano.');
+                wa_nota_lead($wa_id, $r['ok']
+                    ? 'O fluxo entregou a conversa para atendimento humano.'
+                    : 'O fluxo entregou a conversa para atendimento humano, mas o card não pôde ser enviado (' . $r['erro'] . ').');
             } else {
                 wa_conversa_set($wa_id, $grava + ['estado' => 'encerrado']);
             }
@@ -647,9 +666,17 @@ function wa_fluxo_percorre($wa_id, $nome, $grafo, $versao_id, $card, $ctx, $esta
         }
 
         if (!$r['ok']) {
-            error_log('wa_fluxo_percorre: envio falhou no card ' . $card . ' (' . $r['erro'] . '), estado nao avancou | ' . $wa_id);
+            error_log('wa_fluxo_percorre: envio falhou no card ' . $card . ' (' . $r['erro'] . ') | ' . $wa_id);
+            // Lei do envio: nao registrar o que NAO chegou, mas tambem nao
+            // esquecer o que chegou. Se cards anteriores desta cadeia ja
+            // saidas (um PDF, por exemplo), grava ate onde chegou: o card
+            // que falhou vira o proximo a executar, e a mensagem seguinte
+            // retoma dele sem repetir o PDF. Sem progresso, nada a gravar.
+            // O estado NAO vira 'aguardando': ninguem esta sendo aguardado.
+            if ($progresso) wa_conversa_set($wa_id, $grava + ['estado' => 'novo']);
             return 'falha_envio';
         }
+        $progresso = true;
 
         if ($r['espera']) {
             wa_conversa_set($wa_id, $grava + ['estado' => 'aguardando', 'aguardando_desde' => gmdate('c')]);

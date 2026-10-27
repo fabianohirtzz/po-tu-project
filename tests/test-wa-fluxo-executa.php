@@ -120,11 +120,17 @@ foreach (['txt', 'dt', 'lst'] as $id) {
     $r = wa_fluxo_executa($g2, $id, $fone, $c0, 'Marta');
     ok($r['ok'] === false && $r['erro'] !== null, "texto vazio no card $id nao da ok");
     ok($ENVIADAS === [] && $LOG === [], "texto vazio no card $id nao chega ao envio");
+    ok($r['terminal'] === 'humano', "recusa permanente no card $id entrega a conversa a humana, nao a deixa muda");
 }
 // texto que so tinha variavel vazia
 zera(); $g2 = $g; $g2['cards']['txt']['texto'] = '{roteiro}';
 $r = wa_fluxo_executa($g2, 'txt', $fone, $c0, 'Marta');
 ok($r['ok'] === false && $ENVIADAS === [], 'texto que expande para vazio tambem e recusado');
+ok($r['terminal'] === 'humano', 'e tambem vai para a humana (passa na validacao, que olha o texto cru)');
+// card de tipo desconhecido: recusa permanente tambem
+zera(); $g2 = $g; $g2['cards']['txt']['tipo'] = 'inventado';
+$r = wa_fluxo_executa($g2, 'txt', $fone, $c0, 'Marta');
+ok($r['ok'] === false && $r['terminal'] === 'humano' && $ENVIADAS === [], 'tipo desconhecido vai para a humana');
 
 // 9. LEI: envio que falhou nunca devolve ok, nem registra saida
 foreach (['txt' => $c0, 'dt' => $ct, 'lst' => $c0, 'pdf' => $ct, 'hum' => $c0] as $id => $cx) {
