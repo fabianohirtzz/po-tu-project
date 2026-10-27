@@ -752,13 +752,24 @@ function wa_fluxo_porta($ev, $fluxos) {
    Unica parte do interpretador que manda mensagem de verdade. A LEI daqui:
    o estado so avanca se o envio saiu. `ok` so e true quando a Cloud API
    devolveu ok E um wamid; quem chama (wa_processar) so grava o card novo na
-   conversa com ok === true. Sem isso o lead fica "aguardando resposta" de uma
+   conversa com ok === true (a excecao e o `terminal`, abaixo). Sem isso o lead fica "aguardando resposta" de uma
    mensagem que nunca chegou, e o cron o encerra sozinho.
 
-   Retorna ['ok','wamid','espera','terminal','ctx','erro']:
-   - terminal: null | 'humano' | 'fim'. Vem junto de ok=false so quando o
-     proprio card nao tem o que fazer (pdf sem roteiro): quem chama entrega a
-     conversa ao humano em vez de repetir o card.
+   Retorna ['ok','wamid','espera','terminal','ctx','erro'], e DUAS convencoes
+   que quem chama precisa ler certo:
+
+   1) `ok` diz se a mensagem saiu; `terminal` diz para onde a conversa vai;
+      um NAO depende do outro. Card `humano` (ou `fim`) cujo aviso falhou no
+      envio devolve ok=false COM terminal preenchido, e a conversa tem que ser
+      entregue assim mesmo: senao o robo segue dono de uma conversa que o
+      fluxo mandou liberar. O `pdf` sem roteiro no catalogo tambem: ok=false,
+      terminal='humano', sem nada enviado.
+   2) ok=true com `erro` nao nulo significa "andou, mas registre". E o card
+      `marca` cuja gravacao falhou: a conversa continua e o erro vai para o
+      log. Nao leia `erro` preenchido como falha; so `ok` diz isso.
+
+   - terminal: null | 'humano' | 'fim'.
+   - espera: true so quando a mensagem saiu E o card espera o cliente.
    - ctx: o contexto, com o slug descartado se ele nao existe mais no catalogo.
    `ir_para_fluxo` nao envia nada: quem carrega o outro grafo e o chamador. */
 const WA_SITE = 'https://pereiraoliveiraturismo.com.br';   // dono unico; wa-motor.php usa este

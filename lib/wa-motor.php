@@ -2,8 +2,11 @@
 /* ============================================================
    A maquina de estados da conversa.
 
-   Estados: novo -> aguardando_roteiro -> enviado_roteiro -> qualificado
-            | desqualificado | encerrado | humano
+   Quem decide o proximo passo da conversa e o interpretador de fluxo
+   (lib/wa-fluxo.php); este arquivo guarda as leis que ficam ACIMA dele e
+   fala com o grafo em wa_processar / wa_fluxo_percorre.
+   Estado (espelho do card atual, spec 6.5): aguardando | humano | encerrado.
+   'novo' so existe entre a criacao da conversa e a primeira resposta enviada.
 
    REGRA MAIS IMPORTANTE DO ARQUIVO: o eco (o que a cliente digita no
    celular) silencia o robo naquele contato para sempre. Sem isso, robo e
@@ -74,6 +77,13 @@ function wa_envia_texto($wa_id, $texto) {
 /* Meses por extenso, sem acento (mesma normalizacao de wa_normaliza). So
    entram na checagem de duvida combinados com "mas" (ver wa_tem_duvida) -
    nao criam duvida sozinhos, senao "a viagem e em outubro" viraria null. */
+/* @deprecated Plano A: substituidas pelos cards botoes.
+   De WA_MESES ate wa_respostas_numeradas/wa_resposta_data/wa_resposta_grupo,
+   mais wa_envia_roteiro adiante: eram o roteamento da maquina de estados
+   antiga e nenhuma e chamada por wa_processar. Ficam (com os testes) ate o
+   Plano A estar no ar e verificado; so entao saem. wa_envia_roteiro mantem de
+   proposito o `??` em data_label (nao pega string vazia); o caminho novo,
+   wa_fluxo_vars_do_roteiro, usa `?:`. Nao conserte uma, apague as duas. */
 const WA_MESES = [
     'janeiro','fevereiro','marco','abril','maio','junho',
     'julho','agosto','setembro','outubro','novembro','dezembro',
@@ -469,8 +479,6 @@ function wa_processar($ev) {
         $conv['aguardando_desde'] = $agora;
     }
 
-    $roteiros = wa_call('roteiros');
-
     // Primeiro contato: cria lead e contato.
     if (!$conv) {
         wa_lead_set($wa_id, [
@@ -485,71 +493,78 @@ function wa_processar($ev) {
         $conv = wa_conversa($wa_id);
     }
 
-    // Já mandou o roteiro: o que chega agora e resposta das perguntas.
-    if (($conv['estado'] ?? '') === 'enviado_roteiro') {
-        $r     = wa_resposta_data($texto);
-        $grupo = wa_resposta_grupo($texto);
-        if ($r === false) {
-            // Manda primeiro, avanca o estado so se saiu: um envio que
-            // falhou nao pode gravar "perdido" no lead como se a cliente
-            // tivesse sido avisada - ela ficaria perdida sem nunca ter
-            // recebido a mensagem.
-            $envio = wa_envia_texto($wa_id, wa_texto('sem_data', ['nome' => $nome]));
-            if (empty($envio['ok'])) {
-                error_log('wa_processar: falha ao enviar sem_data para ' . $wa_id);
-                return 'falha_envio';
-            }
-            wa_conversa_set($wa_id, ['estado' => 'desqualificado']);
-            $campos = ['status' => 'perdido', 'qualif_data' => false];
-            if ($grupo !== null) $campos['qualif_grupo'] = $grupo;
-            wa_lead_set($wa_id, $campos);
-            return 'desqualificou';
-        }
-        if ($r === true) {
-            $envio = wa_envia_texto($wa_id, wa_texto('qualificado', ['nome' => $nome]));
-            if (empty($envio['ok'])) {
-                error_log('wa_processar: falha ao enviar qualificado para ' . $wa_id);
-                return 'falha_envio';
-            }
-            wa_conversa_set($wa_id, ['estado' => 'qualificado']);
-            // Data confirmada qualifica, tenha o cliente viajado em grupo
-            // antes ou nao. qualif_grupo so e gravado quando existe
-            // evidencia: sem ela a coluna fica como estava, em vez de
-            // receber um true que ninguem disse.
-            $campos = [
-                'status'      => 'atendimento',
-                'qualif_data' => true,
-                'qualif_at'   => gmdate('c'),
-            ];
-            if ($grupo !== null) $campos['qualif_grupo'] = $grupo;
-            wa_lead_set($wa_id, $campos);
-            return 'qualificou';
-        }
-        /* Nem sim nem nao. Nao classifica errado e nao responde bobagem,
-           mas tambem nao pode virar silencio: antes o estado nao mudava,
-           ninguem era avisado, e 48h depois o cron encerrava como PERDIDO
-           um cliente que tinha respondido.
+    $espera = ($conv['estado'] ?? '') === 'aguardando' && !empty($conv['card_atual']);
 
-           Audio, imagem e figurinha chegam sem texto nenhum, e o publico
-           60+ desta agencia responde por audio com frequencia alta: esses
-           vao direto para gente. Quem escreve uma pergunta em vez de
-           responder ganha uma chance (pode responder na proxima); na
-           segunda mensagem sem resposta, tambem vai para gente. */
-        $sem_texto = (trim($texto) === '');
-        $insistiu  = wa_msgs_do_cliente_depois($wa_id, $conv['aguardando_desde'] ?? '') >= 2;
-        if ($sem_texto || $insistiu) {
-            wa_conversa_set($wa_id, ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
-            wa_nota_lead($wa_id, $sem_texto
-                ? 'Cliente respondeu por audio, imagem ou figurinha, que o robo nao le. Conversa entregue para atendimento humano.'
-                : 'Cliente escreveu mais de uma vez sem responder as perguntas do roteiro. Conversa entregue para atendimento humano.');
-            return 'precisa_humano';
+    /* ----- conversa parada num card que espera -----
+       A porta NAO e resolvida aqui (spec 6.11): mensagem que chega com a
+       conversa esperando botao vai para o fallback daquele card, nunca para
+       outro fluxo. O grafo e o da versao que a conversa carimbou ao entrar. */
+    if ($espera) {
+        $versao_id = (string) ($conv['fluxo_versao_id'] ?? '');
+        if ($versao_id === '') {
+            error_log('wa_processar: conversa aguardando sem fluxo_versao_id | ' . $wa_id);
+            wa_entrega_humana($wa_id, 'A conversa estava parada num card, mas sem versão de fluxo registrada. Entregue para atendimento humano.');
+            return 'card_perdido';
         }
-        return 'aguardando';
+        $grafo = wa_fluxo_grafo($versao_id);
+        // null COM versao_id preenchido e "nao sei" (versao apagada ou banco
+        // fora), e nunca "sem fluxo": resolver a porta de novo faria quem esta
+        // no meio da conversa receber as boas-vindas outra vez.
+        if ($grafo === null) {
+            error_log('wa_processar: grafo da versao ' . $versao_id . ' indisponivel, nada feito | ' . $wa_id);
+            return 'grafo_indisponivel';
+        }
+        $atual = (string) $conv['card_atual'];
+        if (!isset($grafo['cards'][$atual])) {
+            error_log('wa_processar: card_atual ' . $atual . ' nao existe na versao ' . $versao_id . ' | ' . $wa_id);
+            wa_entrega_humana($wa_id, 'O robô perdeu o ponto da conversa (o card em que ela estava não existe mais no fluxo). Entregue para atendimento humano.');
+            return 'card_perdido';
+        }
+        // So o clique (botao ou linha de lista) carrega o id de uma opcao.
+        // Texto digitado nao e escolha: se "turquia" valesse como slug, quem
+        // escreve em vez de tocar na lista escolheria um roteiro sem querer.
+        $clique   = in_array($ev['tipo_msg'] ?? '', ['list_reply', 'button_reply', 'button'], true);
+        $resposta = $clique ? $texto : '';
+        $ctx = ['roteiro_slug' => $conv['roteiro_slug'] ?? null, 'tentativas' => (int) ($conv['tentativas'] ?? 0)];
+        $p = wa_fluxo_proximo($grafo, $atual, $resposta, $ctx);
+        if ($p['card'] === null) {
+            error_log('wa_processar: card ' . $atual . ' sem saida (' . $p['motivo'] . ') | ' . $wa_id);
+            wa_entrega_humana($wa_id, 'O card em que a conversa estava não tem saída para essa resposta. Entregue para atendimento humano.');
+            return 'card_perdido';
+        }
+        return wa_fluxo_percorre($wa_id, $nome, $grafo, $versao_id, $p['card'], $p['ctx'], false);
     }
 
-    // Identificacao do roteiro, da fonte mais confiavel para a menos.
-    $slug = null;
+    /* ----- conversa fora de card que espera: a porta decide ----- */
+    $fluxos = wa_fluxos_ativos();
+    if ($fluxos === null) {
+        error_log('wa_processar: lista de fluxos indisponivel, nada feito | ' . $wa_id);
+        return 'grafo_indisponivel';
+    }
+    $porta = wa_fluxo_porta($ev, $fluxos);
+    if ($porta === null) {
+        // Sem fluxo ligado o robo nao inventa resposta. A mensagem fica no
+        // log e a equipe atende pelo app.
+        error_log('wa_processar: nenhum fluxo ligado atende a mensagem | ' . $wa_id);
+        return 'sem_fluxo';
+    }
+    $versao_id = (string) $porta['versao_atual'];
+    $grafo = wa_fluxo_grafo($versao_id);
+    if ($grafo === null) {
+        error_log('wa_processar: grafo da versao ' . $versao_id . ' indisponivel, nada feito | ' . $wa_id);
+        return 'grafo_indisponivel';
+    }
+    $inicial = (string) ($grafo['inicial'] ?? '');
+    if ($inicial === '' || !isset($grafo['cards'][$inicial])) {
+        error_log('wa_processar: card inicial da versao ' . $versao_id . ' nao existe | ' . $wa_id);
+        wa_entrega_humana($wa_id, 'O fluxo que atenderia essa mensagem está sem card inicial. Entregue para atendimento humano.');
+        return 'card_perdido';
+    }
 
+    // Conversa nova (ou recomecada): o contexto nasce limpo. Carregar o
+    // roteiro_slug de uma conversa encerrada faria quem volta um mes depois
+    // receber o PDF da viagem de antes. So o anuncio mapeado semeia o roteiro.
+    $slug = null;
     if (!empty($ev['ad_id'])) {
         $mapa = $GLOBALS['WA_ANUNCIOS'] ?? null;
         if ($mapa === null) {
@@ -559,55 +574,137 @@ function wa_processar($ev) {
             $slug = $mapa[$ev['ad_id']] ?? null;
         }
     }
-    if (!$slug) $slug = wa_slug_do_marcador($texto);
-    if (!$slug && ($ev['tipo_msg'] ?? '') === 'list_reply') $slug = trim($texto);
-    if (!$slug) {
-        $achados = wa_match_roteiros($texto, $roteiros);
-        if (count($achados) === 1) $slug = $achados[0];
-    }
+    return wa_fluxo_percorre($wa_id, $nome, $grafo, $versao_id, $inicial,
+        ['roteiro_slug' => $slug, 'tentativas' => 0], true);
+}
 
-    if ($slug) {
-        $r = wa_acha_roteiro($slug, $roteiros);
-        if ($r) return wa_envia_roteiro($wa_id, $r, $nome);
-    }
+/* ---------- o interpretador, do lado do motor ---------- */
 
-    // Nada identificado (ou ambiguo): o menu resolve sem chutar. Mas sai UMA
-    // vez: estando em aguardando_roteiro o menu ja foi mandado, e repetir a
-    // lista a cada mensagem que o robo nao entende (quatro listas seguidas,
-    // medido na revisao) le como robo travado para o publico da agencia. O
-    // estado existe justamente para distinguir os dois momentos. Quem
-    // continua sem escolher cai no lembrete do cron, que tem texto proprio.
-    if (($conv['estado'] ?? '') === 'aguardando_roteiro') return 'aguardando_menu';
+/* Teto de cards executados por mensagem. Cards que nao esperam encadeiam
+   (texto, marca, pdf, salto de fluxo), e um grafo mal desenhado pode girar
+   para sempre: sem teto, uma unica mensagem do cliente viraria rajada de
+   mensagens ate o PHP estourar o tempo. Contam tambem os saltos de fluxo. */
+const WA_FLUXO_MAX_PASSOS = 10;
 
-    $itens = [];
-    foreach ($roteiros as $r) {
-        $itens[] = ['id' => $r['slug'], 'titulo' => $r['titulo'], 'descricao' => $r['data_label'] ?? ''];
-    }
-    $corpo_menu = wa_texto('menu', ['nome' => $nome]);
-    if ($corpo_menu === '') {
-        error_log('wa_processar: texto do menu vazio, nada enviado para ' . $wa_id);
-        return 'falha_envio';
-    }
+/* Fluxos que podem atender: ligados e publicados. null = o banco nao
+   respondeu (NAO e "nenhum fluxo"). O order= e FIXO de proposito: com dois
+   fluxos `palavra` de valores diferentes e uma mensagem que casa os dois, sem
+   ele vence a linha que o banco devolveu primeiro, ao acaso. Com ele, vence o
+   fluxo mais antigo, sempre o mesmo. */
+function wa_fluxos_ativos() {
+    return wa_call('select_estrito', 'po_wa_fluxos',
+        'ativo=eq.true&versao_atual=not.is.null&select=id,nome,gatilho,gatilho_valor,ativo,versao_atual'
+        . '&order=created_at.asc,id.asc');
+}
 
-    // Catalogo vazio (Supabase fora, cache frio, nenhum roteiro ativo): a
-    // Graph API recusa lista com zero linhas, entao a mensagem inteira nao
-    // sai e o cliente fica sem resposta nenhuma. O proprio texto do menu
-    // ja pergunta qual viagem interessa, e como texto puro ele sempre sai.
-    if (!$itens) {
-        $envio = wa_envia_texto($wa_id, $corpo_menu);
-        if (empty($envio['ok'])) {
-            error_log('wa_processar: catalogo vazio e falha ao pedir o destino para ' . $wa_id);
+/* Entrega a conversa a humana e deixa o motivo na ficha, para ela abrir o
+   lead sem saber por que o robo parou e encontrar a explicacao. Nunca deixa a
+   conversa muda: e o destino de tudo que o fluxo nao sabe resolver. */
+function wa_entrega_humana($wa_id, $nota) {
+    wa_conversa_set($wa_id, ['estado' => 'humano', 'silenciado_at' => gmdate('c'), 'lembrete_at' => null]);
+    wa_nota_lead($wa_id, $nota);
+}
+
+/* Executa a partir de $card ate a conversa esperar, terminar ou travar.
+   $estampar = esta e a ENTRADA num fluxo (porta ou salto): so ai se grava
+   fluxo_versao_id. Conversa em andamento nunca o reescreve: editar e
+   republicar o fluxo nao pode jogar quem esta a meio caminho num grafo onde
+   o card_atual dela talvez nem exista.
+
+   Lei do envio: card_atual/estado so avancam depois de a mensagem sair.
+   A unica excecao e o `terminal`: ok diz se saiu, terminal diz para onde a
+   conversa vai, e a humana recebe a conversa mesmo com o aviso falhado. */
+function wa_fluxo_percorre($wa_id, $nome, $grafo, $versao_id, $card, $ctx, $estampar) {
+    $fluxos = null;   // carregado so se houver salto
+    $passos = 0;
+    while (true) {
+        if ($passos >= WA_FLUXO_MAX_PASSOS) {
+            error_log('wa_fluxo_percorre: teto de ' . WA_FLUXO_MAX_PASSOS . ' passos | ' . $wa_id);
+            wa_entrega_humana($wa_id, 'O fluxo encadeou cards sem nunca esperar o cliente e foi interrompido. Entregue para atendimento humano.');
+            return 'teto_passos';
+        }
+        $passos++;
+
+        $r   = wa_fluxo_executa($grafo, $card, $wa_id, $ctx, $nome);
+        $ctx = $r['ctx'];
+        $grava = [
+            'card_atual'   => $card,
+            'tentativas'   => (int) ($ctx['tentativas'] ?? 0),
+            'roteiro_slug' => $ctx['roteiro_slug'] ?? null,
+            'lembrete_at'  => null,
+        ];
+        if ($estampar) $grava['fluxo_versao_id'] = $versao_id;
+
+        if ($r['terminal'] !== null) {
+            if (!$r['ok']) error_log('wa_fluxo_percorre: card ' . $card . ' terminal ' . $r['terminal'] . ' sem o aviso enviado (' . $r['erro'] . '), conversa entregue assim mesmo | ' . $wa_id);
+            if ($r['terminal'] === 'humano') {
+                wa_conversa_set($wa_id, $grava + ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
+                wa_nota_lead($wa_id, 'O fluxo entregou a conversa para atendimento humano.');
+            } else {
+                wa_conversa_set($wa_id, $grava + ['estado' => 'encerrado']);
+            }
+            return 'fluxo';
+        }
+
+        if (!$r['ok']) {
+            error_log('wa_fluxo_percorre: envio falhou no card ' . $card . ' (' . $r['erro'] . '), estado nao avancou | ' . $wa_id);
             return 'falha_envio';
         }
-        wa_conversa_set($wa_id, ['estado' => 'aguardando_roteiro', 'aguardando_desde' => gmdate('c')]);
-        return 'menu_texto';
+
+        if ($r['espera']) {
+            wa_conversa_set($wa_id, $grava + ['estado' => 'aguardando', 'aguardando_desde' => gmdate('c')]);
+            return 'fluxo';
+        }
+
+        // Card que nao espera: segue para o proximo sem olhar resposta.
+        $p = wa_fluxo_proximo($grafo, $card, '', $ctx);
+
+        if ($p['motivo'] === 'proximo') {
+            $card = $p['card'];
+            $ctx  = $p['ctx'];
+            continue;
+        }
+
+        if ($p['motivo'] === 'ir_para_fluxo') {
+            $destino = (string) ($grafo['cards'][$card]['config']['fluxo'] ?? '');
+            if ($fluxos === null) $fluxos = wa_fluxos_ativos();
+            if ($fluxos === null) {
+                error_log('wa_fluxo_percorre: lista de fluxos indisponivel no salto | ' . $wa_id);
+                return 'grafo_indisponivel';
+            }
+            $alvo = null;
+            foreach ($fluxos as $f) {
+                if ((string) ($f['id'] ?? '') === $destino) { $alvo = $f; break; }
+            }
+            if ($alvo === null) {
+                error_log('wa_fluxo_percorre: salto para fluxo ausente, desligado ou nao publicado: ' . $destino . ' | ' . $wa_id);
+                wa_entrega_humana($wa_id, 'O fluxo mandou a conversa para outro fluxo que não está no ar. Entregue para atendimento humano.');
+                return 'card_perdido';
+            }
+            $novo = wa_fluxo_grafo((string) $alvo['versao_atual']);
+            if ($novo === null) {
+                error_log('wa_fluxo_percorre: grafo do fluxo de destino indisponivel | ' . $wa_id);
+                return 'grafo_indisponivel';
+            }
+            $inicial = (string) ($novo['inicial'] ?? '');
+            if ($inicial === '' || !isset($novo['cards'][$inicial])) {
+                error_log('wa_fluxo_percorre: fluxo de destino sem card inicial | ' . $wa_id);
+                wa_entrega_humana($wa_id, 'O fluxo de destino está sem card inicial. Entregue para atendimento humano.');
+                return 'card_perdido';
+            }
+            // Entrar em outro fluxo e uma entrada: carimba a versao DELE.
+            $grafo     = $novo;
+            $versao_id = (string) $alvo['versao_atual'];
+            $estampar  = true;
+            $card      = $inicial;
+            $ctx['tentativas'] = 0;
+            continue;
+        }
+
+        // Sem proximo valido e sem terminal: o grafo acabou no meio. A
+        // conversa encerra, igual a um card `fim`.
+        error_log('wa_fluxo_percorre: card ' . $card . ' sem proximo (' . $p['motivo'] . '), encerrando | ' . $wa_id);
+        wa_conversa_set($wa_id, $grava + ['estado' => 'encerrado']);
+        return 'fluxo';
     }
-    $envio = wa_call('send_list', $wa_id, $corpo_menu, 'Ver roteiros', $itens);
-    wa_registra_saida($wa_id, $envio, 'list', $corpo_menu);
-    if (empty($envio['ok'])) {
-        error_log('wa_processar: falha ao enviar o menu para ' . $wa_id);
-        return 'falha_envio';
-    }
-    wa_conversa_set($wa_id, ['estado' => 'aguardando_roteiro', 'aguardando_desde' => gmdate('c')]);
-    return 'menu';
 }
