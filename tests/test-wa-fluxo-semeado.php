@@ -45,6 +45,31 @@ foreach ($grafos as $g) {
     }
 }
 
+// O insert de po_wa_cards deriva cada coluna do retrato: a lista de colunas e as expressoes do select tem que
+// concordar posicao a posicao, senao o rascunho diverge do publicado (fallback x sem_resposta trocados) sem teste vermelho.
+preg_match('/insert into public\.po_wa_cards\s*\((.*?)\)\s*select(.*?)from public\.po_wa_fluxo_versoes v/s', $sql, $ins);
+ok(count($ins) === 3, 'o insert de po_wa_cards existe no formato esperado');
+$colunas = array_map('trim', explode(',', $ins[1]));
+// Separa as expressoes do select nas virgulas de nivel zero (as de dentro de coalesce(...) ficam).
+$exprs = [];
+$prof = 0; $atual = '';
+foreach (str_split(trim($ins[2])) as $ch) {
+    if ($ch === '(') $prof++;
+    if ($ch === ')') $prof--;
+    if ($ch === ',' && $prof === 0) { $exprs[] = trim($atual); $atual = ''; continue; }
+    $atual .= $ch;
+}
+$exprs[] = trim($atual);
+ok(count($colunas) === count($exprs), 'colunas e expressoes do insert de cards tem o mesmo tamanho: ' . count($colunas) . ' x ' . count($exprs));
+foreach ($colunas as $k => $col) {
+    if (in_array($col, ['ordem', 'x', 'y'], true)) { ok($exprs[$k] === 'p.' . $col, "coluna $col vem de p.$col"); continue; }
+    if ($col === 'fluxo_id') { ok($exprs[$k] === 'v.fluxo_id', 'fluxo_id vem da versao'); continue; }
+    ok(strpos($exprs[$k], "card->>'$col'") !== false || strpos($exprs[$k], "card->'$col'") !== false, "a coluna $col le a chave '$col' do retrato, nao outra: " . $exprs[$k]);
+    foreach (['proximo', 'fallback', 'sem_resposta', 'tipo', 'titulo', 'texto', 'opcoes', 'config', 'lembrete_ativo', 'lembrete_texto'] as $outra) {
+        if ($outra !== $col && $col !== 'id') ok(strpos($exprs[$k], "'$outra'") === false, "a coluna $col nao le a chave '$outra'");
+    }
+}
+
 // Texto: sem travessao (nem meia-risca), sem emoji, sem telefone, em todo campo que o cliente final ou a cliente leem.
 $emoji = '/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE0F}]/u';
 foreach ($grafos as $g) {
@@ -53,13 +78,15 @@ foreach ($grafos as $g) {
         foreach (['titulo', 'texto', 'lembrete_texto'] as $k) if (isset($c[$k])) $textos[] = (string) $c[$k];
         foreach ($c['opcoes'] as $o) { $textos[] = $o['rotulo']; if (isset($o['descricao'])) $textos[] = $o['descricao']; }
         if (isset($c['config']['botao'])) $textos[] = $c['config']['botao'];
-        // O nome da atendente e rotulo de botao (pedido do cliente); no corpo da mensagem ela e "nossa equipe".
-        foreach (['texto', 'lembrete_texto'] as $k) {
-            $t = (string) ($c[$k] ?? '');
-            ok(stripos($t, 'Laís') === false && stripos($t, 'Lais') === false, 'nenhum nome de pessoa no corpo do card ' . $c['titulo']);
+        // A atendente e nomeada onde o cliente espera ouvi-la: no botao e na resposta de quem entrega a conversa a ela.
+        // Nos demais corpos o robo fala como a agencia. Nenhum outro nome de pessoa existe no seed.
+        if ($c['tipo'] !== 'humano') {
+            ok(stripos((string) $c['texto'], 'Laís') === false, 'a atendente so e nomeada nos cards de entrega: ' . $c['titulo']);
         }
     }
     foreach ($textos as $t) {
+        // {data} chega como "De 27/10/26 a 12/11/26", "25/11/26 a 02/12/26" ou "na data prevista": preposicao colada antes quebra o portugues.
+        ok(!preg_match('/\b(em|de|na|no|a|para)\s+\{data\}/iu', $t), 'nenhuma preposicao colada antes de {data}: ' . $t);
         ok(strpos($t, '—') === false && strpos($t, '–') === false, 'nenhum travessao: ' . $t);
         ok(!preg_match($emoji, $t), 'nenhum emoji: ' . $t);
         ok(!preg_match('/\d{4,}[-\s]?\d{4}/', $t), 'nenhum telefone no texto: ' . $t);
@@ -78,7 +105,17 @@ foreach ($grafos as $i => $g) {
               'gatilho_valor' => $g['porta_valor'], 'ativo' => false, 'card_inicial' => $g['inicial']];
     $outro = $i === 0 ? $esp : $bv;
     $outros = [['id' => $outro['id'], 'gatilho' => $outro['porta'], 'gatilho_valor' => $outro['porta_valor'],
-                'ativo' => true, 'versao_atual' => 'v1']];
+                'ativo' => false, 'versao_atual' => 'v1']];   // o estado REAL do banco depois da migration: os dois desligados
+    $bloqueios = array_values(array_filter(wa_fluxo_valida($fluxo, array_values($g['cards']), $outros), function ($p) { return $p['bloqueia']; }));
+    if ($i === 0) {
+        // Atrito conhecido e desejado: o salto exige destino ativo, entao a triagem so republica depois de ligar a Lista de espera.
+        // Se um SEGUNDO bloqueio aparecer aqui, este teste grita.
+        ok(count($bloqueios) === 1 && $bloqueios[0]['regra'] === 11, 'a triagem, com a espera desligada, tem exatamente um bloqueio (regra 11): ' . json_encode($bloqueios, JSON_UNESCAPED_UNICODE));
+    } else {
+        ok(!$bloqueios, 'a lista de espera nao tem bloqueio: ' . json_encode($bloqueios, JSON_UNESCAPED_UNICODE));
+    }
+    // Com o irmao ligado e publicado (o que a cliente faz antes de ligar a triagem), zero bloqueios.
+    $outros[0]['ativo'] = true;
     foreach (wa_fluxo_valida($fluxo, array_values($g['cards']), $outros) as $p) {
         ok(!$p['bloqueia'], 'fluxo "' . $g['nome'] . '" sem bloqueio (regra ' . $p['regra'] . '): ' . $p['texto']);
     }
@@ -225,20 +262,34 @@ foreach ($caminho_nao as $o) if ($o['id'] === $id_nao) {
     ok($m1['tipo'] === 'marca' && ($m1['config']['qualif_data'] ?? null) === false, '"Não nessa data" passa pela marca antes de perguntar o que fazer');
 }
 
-// Resposta fora do esperado: 1a vez vai para "respondeu outra coisa", 2a vai para a equipe
-$r1 = wa_fluxo_proximo($bv, $pergunta_data, 'bom dia, e o cruzeiro?', $c);
-ok($r1['motivo'] === 'fallback' && $bv['cards'][$r1['card']]['tipo'] === 'botoes', 'texto solto cai no "respondeu outra coisa"');
-$r2 = wa_fluxo_proximo($bv, $r1['card'], 'ainda nao entendi', $r1['ctx']);
-ok($r2['motivo'] === 'socorro' && $bv['cards'][$r2['card']]['tipo'] === 'humano', 'a segunda resposta solta chama a equipe');
-ok($r2['card'] === $bv['humano'], 'o socorro vai ao card de atendimento humano declarado no retrato');
-// ... e as opcoes dele repetem os tres caminhos da boas-vindas
+// Resposta fora do esperado, em cada pergunta: quem DIGITA em vez de tocar volta a ouvir a PROPRIA pergunta,
+// com os botoes dela, e nao um menu que ja nao responde nada. A segunda resposta solta chama a Laís.
+$perguntas = [$pergunta_data => 'Data da viagem', $grupo => 'viajou em grupo', $nao_serve => 'só por este destino'];
+foreach ($perguntas as $pid => $trecho) {
+    $orig = $bv['cards'][$pid];
+    $r1 = wa_fluxo_proximo($bv, $pid, 'acho que sim', $c);
+    ok($r1['motivo'] === 'fallback' && $bv['cards'][$r1['card']]['tipo'] === 'botoes', 'texto solto em "' . $orig['titulo'] . '" cai num fallback de botoes');
+    ok($r1['card'] !== $bv['cards'][$bv['inicial']]['fallback'], 'o fallback de "' . $orig['titulo'] . '" NAO e o menu geral');
+    ok(stripos($bv['cards'][$r1['card']]['texto'], $trecho) !== false, 'o fallback de "' . $orig['titulo'] . '" repete a propria pergunta');
+    ok(count($bv['cards'][$r1['card']]['opcoes']) === count($orig['opcoes']), 'mesmo numero de botoes');
+    foreach ($orig['opcoes'] as $k => $o) {
+        $f = $bv['cards'][$r1['card']]['opcoes'][$k];
+        ok($f['id'] === $o['id'] && $f['rotulo'] === $o['rotulo'] && $f['destino'] === $o['destino'], 'o fallback repete o botao "' . $o['rotulo'] . '" com o mesmo destino');
+    }
+    $r2 = wa_fluxo_proximo($bv, $r1['card'], 'ainda nao entendi', $r1['ctx']);
+    ok($r2['motivo'] === 'socorro' && $r2['card'] === $bv['humano'] && $bv['cards'][$r2['card']]['tipo'] === 'humano', 'a segunda resposta solta em "' . $orig['titulo'] . '" chama a Laís');
+    $r3 = wa_fluxo_proximo($bv, $r1['card'], $orig['opcoes'][0]['id'], $r1['ctx']);
+    ok($r3['motivo'] === 'opcao' && $r3['card'] === $orig['opcoes'][0]['destino'] && $r3['ctx']['tentativas'] === 0, 'tocar o botao no fallback segue o mesmo caminho e zera as tentativas');
+}
+// Boas-vindas e listas: o fallback e o menu geral, que repete as tres opcoes da boas-vindas
 $ini_dest = [];
 foreach ($bv['cards'][$bv['inicial']]['opcoes'] as $o) $ini_dest[$o['id']] = $o['destino'];
-foreach ($bv['cards'][$r1['card']]['opcoes'] as $o) ok(($ini_dest[$o['id']] ?? null) === $o['destino'], 'o "respondeu outra coisa" repete a opcao da boas-vindas: ' . $o['rotulo']);
-ok(count($bv['cards'][$r1['card']]['opcoes']) === 3, 'e repete as tres');
-// Quem toca a opcao do fallback volta ao fluxo com o contador zerado
-$r3 = wa_fluxo_proximo($bv, $r1['card'], 'b_roteiro', $r1['ctx']);
-ok($r3['motivo'] === 'opcao' && $r3['ctx']['tentativas'] === 0, 'responder certo zera as tentativas');
+$rm = wa_fluxo_proximo($bv, $bv['inicial'], 'bom dia, e o cruzeiro?', $c);
+ok($rm['motivo'] === 'fallback', 'texto solto na boas-vindas cai no "respondeu outra coisa"');
+foreach ($bv['cards'][$rm['card']]['opcoes'] as $o) ok(($ini_dest[$o['id']] ?? null) === $o['destino'], 'o "respondeu outra coisa" repete a opcao da boas-vindas: ' . $o['rotulo']);
+ok(count($bv['cards'][$rm['card']]['opcoes']) === 3, 'e repete as tres');
+$rm2 = wa_fluxo_proximo($bv, $rm['card'], 'nao entendi', $rm['ctx']);
+ok($rm2['motivo'] === 'socorro' && $rm2['card'] === $bv['humano'], 'e a segunda resposta solta chama a Laís');
 
 // A despedida de quem cala existe e e dita com palavras da cliente
 foreach ($bv['cards'] as $cd) {

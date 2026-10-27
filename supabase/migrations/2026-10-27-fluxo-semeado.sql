@@ -2,9 +2,11 @@
 -- Pereira Oliveira: os dois fluxos de conversa de verdade, publicados na
 -- versao 1 e DESLIGADOS.
 -- Rodar no Supabase → SQL Editor, DEPOIS de 2026-10-27-fluxo-conversa.sql.
--- Idempotente: pode rodar de novo sem duplicar nada e sem desfazer o que a
--- cliente editou ou publicou depois (cada insert e on conflict do nothing, e
--- versao_atual so e preenchida quando ainda esta vazia).
+-- Idempotente: rodar de novo nao duplica nada, nao sobrescreve card, fluxo nem
+-- versao que ja existam e nao pisa numa publicacao posterior (cada insert e
+-- on conflict do nothing, e versao_atual so e preenchida quando ainda esta
+-- vazia). Limite conhecido: um card seed que a cliente APAGAR volta numa
+-- segunda rodada, porque a unica guarda e o id. Rodar uma vez so.
 --
 -- Dois fluxos, ids fixos (uuid literal, nao gen_random_uuid()) para o seed ser
 -- idempotente e para o card "Lista de espera" poder apontar para o segundo:
@@ -49,7 +51,7 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             "id": "c1000000-0000-4000-8000-000000000001",
             "tipo": "botoes",
             "titulo": "Boas-vindas",
-            "texto": "Olá, {nome}. Que bom ter você por aqui. A Pereira Oliveira Turismo organiza viagens em grupo desde 1967. Como podemos ajudar você hoje?",
+            "texto": "Olá! Que bom ter você por aqui. A Pereira Oliveira Turismo organiza viagens em grupo desde 1967. Como podemos ajudar você hoje?",
             "opcoes": [
                 {
                     "id": "b_roteiro",
@@ -72,7 +74,7 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             "fallback": "c1000000-0000-4000-8000-000000000016",
             "sem_resposta": "c1000000-0000-4000-8000-000000000017",
             "lembrete_ativo": true,
-            "lembrete_texto": "Oi {nome}, tudo bem? Passando para saber se posso ajudar com alguma viagem. Se preferir, é só me responder por aqui."
+            "lembrete_texto": "Oi {nome}, tudo bem? Passando para saber se podemos ajudar com alguma viagem. Se preferir, é só nos responder por aqui."
         },
         "c1000000-0000-4000-8000-000000000002": {
             "id": "c1000000-0000-4000-8000-000000000002",
@@ -88,13 +90,13 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             "fallback": "c1000000-0000-4000-8000-000000000016",
             "sem_resposta": "c1000000-0000-4000-8000-000000000017",
             "lembrete_ativo": true,
-            "lembrete_texto": "Oi {nome}, tudo bem? Mandei a lista das nossas próximas viagens. Quer que eu envie o roteiro completo de alguma delas?"
+            "lembrete_texto": "Oi {nome}, tudo bem? Enviamos a lista das nossas próximas viagens. Quer que mandemos o roteiro completo de alguma delas?"
         },
         "c1000000-0000-4000-8000-000000000003": {
             "id": "c1000000-0000-4000-8000-000000000003",
             "tipo": "lista",
             "titulo": "A programação",
-            "texto": "Estas são as nossas próximas viagens em grupo. Toque no botão abaixo, escolha a que mais chamar a sua atenção e eu envio o roteiro completo.",
+            "texto": "Estas são as nossas próximas viagens em grupo. Toque no botão abaixo, escolha a que mais chamar a sua atenção e nós enviamos o roteiro completo.",
             "opcoes": [],
             "config": {
                 "fonte": "roteiros",
@@ -104,13 +106,13 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             "fallback": "c1000000-0000-4000-8000-000000000016",
             "sem_resposta": "c1000000-0000-4000-8000-000000000017",
             "lembrete_ativo": true,
-            "lembrete_texto": "Oi {nome}, tudo bem? Mandei a lista das nossas próximas viagens. Quer que eu envie o roteiro completo de alguma delas?"
+            "lembrete_texto": "Oi {nome}, tudo bem? Enviamos a lista das nossas próximas viagens. Quer que mandemos o roteiro completo de alguma delas?"
         },
         "c1000000-0000-4000-8000-000000000004": {
             "id": "c1000000-0000-4000-8000-000000000004",
             "tipo": "humano",
             "titulo": "Atendimento humano",
-            "texto": "Combinado, {nome}. Vou avisar a nossa equipe e em breve alguém fala com você pessoalmente, por aqui mesmo.",
+            "texto": "Combinado, {nome}. Já avisamos a Laís, que fala com você pessoalmente, por aqui mesmo, em breve.",
             "opcoes": [],
             "config": {},
             "proximo": null,
@@ -151,7 +153,7 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             "id": "c1000000-0000-4000-8000-000000000007",
             "tipo": "botoes",
             "titulo": "A data serve?",
-            "texto": "A viagem acontece em {data}. Essa data funciona para você?",
+            "texto": "Data da viagem: {data}. Essa data funciona para você?",
             "opcoes": [
                 {
                     "id": "d_sim",
@@ -166,10 +168,10 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             ],
             "config": {},
             "proximo": null,
-            "fallback": "c1000000-0000-4000-8000-000000000016",
+            "fallback": "c1000000-0000-4000-8000-000000000018",
             "sem_resposta": "c1000000-0000-4000-8000-000000000017",
             "lembrete_ativo": true,
-            "lembrete_texto": "Oi {nome}, tudo bem? Só passando para saber se você chegou a ver o roteiro que enviei."
+            "lembrete_texto": "Oi {nome}, tudo bem? Só passando para saber se você chegou a ver o roteiro que enviamos."
         },
         "c1000000-0000-4000-8000-000000000008": {
             "id": "c1000000-0000-4000-8000-000000000008",
@@ -192,7 +194,7 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             "id": "c1000000-0000-4000-8000-000000000009",
             "tipo": "botoes",
             "titulo": "Já viajou em grupo?",
-            "texto": "Para eu adiantar o seu atendimento, mais uma pergunta: você já viajou em grupo alguma vez?",
+            "texto": "Para adiantarmos o seu atendimento, mais uma pergunta: você já viajou em grupo alguma vez?",
             "opcoes": [
                 {
                     "id": "g_ja",
@@ -207,10 +209,10 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             ],
             "config": {},
             "proximo": null,
-            "fallback": "c1000000-0000-4000-8000-000000000016",
+            "fallback": "c1000000-0000-4000-8000-000000000019",
             "sem_resposta": "c1000000-0000-4000-8000-000000000017",
             "lembrete_ativo": true,
-            "lembrete_texto": "Oi {nome}, tudo bem? Falta só uma pergunta para eu passar o seu atendimento para a nossa equipe: você já viajou em grupo alguma vez?"
+            "lembrete_texto": "Oi {nome}, tudo bem? Falta só uma pergunta para passarmos o seu atendimento para a Laís: você já viajou em grupo alguma vez?"
         },
         "c1000000-0000-4000-8000-000000000010": {
             "id": "c1000000-0000-4000-8000-000000000010",
@@ -246,7 +248,7 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             "id": "c1000000-0000-4000-8000-000000000012",
             "tipo": "humano",
             "titulo": "A Laís assume",
-            "texto": "Perfeito, {nome}. Vou passar o seu contato para a nossa equipe e em breve alguém fala com você pessoalmente.",
+            "texto": "Perfeito, {nome}. Já passamos o seu contato para a Laís, que fala com você pessoalmente em breve.",
             "opcoes": [],
             "config": {},
             "proximo": null,
@@ -276,7 +278,7 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             "id": "c1000000-0000-4000-8000-000000000014",
             "tipo": "botoes",
             "titulo": "A data não serve",
-            "texto": "Entendo, {nome}, essa data não funciona para você. Se o seu interesse é só por este destino, deixo o seu contato registrado e aviso quando abrirmos novas datas. Se preferir, posso mostrar outras viagens.",
+            "texto": "Entendo, {nome}, essa data não funciona para você. Se o seu interesse é só por este destino, deixamos o seu contato registrado e avisamos quando abrirmos novas datas. Se preferir, podemos mostrar outras viagens.",
             "opcoes": [
                 {
                     "id": "n_espera",
@@ -291,10 +293,10 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             ],
             "config": {},
             "proximo": null,
-            "fallback": "c1000000-0000-4000-8000-000000000016",
+            "fallback": "c1000000-0000-4000-8000-000000000020",
             "sem_resposta": "c1000000-0000-4000-8000-000000000017",
             "lembrete_ativo": true,
-            "lembrete_texto": "Oi {nome}, tudo bem? Se quiser que eu avise quando abrirmos novas datas deste destino, é só tocar em uma das opções da mensagem anterior."
+            "lembrete_texto": "Oi {nome}, tudo bem? Se quiser que avisemos quando abrirmos novas datas deste destino, é só tocar em uma das opções da mensagem anterior."
         },
         "c1000000-0000-4000-8000-000000000015": {
             "id": "c1000000-0000-4000-8000-000000000015",
@@ -315,7 +317,7 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             "id": "c1000000-0000-4000-8000-000000000016",
             "tipo": "botoes",
             "titulo": "Respondeu outra coisa",
-            "texto": "Desculpe, não consegui entender. Para eu ajudar do jeito certo, toque em uma das opções abaixo.",
+            "texto": "Desculpe, não conseguimos entender. Para ajudarmos do jeito certo, toque em uma das opções abaixo.",
             "opcoes": [
                 {
                     "id": "b_roteiro",
@@ -338,13 +340,13 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             "fallback": null,
             "sem_resposta": "c1000000-0000-4000-8000-000000000017",
             "lembrete_ativo": true,
-            "lembrete_texto": "Oi {nome}, tudo bem? Passando para saber se posso ajudar com alguma viagem. Se preferir, é só me responder por aqui."
+            "lembrete_texto": "Oi {nome}, tudo bem? Passando para saber se podemos ajudar com alguma viagem. Se preferir, é só nos responder por aqui."
         },
         "c1000000-0000-4000-8000-000000000017": {
             "id": "c1000000-0000-4000-8000-000000000017",
             "tipo": "fim",
             "titulo": "Despedida de quem não responde",
-            "texto": "Tudo bem, {nome}, não vou insistir. Quando quiser conversar sobre uma viagem, é só escrever por aqui. Estamos à disposição.",
+            "texto": "Tudo bem, {nome}, não vamos insistir. Quando quiser conversar sobre uma viagem, é só escrever por aqui. Estamos à disposição.",
             "opcoes": [],
             "config": {},
             "proximo": null,
@@ -352,6 +354,78 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             "sem_resposta": null,
             "lembrete_ativo": false,
             "lembrete_texto": null
+        },
+        "c1000000-0000-4000-8000-000000000018": {
+            "id": "c1000000-0000-4000-8000-000000000018",
+            "tipo": "botoes",
+            "titulo": "Repete: a data serve?",
+            "texto": "Desculpe, não conseguimos entender. Vamos repetir a pergunta. Data da viagem: {data}. Essa data funciona para você? Toque em um dos botões abaixo.",
+            "opcoes": [
+                {
+                    "id": "d_sim",
+                    "rotulo": "Sim, funciona",
+                    "destino": "c1000000-0000-4000-8000-000000000008"
+                },
+                {
+                    "id": "d_nao",
+                    "rotulo": "Não nessa data",
+                    "destino": "c1000000-0000-4000-8000-000000000013"
+                }
+            ],
+            "config": {},
+            "proximo": null,
+            "fallback": null,
+            "sem_resposta": "c1000000-0000-4000-8000-000000000017",
+            "lembrete_ativo": true,
+            "lembrete_texto": "Oi {nome}, tudo bem? Só passando para saber se você chegou a ver o roteiro que enviamos."
+        },
+        "c1000000-0000-4000-8000-000000000019": {
+            "id": "c1000000-0000-4000-8000-000000000019",
+            "tipo": "botoes",
+            "titulo": "Repete: já viajou em grupo?",
+            "texto": "Desculpe, não conseguimos entender. Vamos repetir a pergunta: você já viajou em grupo alguma vez? Toque em um dos botões abaixo.",
+            "opcoes": [
+                {
+                    "id": "g_ja",
+                    "rotulo": "Já viajei",
+                    "destino": "c1000000-0000-4000-8000-000000000010"
+                },
+                {
+                    "id": "g_nunca",
+                    "rotulo": "Primeira vez",
+                    "destino": "c1000000-0000-4000-8000-000000000011"
+                }
+            ],
+            "config": {},
+            "proximo": null,
+            "fallback": null,
+            "sem_resposta": "c1000000-0000-4000-8000-000000000017",
+            "lembrete_ativo": true,
+            "lembrete_texto": "Oi {nome}, tudo bem? Falta só uma pergunta para passarmos o seu atendimento para a Laís: você já viajou em grupo alguma vez?"
+        },
+        "c1000000-0000-4000-8000-000000000020": {
+            "id": "c1000000-0000-4000-8000-000000000020",
+            "tipo": "botoes",
+            "titulo": "Repete: a data não serve",
+            "texto": "Desculpe, não conseguimos entender. Vamos repetir: se o seu interesse é só por este destino, deixamos o seu contato registrado e avisamos quando abrirmos novas datas. Ou podemos mostrar outras viagens. Toque em um dos botões abaixo.",
+            "opcoes": [
+                {
+                    "id": "n_espera",
+                    "rotulo": "Só esse destino",
+                    "destino": "c1000000-0000-4000-8000-000000000015"
+                },
+                {
+                    "id": "n_outras",
+                    "rotulo": "Ver outras datas",
+                    "destino": "c1000000-0000-4000-8000-000000000003"
+                }
+            ],
+            "config": {},
+            "proximo": null,
+            "fallback": null,
+            "sem_resposta": "c1000000-0000-4000-8000-000000000017",
+            "lembrete_ativo": true,
+            "lembrete_texto": "Oi {nome}, tudo bem? Se quiser que avisemos quando abrirmos novas datas deste destino, é só tocar em uma das opções da mensagem anterior."
         }
     }
 }
@@ -387,7 +461,7 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             "id": "c2000000-0000-4000-8000-000000000002",
             "tipo": "fim",
             "titulo": "Avisa e termina",
-            "texto": "Combinado, {nome}. Deixei o seu contato registrado e aviso você assim que abrirmos novas datas deste destino.",
+            "texto": "Combinado, {nome}. Deixamos o seu contato registrado e avisamos você assim que abrirmos novas datas deste destino.",
             "opcoes": [],
             "config": {},
             "proximo": null,
@@ -439,6 +513,9 @@ join (values
     ('c1000000-0000-4000-8000-000000000015', 15, 2240, 160),
     ('c1000000-0000-4000-8000-000000000016', 16, 640, 400),
     ('c1000000-0000-4000-8000-000000000017', 17, 640, 600),
+    ('c1000000-0000-4000-8000-000000000018', 18, 1280, -240),
+    ('c1000000-0000-4000-8000-000000000019', 19, 1920, -300),
+    ('c1000000-0000-4000-8000-000000000020', 20, 1920, 360),
     ('c2000000-0000-4000-8000-000000000001', 1, 0, 0),
     ('c2000000-0000-4000-8000-000000000002', 2, 320, 0)
 ) as p(id, ordem, x, y) on p.id::uuid = (k.card->>'id')::uuid
