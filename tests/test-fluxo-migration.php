@@ -37,4 +37,12 @@ ok(preg_match("/update public\.po_wa_conversas set estado = 'encerrado'/i", $sql
 
 // 6. repositorio publico: nenhum telefone que nao seja da faixa de teste
 ok(!preg_match('/\+55(?!48900000)\d{10,11}/', $sql), 'nenhum telefone real na migration');
+// 7. o seed (2026-10-27-fluxo-semeado.sql): idempotente, desligado, na versao 1, sem telefone real
+$seed = file_get_contents(__DIR__ . '/../supabase/migrations/2026-10-27-fluxo-semeado.sql');
+ok($seed !== false, 'a migration semeada existe');
+ok(preg_match('/on conflict .* do nothing/i', $seed), 'o seed e idempotente');
+ok(!preg_match('/ativo\s*=\s*true/i', $seed), 'o seed NAO liga nenhum fluxo');
+ok(preg_match('/po_wa_fluxo_versoes/i', $seed) && preg_match('/\bversao\b.*\b1\b/i', $seed),
+   'o seed publica a versao 1');
+ok(!preg_match('/\+55(?!48900000)\d{10,11}/', $seed), 'nenhum telefone real no seed');
 echo "test-fluxo-migration: ok\n";
