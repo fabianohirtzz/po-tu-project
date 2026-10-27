@@ -80,7 +80,7 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             "id": "c1000000-0000-4000-8000-000000000002",
             "tipo": "lista",
             "titulo": "Qual roteiro?",
-            "texto": "Sobre qual viagem você quer saber? Toque no botão abaixo para ver a lista.",
+            "texto": "Sobre qual viagem você quer saber? Escolha uma das opções e nós enviamos o roteiro completo.",
             "opcoes": [],
             "config": {
                 "fonte": "roteiros",
@@ -90,13 +90,13 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             "fallback": "c1000000-0000-4000-8000-000000000016",
             "sem_resposta": "c1000000-0000-4000-8000-000000000017",
             "lembrete_ativo": true,
-            "lembrete_texto": "Oi {nome}, tudo bem? Enviamos a lista das nossas próximas viagens. Quer que mandemos o roteiro completo de alguma delas?"
+            "lembrete_texto": "Oi {nome}, tudo bem? Quer que mandemos o roteiro completo de alguma das nossas próximas viagens em grupo?"
         },
         "c1000000-0000-4000-8000-000000000003": {
             "id": "c1000000-0000-4000-8000-000000000003",
             "tipo": "lista",
             "titulo": "A programação",
-            "texto": "Estas são as nossas próximas viagens em grupo. Toque no botão abaixo, escolha a que mais chamar a sua atenção e nós enviamos o roteiro completo.",
+            "texto": "Temos várias viagens em grupo com datas marcadas. Escolha a que mais chamar a sua atenção e nós enviamos o roteiro completo.",
             "opcoes": [],
             "config": {
                 "fonte": "roteiros",
@@ -106,7 +106,7 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             "fallback": "c1000000-0000-4000-8000-000000000016",
             "sem_resposta": "c1000000-0000-4000-8000-000000000017",
             "lembrete_ativo": true,
-            "lembrete_texto": "Oi {nome}, tudo bem? Enviamos a lista das nossas próximas viagens. Quer que mandemos o roteiro completo de alguma delas?"
+            "lembrete_texto": "Oi {nome}, tudo bem? Quer que mandemos o roteiro completo de alguma das nossas próximas viagens em grupo?"
         },
         "c1000000-0000-4000-8000-000000000004": {
             "id": "c1000000-0000-4000-8000-000000000004",

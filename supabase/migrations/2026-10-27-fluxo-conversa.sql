@@ -7,6 +7,15 @@
 -- publicadas. A conversa em andamento aponta para uma VERSAO (retrato
 -- imutavel), entao editar o rascunho nunca muda uma conversa que ja comecou.
 --
+-- ATENCAO: o DDL daqui e idempotente, mas a CONVERSAO DE ESTADO do fim do
+-- arquivo e de RODADA UNICA. Rodar esta migration de novo depois do go-live
+-- (depois de o robo estar atendendo) colapsaria em 'encerrado' duas coisas que
+-- 'novo' significa de verdade: a cadeia parada por falha de envio ('novo' COM
+-- card_atual, que a proxima mensagem retoma) e a conversa recem-criada. As duas
+-- voltariam a resolver a porta, e o cliente receberia as boas-vindas e o PDF
+-- outra vez. Entao: rodar UMA vez, antes de ligar o robo. Depois disso, se
+-- precisar reaplicar o DDL, rodar o arquivo SEM os dois `update` finais.
+--
 -- Spec: docs/superpowers/specs/2026-10-27-fluxo-conversa-painel-design.md, secao 7.
 -- ============================================================
 
@@ -32,7 +41,11 @@ create table if not exists public.po_wa_cards (
   tipo                text not null,       -- WA_CARD_TIPOS
   titulo              text not null,
   texto               text,
-  opcoes              jsonb not null default '[]'::jsonb,  -- [{rotulo, destino}]
+  -- O `id` de cada opcao e OBRIGATORIO: e ele que o WhatsApp devolve quando o
+  -- cliente toca. wa_send_buttons RECUSA id vazio ou repetido no mesmo card, e
+  -- a mensagem inteira nao sai; no card inicial isso vira silencio para todo
+  -- cliente que entra por aquela porta. `descricao` so vale na lista.
+  opcoes              jsonb not null default '[]'::jsonb,  -- [{id, rotulo, destino, descricao?}]
   config              jsonb not null default '{}'::jsonb,  -- por tipo
   proximo             uuid,
   fallback            uuid,                -- saida "respondeu outra coisa"
@@ -95,6 +108,8 @@ create policy po_wa_fluxo_versoes_auth on public.po_wa_fluxo_versoes
 -- Conversao dos estados antigos, na mesma migration. Hoje as tabelas de
 -- conversa estao vazias, mas o motor novo pode subir antes desta migration
 -- rodar, e uma linha com estado antigo sairia do radar da varredura.
+-- RODADA UNICA (ver o cabecalho): depois do go-live, estes dois `update` nao
+-- se repetem. 'novo' COM card_atual e cadeia parada, e nao conversa antiga.
 update public.po_wa_conversas set estado = 'aguardando'
   where estado in ('aguardando_roteiro','enviado_roteiro');
 update public.po_wa_conversas set estado = 'encerrado'

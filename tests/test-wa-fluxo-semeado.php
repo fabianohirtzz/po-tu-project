@@ -291,6 +291,32 @@ ok(count($bv['cards'][$rm['card']]['opcoes']) === 3, 'e repete as tres');
 $rm2 = wa_fluxo_proximo($bv, $rm['card'], 'nao entendi', $rm['ctx']);
 ok($rm2['motivo'] === 'socorro' && $rm2['card'] === $bv['humano'], 'e a segunda resposta solta chama a Laís');
 
+/* O corpo dos cards de lista tem que ler certo NOS DOIS CAMINHOS. Quando o
+   catalogo volta vazio (Supabase fora, ou nenhum roteiro ativo), a Graph recusa
+   lista de zero linhas e wa_fluxo_executa manda esse MESMO corpo como texto
+   puro. Um texto que manda tocar num botao que nao esta ali, ou que afirma uma
+   lista que nao foi enviada, deixa o cliente de 60+ procurando o que nao
+   existe. Quem diz o que fazer no caminho normal e o config.botao. */
+$listas = 0;
+foreach ($bv['cards'] as $cd) {
+    if ($cd['tipo'] !== 'lista') continue;
+    $listas++;
+    /* Vale para o corpo E para o lembrete: o lembrete sai 20h depois do card que
+       o cliente nao respondeu, e se aquele card saiu como texto puro, dizer
+       "enviamos a lista" mente do mesmo jeito. */
+    foreach (['texto' => 'o corpo', 'lembrete_texto' => 'o lembrete'] as $campo => $onde) {
+        $t = (string) $cd[$campo];
+        if (trim($t) === '') continue;
+        ok(!preg_match('/\bbot(ão|ao|ões|oes)\b/iu', $t), $onde . ' da lista "' . $cd['titulo'] . '" nao manda tocar num botao (que o caminho degradado nao envia): ' . $t);
+        ok(!preg_match('/\b(abaixo|a seguir|aqui embaixo|logo abaixo)\b/iu', $t), 'nem aponta para algo que pode nao estar ali: ' . $t);
+        ok(!preg_match('/\b(estas são as|esta é a|enviamos a lista|segue a lista|veja a lista|abaixo a lista)\b/iu', $t), 'nem AFIRMA uma lista que pode nao ter sido enviada: ' . $t);
+        // E o convite a escolher continua de pe nos dois caminhos.
+        ok(preg_match('/\bescolh|\bqual\b|\bquer\b/iu', $t), 'mas segue convidando o cliente a escolher: ' . $t);
+        ok(mb_strlen($t, 'UTF-8') <= 1024, 'e cabe no corpo da lista e no texto puro: ' . $cd['titulo']);
+    }
+}
+ok($listas === 2, 'os dois cards de lista do seed foram conferidos, nao zero');
+
 // A despedida de quem cala existe e e dita com palavras da cliente
 foreach ($bv['cards'] as $cd) {
     if (!in_array($cd['tipo'], WA_CARD_ESPERA, true)) continue;

@@ -20,6 +20,23 @@ foreach (['interesses', 'espera'] as $c) {
     ok(preg_match('/po_leads add column if not exists\s+' . $c . '\s+jsonb/i', $sql), "po_leads.$c e jsonb");
 }
 
+/* 2b. O comentario do contrato de po_wa_cards.opcoes. Quem construir o painel le
+   AQUELE comentario: se ele esconder o `id`, a tela produz opcao sem id, e
+   wa_send_buttons recusa a mensagem inteira (id vazio ou repetido), entao o card
+   nunca sai e o cliente fica mudo. O `id` e load-bearing, nao enfeite. */
+ok(preg_match('/opcoes\s+jsonb.*--\s*\[\{\s*id\s*,\s*rotulo\s*,\s*destino/i', $sql),
+   'o comentario de po_wa_cards.opcoes declara o id antes de rotulo e destino');
+
+/* 2c. A conversao de estado e de RODADA UNICA. Reaplicada depois do go-live, ela
+   colapsa o marcador de cadeia parada ('novo' + card_atual) e as conversas
+   recem-criadas em 'encerrado': a porta seria resolvida de novo e o PDF
+   reenviado. O cabecalho tem que avisar, senao alguem roda "para garantir". */
+$cabeca = substr($sql, 0, strpos($sql, 'create table'));
+ok(preg_match('/(rodada unica|uma vez so|uma rodada so|nao reaplicar)/iu', $cabeca),
+   'o cabecalho avisa que a conversao de estado e de rodada unica');
+ok(stripos($cabeca, 'go-live') !== false || stripos($cabeca, 'no ar') !== false,
+   'e diz que o limite e o go-live (depois dele, nao reaplicar)');
+
 // 3. o indice de porta e PARCIAL: duas portas iguais podem coexistir se uma estiver desligada
 ok(preg_match('/create unique index if not exists po_wa_fluxos_porta_ativa_uniq.*?where ativo/is', $sql),
    'o indice unico da porta vale so onde ativo');
