@@ -21,7 +21,7 @@ require_once __DIR__ . '/wa-roteiro.php';
 require_once __DIR__ . '/wa-fone.php';
 require_once __DIR__ . '/wa-camp-recibo.php';
 
-const WA_SITE = 'https://pereiraoliveiraturismo.com.br';
+// WA_SITE mora em wa-fluxo.php (o motor ja o requer): um dono so para o dominio.
 
 function wa_motor_set_deps($d) {
     $GLOBALS['WA_DEPS'] = array_merge($GLOBALS['WA_DEPS'] ?? [], $d);

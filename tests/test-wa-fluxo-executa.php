@@ -131,7 +131,8 @@ foreach (['txt' => $c0, 'dt' => $ct, 'lst' => $c0, 'pdf' => $ct, 'hum' => $c0] a
     zera(); $OK = false;
     $r = wa_fluxo_executa($g, $id, $fone, $cx, 'Marta');
     ok($r['ok'] === false && $r['wamid'] === null && $r['erro'] !== null, "envio falhado no card $id nao da ok nem wamid");
-    ok($r['terminal'] === null, "envio falhado no card $id nao declara terminal");
+    // ok diz se saiu; terminal diz para onde vai a conversa: o humano segue terminal mesmo sem o aviso.
+    ok($r['terminal'] === ($id === 'hum' ? 'humano' : null), "terminal do card $id independe de o envio ter saido");
     ok($LOG === [], "envio falhado no card $id nao entra no log");
     $OK = true;
 }
@@ -173,6 +174,15 @@ foreach ($ESCRITAS as $e) ok(!isset($e[1]['interesses']), 'leitura com erro nao 
 ok(($ESCRITAS[0][1]['status'] ?? null) === 'atendimento', 'o resto da marca ainda e gravado');
 wa_fluxo_set_deps(['select_estrito' => function ($t, $q) use (&$LEAD) { return $LEAD; }]);
 
+// 10b. marca: gravacao que falha NAO bloqueia a conversa, mas avisa
+zera(); $LEAD = [['interesses' => [], 'espera' => []]];
+wa_fluxo_set_deps(['update' => function () { return false; }]);
+$r = wa_fluxo_executa($g, 'mrc', $fone, $ct, 'Marta');
+ok($r['ok'] === true && $r['erro'] !== null, 'gravacao falha: ok=true com erro preenchido');
+wa_fluxo_set_deps(['update' => function ($t, $q, $c) use (&$ESCRITAS) { $ESCRITAS[] = [$t, $c]; return true; }]);
+$r = wa_fluxo_executa($g, 'mrc', $fone, $ct, 'Marta');
+ok($r['ok'] === true && $r['erro'] === null, 'gravacao ok: ok=true sem erro');
+
 // 11. terminais
 zera();
 $r = wa_fluxo_executa($g, 'hum', $fone, $c0, 'M');
@@ -195,6 +205,16 @@ wa_fluxo_executa($g, 'lst', $fone, $c0, 'Marta');
 wa_fluxo_executa($g, 'pdf', $fone, $ct, 'Marta');
 ok(array_column(array_column($LOG, 1), 'wamid') === ['w1', 'w2', 'w3', 'w4'], 'text, buttons, list e document registram a saida');
 ok(array_column(array_column($LOG, 1), 'tipo') === ['text', 'buttons', 'list', 'document'], 'o tipo do log acompanha o envio');
+
+// 14. um dono so para o dominio do link: o motor nao redefine WA_SITE
+ok(!preg_match('/^\s*const\s+WA_SITE\b/m', file_get_contents(__DIR__ . '/../lib/wa-motor.php')), 'wa-motor.php nao define WA_SITE');
+ok(WA_SITE === 'https://pereiraoliveiraturismo.com.br', 'WA_SITE vem do wa-fluxo.php');
+
+// 15. roteiro sem PDF: legenda + link da pagina, montado com o WA_SITE
+zera(); $ROTEIROS[0]['pdf_url'] = '';
+$r = wa_fluxo_executa($g, 'pdf', $fone, $ct, 'Marta');
+ok($r['ok'] === true && substr($ENVIADAS[0][1], -strlen(WA_SITE . '/roteiros/turquia')) === WA_SITE . '/roteiros/turquia', 'sem PDF manda o link da pagina com o WA_SITE');
+$ROTEIROS = $salva;
 
 // card que nao existe
 $r = wa_fluxo_executa($g, 'nao-existe', $fone, $c0, 'M');

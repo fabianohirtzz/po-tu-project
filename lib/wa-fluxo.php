@@ -761,7 +761,7 @@ function wa_fluxo_porta($ev, $fluxos) {
      conversa ao humano em vez de repetir o card.
    - ctx: o contexto, com o slug descartado se ele nao existe mais no catalogo.
    `ir_para_fluxo` nao envia nada: quem carrega o outro grafo e o chamador. */
-const WA_FLUXO_SITE = 'https://pereiraoliveiraturismo.com.br';
+const WA_SITE = 'https://pereiraoliveiraturismo.com.br';   // dono unico; wa-motor.php usa este
 
 function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
     $res = function ($ok, $extra = []) use (&$ctx) {
@@ -810,6 +810,8 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
     // decide o ok: so com wamid.
     $saiu = function ($envio, $tipo_log, $texto, $espera) use ($wa_id, $res, $card_id) {
         wa_registra_saida($wa_id, $envio, $tipo_log, $texto);
+        // O wamid aqui e cinto e suspensorio: wa_envia ja converte resposta
+        // sem wamid em ok=false. Fica para um send_* futuro que nao passe por ele.
         if (empty($envio['ok']) || empty($envio['wamid'])) {
             $erro = (string) ($envio['erro'] ?? 'envio sem confirmacao');
             error_log('wa_fluxo_executa: envio falhou no card ' . $card_id . ': ' . $erro);
@@ -840,7 +842,10 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
                 $titulo = trim((string) ($r['titulo'] ?? ''));
                 if ($id === '' || $titulo === '') continue;
                 $quando = (string) ($r['data_label'] ?? '') ?: (string) ($r['periodo'] ?? '');
-                // Titulo de linha 24 e descricao 72: a variavel {roteiro} tem teto 60, entao so aqui se corta.
+                // Corte COSMETICO, nao de correcao: wa_send_list ja trunca em 24/72
+                // e fatia em 10, mas seco. Aqui corta em limite de palavra com
+                // reticencia, senao um periodo cortado no meio afirma uma data
+                // de volta que nao existe. Nao remova achando que o outro lado cobre.
                 $itens[] = ['id' => $id, 'titulo' => wa_fluxo_corta($titulo, 24), 'descricao' => wa_fluxo_corta($quando, 72)];
             }
         } else {
@@ -851,6 +856,8 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
                             'descricao' => wa_fluxo_corta((string) ($o['descricao'] ?? ''), 72)];
             }
         }
+        // Limite da Cloud API; wa_send_list tambem fatia, mas o desvio abaixo
+        // ("lista vazia vira texto") precisa contar as linhas que valem.
         $itens = array_slice($itens, 0, 10);
         // A Graph recusa lista de zero linhas e a mensagem inteira nao sai.
         // O corpo ja pergunta qual viagem interessa: como texto, sai sempre.
@@ -867,7 +874,7 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
         }
         if (empty($roteiro['pdf_url'])) {
             // Sem PDF a conversa nao morre: o link da pagina sempre existe.
-            $texto = trim($corpo . "\n\n" . WA_FLUXO_SITE . '/roteiros/' . $slug);
+            $texto = trim($corpo . "\n\n" . WA_SITE . '/roteiros/' . $slug);
             return $saiu(wa_fl_call('send_text', $wa_id, $texto), 'text', $texto, false);
         }
         return $saiu(wa_fl_call('send_doc', $wa_id, $roteiro['pdf_url'], $slug . '.pdf', $corpo), 'document', $corpo, false);
@@ -891,8 +898,14 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
         }
         // Cinto e suspensorio: so a whitelist chega ao banco.
         $campos = array_intersect_key($campos, array_flip(WA_FLUXO_CAMPOS_MARCAVEIS));
+        // O `marca` nao envia nada, entao a lei do envio nao tem o que proteger
+        // aqui. Falha de gravacao NAO bloqueia: ele costuma vir antes do card
+        // que fala, e bloquear deixaria o cliente sem resposta ate o timeout.
+        // Perde-se uma marcacao recuperavel; `ok=true` com `erro` e "andou,
+        // mas registre".
         if ($campos && !wa_fl_call('update', 'po_leads', 'wa_id=eq.' . rawurlencode($wa_id), $campos)) {
-            return $recusa('gravacao da marca falhou');
+            error_log('wa_fluxo_executa: ERRO card ' . $card_id . ': gravacao da marca falhou para ' . $wa_id . ', conversa segue');
+            return $res(true, ['erro' => 'gravacao da marca falhou']);
         }
         return $res(true);
 
@@ -900,8 +913,13 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
     case 'fim':
         $terminal = $tipo === 'humano' ? 'humano' : 'fim';
         if ($vazio) return $res(true, ['terminal' => $terminal]);
+        // `ok` diz se o aviso saiu; `terminal` diz para onde a conversa vai.
+        // Um nao depende do outro: se o aviso falhar, a conversa AINDA vai
+        // para a humana, senao o robo seguiria dono de uma conversa que o
+        // fluxo mandou liberar (robo e humana falando por cima, o pior modo
+        // de falha). Nao ha espera pendente que a lei do envio precise proteger.
         $r = $saiu(wa_fl_call('send_text', $wa_id, $corpo), 'text', $corpo, false);
-        if ($r['ok']) $r['terminal'] = $terminal;
+        $r['terminal'] = $terminal;
         return $r;
     }
     return $recusa('tipo sem execucao');
