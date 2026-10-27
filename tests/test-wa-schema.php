@@ -45,7 +45,7 @@ function tabela_existe($base, $tabela) {
     return $body !== null;
 }
 
-foreach (['po_wa_contatos','po_wa_conversas','po_wa_mensagens','po_wa_anuncios','po_wa_textos'] as $t) {
+foreach (['po_wa_contatos','po_wa_conversas','po_wa_mensagens','po_wa_anuncios','po_wa_textos','po_wa_fluxos','po_wa_cards','po_wa_fluxo_versoes'] as $t) {
     ok(tabela_existe($base, $t), "tabela $t existe (rodou a migration?)");
 }
 
