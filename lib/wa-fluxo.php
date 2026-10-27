@@ -23,6 +23,7 @@
 require_once __DIR__ . '/po-data.php';
 require_once __DIR__ . '/wa-db.php';
 require_once __DIR__ . '/wa-send.php';
+require_once __DIR__ . '/wa-roteiro.php';   // wa_normaliza / wa_mesma_palavra, para a porta `palavra`
 
 /* ---------- dependencias injetaveis ----------
    Usa o MESMO repositorio de dependencias do motor ($GLOBALS['WA_DEPS']).
@@ -36,7 +37,8 @@ function wa_fl_dep($nome) {
     if (isset($GLOBALS['WA_DEPS'][$nome])) return $GLOBALS['WA_DEPS'][$nome];
     $padrao = [
         'select'       => 'wa_db_select',
-        'insert'       => 'wa_db_insert',
+        'select_estrito' => 'wa_db_select_estrito',   // null em erro, [] so quando o banco respondeu vazio
+        'insert'      => 'wa_db_insert',
         'update'       => 'wa_db_update',
         'roteiros'     => 'po_fetch_roteiros',
         'send_text'    => 'wa_send_text',
@@ -611,6 +613,139 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
     if (!$tem_fim) $acha(16, null, 'Este fluxo não tem nenhum card de fim.', false);
 
     return $probs;
+}
+
+/* ---------- retrato publicado, versao por conversa e porta de entrada ----------
+   As tabelas de edicao (po_wa_fluxos, po_wa_cards) sao o RASCUNHO. O motor le
+   so o retrato congelado em po_wa_fluxo_versoes.grafo, e cada conversa guarda
+   em fluxo_versao_id a versao em que esta. Editar nunca quebra conversa em voo.
+
+   PUBLICAR E LIGAR SAO DOIS ATOS. A porta mensagem_nova pega todo contato novo:
+   se publicar ligasse, um clique redirecionaria todo mundo, sem ensaio. A coluna
+   que liga nasce desligada de proposito e nenhuma funcao daqui a escreve.
+
+   Toda leitura aqui e ESTRITA: banco fora do ar nao pode parecer "nenhum fluxo". */
+
+/* Leitura que distingue erro (null) de vazio ([]). */
+function wa_fl_ler($tabela, $query) {
+    return wa_fl_call('select_estrito', $tabela, $query);
+}
+
+/* Retrato de uma versao, ou null (id vazio, inexistente, banco fora, grafo corrompido). */
+function wa_fluxo_grafo($versao_id) {
+    $versao_id = (string) $versao_id;
+    if ($versao_id === '') return null;
+    $linhas = wa_fl_ler('po_wa_fluxo_versoes', 'id=eq.' . rawurlencode($versao_id) . '&select=grafo&limit=1');
+    if (!is_array($linhas) || !isset($linhas[0]['grafo'])) return null;
+    $g = $linhas[0]['grafo'];
+    if (is_string($g)) $g = json_decode($g, true);
+    return is_array($g) ? $g : null;
+}
+
+/* Valida o rascunho e, so se nao houver problema que bloqueie, congela o
+   retrato como a proxima versao e aponta versao_atual para ele. A validacao
+   roda AQUI, e nao so no endpoint: nao pode existir caminho que publique sem ela.
+   Devolve ['ok'=>bool, 'versao'=>?int, 'problemas'=>array]. */
+function wa_fluxo_publica($fluxo_id) {
+    $falha = function ($texto, $problemas = null) {
+        return ['ok' => false, 'versao' => null,
+                'problemas' => $problemas ?? [['regra' => 0, 'card' => null, 'texto' => $texto, 'bloqueia' => true]]];
+    };
+    $id = rawurlencode((string) $fluxo_id);
+    if ((string) $fluxo_id === '') return $falha('Não foi dito qual fluxo publicar.');
+
+    $linhas = wa_fl_ler('po_wa_fluxos', 'id=eq.' . $id . '&limit=1');
+    if ($linhas === null) return $falha('Não consegui ler o fluxo agora. Nada foi publicado. Tente de novo em instantes.');
+    if (!$linhas) return $falha('Este fluxo não existe.');
+    $fluxo = $linhas[0];
+
+    $cards = wa_fl_ler('po_wa_cards', 'fluxo_id=eq.' . $id . '&order=ordem.asc');
+    $outros = wa_fl_ler('po_wa_fluxos', 'select=id,gatilho,gatilho_valor,ativo,versao_atual');
+    if ($cards === null || $outros === null) {
+        return $falha('Não consegui ler os cards agora. Nada foi publicado. Tente de novo em instantes.');
+    }
+
+    $problemas = wa_fluxo_valida($fluxo, $cards, $outros);
+    foreach ($problemas as $p) {
+        if (!empty($p['bloqueia'])) return $falha('', $problemas);
+    }
+
+    $ultima = wa_fl_ler('po_wa_fluxo_versoes', 'fluxo_id=eq.' . $id . '&select=versao&order=versao.desc&limit=1');
+    if ($ultima === null) return $falha('Não consegui ler as versões agora. Nada foi publicado. Tente de novo em instantes.');
+    $numero = $ultima ? (int) $ultima[0]['versao'] + 1 : 1;
+
+    // O unique (fluxo_id, versao) segura duas publicacoes simultaneas: a segunda leva null.
+    $versao = wa_fl_call('insert', 'po_wa_fluxo_versoes', [
+        'fluxo_id' => (string) $fluxo_id,
+        'versao'   => $numero,
+        'grafo'    => wa_fluxo_grafo_de($fluxo, $cards),
+    ]);
+    if (!is_array($versao) || empty($versao['id'])) {
+        return $falha('Não consegui gravar a versão. Se alguém publicou ao mesmo tempo, tente de novo.');
+    }
+    // So versao_atual. Quem liga o fluxo e outro ato, de outra tela.
+    if (!wa_fl_call('update', 'po_wa_fluxos', 'id=eq.' . $id, ['versao_atual' => $versao['id']])) {
+        return $falha('A versão foi gravada, mas não consegui colocá-la no ar. Tente publicar de novo.');
+    }
+    return ['ok' => true, 'versao' => $numero, 'problemas' => $problemas];
+}
+
+/* Quais palavras uma porta `palavra` aceita: separadas por virgula ou ponto e
+   virgula, cada uma pode ter mais de uma palavra ("tesouros asiaticos"). */
+function wa_fluxo_porta_palavras($valor) {
+    $termos = [];
+    foreach (preg_split('/[,;]/', (string) $valor) as $t) {
+        $tokens = array_values(array_filter(explode(' ', wa_normaliza($t)), 'strlen'));
+        if ($tokens) $termos[] = $tokens;
+    }
+    return $termos;
+}
+
+/* A mensagem tem esse termo como palavra(s) INTEIRA(S)? Sem limite de palavra,
+   "natal" casaria dentro de "natalidade" (a mesma classe de defeito do PO em Poa). */
+function wa_fluxo_porta_casa($texto, $valor) {
+    $msg = array_values(array_filter(explode(' ', wa_normaliza($texto)), 'strlen'));
+    foreach (wa_fluxo_porta_palavras($valor) as $termo) {
+        for ($i = 0; $i + count($termo) <= count($msg); $i++) {
+            $bate = true;
+            foreach ($termo as $j => $p) {
+                if (!wa_mesma_palavra($msg[$i + $j], $p)) { $bate = false; break; }
+            }
+            if ($bate) return true;
+        }
+    }
+    return false;
+}
+
+/* Qual fluxo atende esta entrada, ou null. Pura. Ordem FIXA: anuncio > palavra
+   > mensagem_nova. `chamado` nunca dispara sozinha (so um card ir_para_fluxo a
+   chama). Fluxo desligado ou nunca publicado nao atende. Anuncio sem valor
+   atende qualquer anuncio, mas o que nomeia o proprio anuncio ganha dele. */
+function wa_fluxo_porta($ev, $fluxos) {
+    $vivos = [];
+    foreach ($fluxos as $f) {
+        if (!empty($f['ativo']) && !empty($f['versao_atual'])) $vivos[] = $f;
+    }
+    $da_porta = function ($gatilho) use ($vivos) {
+        return array_values(array_filter($vivos, function ($f) use ($gatilho) { return ($f['gatilho'] ?? '') === $gatilho; }));
+    };
+    $valor = function ($f) { return trim((string) ($f['gatilho_valor'] ?? '')); };
+
+    $ad = trim((string) ($ev['ad_id'] ?? ''));
+    if ($ad !== '') {
+        $generico = null;
+        foreach ($da_porta('anuncio') as $f) {
+            if ($valor($f) === $ad) return $f;
+            if ($valor($f) === '' && $generico === null) $generico = $f;
+        }
+        if ($generico !== null) return $generico;
+    }
+    $texto = (string) ($ev['texto'] ?? '');
+    foreach ($da_porta('palavra') as $f) {
+        if ($valor($f) !== '' && wa_fluxo_porta_casa($texto, $f['gatilho_valor'])) return $f;
+    }
+    $nova = $da_porta('mensagem_nova');
+    return $nova ? $nova[0] : null;
 }
 
 /* ---------- funcoes puras compartilhadas com o motor ---------- */
