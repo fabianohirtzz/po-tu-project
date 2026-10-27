@@ -415,11 +415,25 @@ function wa_processar($ev) {
 
         $acao = wa_atalho($wa_id, $texto);
 
-        // Documento numa conversa ja qualificada (ou ja em humano) e
-        // proposta, com alta confianca no fluxo dela. Cobre o esquecimento
-        // do atalho.
+        /* Documento numa conversa ja QUALIFICADA (ou ja em humano) e proposta,
+           com alta confianca no fluxo dela. Cobre o esquecimento do atalho.
+
+           A qualificacao e exigida de proposito, e e o ponto delicado daqui:
+           no motor antigo a rede era o estado 'qualificado', que significava
+           "respondeu as duas perguntas". Com o interpretador, 'aguardando' vale
+           desde a PRIMEIRA mensagem (a boas-vindas ja deixa a conversa assim),
+           entao aceitar 'aguardando' sozinho faria o PDF dela virar
+           `negociacao` + `proposta_at` para quase todo contato novo - inflando
+           a etapa Proposta do Funil e distorcendo os Relatorios em silencio. O
+           equivalente novo de 'qualificado' e a ficha ter `qualif_at`, que o
+           card `marca` da qualificacao grava. Em 'humano' nao se exige nada:
+           ali ela ja esta conduzindo o atendimento.
+           A ficha so e lida quando o evento e documento: nenhum eco comum
+           ganha uma consulta a mais por causa disto. */
+        $lead_eco = ($ev['tipo_msg'] ?? '') === 'document' ? wa_lead($wa_id) : null;
         if (!$acao && ($ev['tipo_msg'] ?? '') === 'document'
-            && in_array($conv['estado'] ?? '', ['aguardando', 'humano'], true)) {
+            && (($conv['estado'] ?? '') === 'humano'
+                || (($conv['estado'] ?? '') === 'aguardando' && !empty($lead_eco['qualif_at'])))) {
             wa_lead_set($wa_id, ['status' => 'negociacao', 'proposta_at' => gmdate('c')]);
             $acao = 'proposta';
         }
@@ -678,7 +692,20 @@ function wa_fluxo_percorre($wa_id, $nome, $grafo, $versao_id, $card, $ctx, $esta
             // que falhou vira o proximo a executar, e a mensagem seguinte
             // retoma dele sem repetir o PDF. Sem progresso, nada a gravar.
             // O estado NAO vira 'aguardando': ninguem esta sendo aguardado.
-            if ($progresso) wa_conversa_set($wa_id, $grava + ['estado' => 'novo']);
+            //
+            // E por isso mesmo a cadeia parada precisa de NOTA NA FICHA: a
+            // varredura ignora 'novo' (corretamente), entao nenhum relogio
+            // alcanca esta linha. Sem a nota, o cliente recebeu o PDF, a
+            // pergunta nunca chegou, e se ele nao escrever de novo a conversa
+            // morre invisivel. O auto-conserto existe (qualquer mensagem
+            // seguinte retoma a cadeia) mas depende de ele insistir, e o
+            // publico 60+ da agencia e justamente quem nao insiste. A ficha e
+            // o que a Lais le, e o unico canal que sobra neste caminho.
+            if ($progresso) {
+                wa_conversa_set($wa_id, $grava + ['estado' => 'novo']);
+                wa_nota_lead($wa_id, 'O robô enviou parte das mensagens e a próxima falhou ('
+                    . $r['erro'] . '). A conversa está parada neste ponto.');
+            }
             return 'falha_envio';
         }
         $progresso = true;
@@ -733,10 +760,17 @@ function wa_fluxo_percorre($wa_id, $nome, $grafo, $versao_id, $card, $ctx, $esta
             continue;
         }
 
-        // Sem proximo valido e sem terminal: o grafo acabou no meio. A
-        // conversa encerra, igual a um card `fim`.
+        // Sem proximo valido e sem terminal: o grafo acabou no meio (card que
+        // nao espera, sem proximo que exista). A conversa encerra, igual a um
+        // card `fim` - mas sem nenhuma despedida ter sido desenhada, e nenhum
+        // relogio alcanca conversa encerrada. A NOTA e o unico aviso: a ficha
+        // e o que a Lais le, e o card fim de proposito nao deixa nota nenhuma,
+        // entao a nota aqui significa sempre "o desenho do fluxo tem furo".
         error_log('wa_fluxo_percorre: card ' . $card . ' sem proximo (' . $p['motivo'] . '), encerrando | ' . $wa_id);
         wa_conversa_set($wa_id, $grava + ['estado' => 'encerrado']);
+        wa_nota_lead($wa_id, 'O fluxo acabou no card "'
+            . (string) ($grafo['cards'][$card]['titulo'] ?? $card)
+            . '", que não leva a nenhum outro card. A conversa foi encerrada sem despedida.');
         return 'fluxo';
     }
 }

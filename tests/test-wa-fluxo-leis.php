@@ -13,6 +13,11 @@ require __DIR__ . '/fixtures/fluxo-motor.php';
 
 function ok($cond, $msg) { if (!$cond) { fwrite(STDERR, "ASSERT: $msg\n"); exit(1); } }
 
+/* Quase todo desvio deste arquivo loga de proposito (error_log). Com dezenas de
+   linhas na saida, um warning de PHP de verdade passaria sem ninguem ver: aqui
+   o log vai para um arquivo e a saida do teste fica so com o que e do teste. */
+ini_set('error_log', sys_get_temp_dir() . '/po-test-wa-fluxo-leis.log');
+
 $DB = fx_banco_inicial(); $ENVIADAS = []; $QUERIES = []; $ESCRITAS_MENSAGENS = [];
 $TRANSP_STATUS = 201;   // o que o "Supabase" responde ao POST em po_wa_mensagens
 wa_db_set_transport(function ($metodo, $url, $corpo) use (&$ESCRITAS_MENSAGENS, &$TRANSP_STATUS) {
@@ -81,13 +86,37 @@ zera();
 wa_processar(ev('mensagem', 'oi'));
 ok(wa_processar(ev('eco', '#proposta')) === 'proposta', 'atalho move o funil');
 ok(conv()['estado'] === 'humano', 'e silencia o robo mesmo vindo de aguardando');
+/* O PDF dela vira proposta numa conversa QUALIFICADA, nao em qualquer uma.
+   No motor antigo a rede era o estado 'qualificado', que significava "respondeu
+   as perguntas". Com o fluxo, 'aguardando' vale desde a boas-vindas, entao a
+   rede larga transformaria quase todo contato novo em "Proposta" no Funil, com
+   proposta_at distorcido nos Relatorios, em silencio. O equivalente novo de
+   'qualificado' e a ficha ter qualif_at (que o card `qual` do fluxo grava). */
+zera();
+wa_processar(ev('mensagem', 'oi'));                      // boas-vindas: aguardando, sem qualif_at
+ok(empty($DB['po_leads'][0]['qualif_at']), 'preparo: a conversa recem-aberta nao passou pela qualificacao');
+ok(wa_processar(ev('eco', 'proposta.pdf', ['tipo_msg' => 'document'])) === 'silenciou', 'PDF dela numa conversa recem-aberta NAO e proposta');
+ok(($DB['po_leads'][0]['status'] ?? null) !== 'negociacao', 'e o funil nao anda: nada de inflar a etapa Proposta');
+ok(empty($DB['po_leads'][0]['proposta_at']), 'nem o proposta_at dos Relatorios e carimbado');
+ok(conv()['estado'] === 'humano', 'mas o eco silencia o robo do mesmo jeito');
+// A mesma conversa depois da qualificacao: ai o PDF dela e proposta.
 zera();
 wa_processar(ev('mensagem', 'oi'));
-// Com o fluxo, "conversa em andamento" e aguardando (o motor nao escreve mais
-// 'qualificado'): o PDF dela ali e proposta, e o funil tem que andar.
-ok(wa_processar(ev('eco', 'proposta.pdf', ['tipo_msg' => 'document'])) === 'proposta', 'PDF dela numa conversa em andamento e proposta');
+wa_processar(clica('rot'));
+wa_processar(clica('turquia', 'list_reply'));
+wa_processar(clica('sim'));                              // passa pelo card `qual`, que grava qualif_at
+ok(!empty($DB['po_leads'][0]['qualif_at']) && conv()['estado'] === 'aguardando', 'preparo: a ficha foi qualificada e a conversa segue aguardando');
+ok(wa_processar(ev('eco', 'proposta.pdf', ['tipo_msg' => 'document'])) === 'proposta', 'PDF dela numa conversa qualificada e proposta');
 ok($DB['po_leads'][0]['status'] === 'negociacao', 'e o funil anda para negociacao sem ela lembrar do #proposta');
+ok(!empty($DB['po_leads'][0]['proposta_at']), 'com a data da proposta para os Relatorios');
 ok(conv()['estado'] === 'humano', 'PDF dela deixa o estado em humano');
+// E numa conversa ja entregue a humana, o PDF dela e proposta mesmo sem qualif_at:
+// ali ela esta conduzindo o atendimento, e o documento e a proposta dela.
+zera();
+wa_processar(ev('mensagem', 'oi'));
+wa_processar(clica('hum'));
+ok(conv()['estado'] === 'humano' && empty($DB['po_leads'][0]['qualif_at']), 'preparo: conversa em humano, sem qualificacao');
+ok(wa_processar(ev('eco', 'proposta.pdf', ['tipo_msg' => 'document'])) === 'proposta', 'PDF dela numa conversa ja em atendimento humano e proposta');
 
 /* ============ LEI: SAIR vem antes de tudo, carimba sempre, responde so se nao silenciado ============ */
 zera();
@@ -136,6 +165,7 @@ quebra('send_buttons');
 ok(wa_processar(ev('mensagem', 'oi')) === 'falha_envio', 'primeira mensagem com envio falhado');
 ok(empty(conv()['card_atual']) && empty(conv()['fluxo_versao_id']), 'nao carimba card nem versao de algo que nao saiu');
 ok($DB['po_wa_mensagens'] === [], 'e nada entra no log de saida');
+ok(($DB['po_leads'][0]['notas'] ?? []) === [], 'sem progresso nao ha o que contar na ficha: nenhuma nota');
 
 // Cadeia interrompida: o que SAIU fica registrado (lei 9 = nao registrar o que
 // nao chegou, nao = esquecer o que chegou). Cadeia lista -> pdf -> marca -> data,
@@ -150,6 +180,15 @@ ok(tipos() === ['doc'], 'o PDF saiu');
 ok(conv()['card_atual'] === 'data', 'o progresso ate o ultimo envio que saiu fica gravado');
 ok(conv()['estado'] !== 'aguardando', 'mas a cadeia parada NAO e marcada como esperando o cliente (o cron mandaria lembrete)');
 ok(conv()['roteiro_slug'] === 'turquia', 'e o roteiro escolhido segue no contexto');
+/* A cadeia parada nao tem relogio nenhum: a varredura ignora 'novo' (e esta
+   certa, ninguem esta sendo aguardado), entao sem nota na ficha o cliente que
+   recebeu o PDF e nunca recebeu a pergunta fica invisivel. A ficha e o que a
+   Lais le, e aqui e o unico canal que sobra. */
+$notas = $DB['po_leads'][0]['notas'] ?? [];
+ok(count($notas) === 1, 'a cadeia parada deixa exatamente uma nota na ficha');
+ok(stripos($notas[0]['txt'], 'parte das mensagens') !== false && stripos($notas[0]['txt'], 'parada') !== false,
+   'e a nota diz que parte saiu e que a conversa esta parada: ' . $notas[0]['txt']);
+ok(stripos($notas[0]['txt'], 'timeout') !== false, 'e carrega o erro do envio, para a Lais saber se foi rede');
 fx_instala();
 $ENVIADAS = [];
 ok(wa_processar(ev('mensagem', 'oi?')) === 'fluxo', 'a mensagem seguinte retoma a cadeia');
@@ -211,6 +250,26 @@ wa_motor_set_deps(['update' => function ($tabela, $query, $campos) {
 }]);
 ok(wa_processar(clica('turquia', 'list_reply')) === 'fluxo', 'marca que nao gravou nao derruba a conversa');
 ok(conv()['card_atual'] === 'data' && conv()['estado'] === 'aguardando', 'a conversa segue ate a pergunta da data');
+
+/* ============ O grafo que acaba no meio tambem deixa rastro na ficha ============
+   Card que nao espera e sem proximo: a conversa encerra, igual a um card `fim`,
+   mas sem nenhuma despedida ter sido desenhada. A cliente desenhou um fluxo que
+   para, e so a ficha pode contar isso para a Lais (nao ha lembrete nem varredura
+   que alcance conversa encerrada). */
+zera();
+add_fluxo('f-corta', 'palavra', 'corta', mini('u1', ['u1' => fx_card('u1', 'texto', ['texto' => 'Ja volto.'])]));
+ok(wa_processar(ev('mensagem', 'corta')) === 'fluxo', 'o card sem proximo e tratado');
+ok(conv()['estado'] === 'encerrado', 'a conversa encerra, como num card de fim');
+$notas = $DB['po_leads'][0]['notas'] ?? [];
+ok(count($notas) === 1, 'e deixa uma nota na ficha');
+ok(stripos($notas[0]['txt'], 'Ja volto') !== false || stripos($notas[0]['txt'], 'u1') !== false,
+   'a nota nomeia o card em que o fluxo acabou: ' . $notas[0]['txt']);
+ok(stripos($notas[0]['txt'], 'encerrada') !== false, 'e diz que a conversa foi encerrada: ' . $notas[0]['txt']);
+// O card `fim` desenhado de proposito NAO deixa nota: ele e o caminho certo.
+zera();
+add_fluxo('f-adeus', 'palavra', 'adeus', mini('z1', ['z1' => fx_card('z1', 'fim', ['texto' => 'Ate logo.'])]));
+ok(wa_processar(ev('mensagem', 'adeus')) === 'fluxo' && conv()['estado'] === 'encerrado', 'o card fim encerra');
+ok(($DB['po_leads'][0]['notas'] ?? []) === [], 'e o fim desenhado de proposito nao vira aviso na ficha');
 
 /* ============ LEI: mensagem do cliente reseta lembrete_at E aguardando_desde juntos ============ */
 zera();
