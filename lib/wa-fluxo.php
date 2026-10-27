@@ -247,6 +247,364 @@ function wa_fluxo_sem_resposta($grafo, $card_id) {
     return is_string($d) && $d !== '' && isset($grafo['cards'][$d]) ? $d : null;
 }
 
+/* ---------- validacao pura ----------
+   A rede que protege o cliente final: a cliente monta o fluxo numa tela, sem
+   programar, e e esta funcao que impede um beco sem saida de ir ao ar. Nenhuma
+   rede, nenhum banco, nenhum relogio. Quem chama: o endpoint do painel e o
+   publicar (que valida de novo por dentro, para nao existir caminho sem ela).
+   Nao acrescente regra aqui sem decisao: a semente do fluxo e validada contra
+   exatamente estas 14 que bloqueiam (1 a 14) e 2 que avisam (15 e 16). */
+
+/* Monta o retrato do fluxo no formato que o roteamento consome, a partir das
+   linhas de edicao (fluxo + cards). Pura. */
+function wa_fluxo_grafo_de($fluxo, $cards) {
+    $lista = function ($v) {
+        if (is_string($v)) $v = json_decode($v, true);
+        return is_array($v) ? $v : [];
+    };
+    $mapa = [];
+    $humano = null;
+    foreach ($cards as $c) {
+        $id = (string) ($c['id'] ?? '');
+        if ($id === '') continue;
+        $opcoes = [];
+        foreach ($lista($c['opcoes'] ?? []) as $o) {
+            $opcoes[] = [
+                'id'      => (string) ($o['id'] ?? ''),
+                'rotulo'  => (string) ($o['rotulo'] ?? ''),
+                'destino' => ($o['destino'] ?? '') !== '' ? (string) $o['destino'] : null,
+            ] + (isset($o['descricao']) ? ['descricao' => (string) $o['descricao']] : []);
+        }
+        $mapa[$id] = [
+            'id'             => $id,
+            'tipo'           => (string) ($c['tipo'] ?? ''),
+            'titulo'         => (string) ($c['titulo'] ?? ''),
+            'texto'          => isset($c['texto']) ? (string) $c['texto'] : null,
+            'opcoes'         => $opcoes,
+            'config'         => $lista($c['config'] ?? []),
+            'proximo'        => ($c['proximo'] ?? '') !== '' ? (string) $c['proximo'] : null,
+            'fallback'       => ($c['fallback'] ?? '') !== '' ? (string) $c['fallback'] : null,
+            'sem_resposta'   => ($c['sem_resposta'] ?? '') !== '' ? (string) $c['sem_resposta'] : null,
+            'lembrete_ativo' => !empty($c['lembrete_ativo']),
+            'lembrete_texto' => isset($c['lembrete_texto']) ? (string) $c['lembrete_texto'] : null,
+        ];
+        if ($humano === null && $mapa[$id]['tipo'] === 'humano') $humano = $id;
+    }
+    return [
+        'id'          => (string) ($fluxo['id'] ?? ''),
+        'nome'        => (string) ($fluxo['nome'] ?? ''),
+        'inicial'     => ($fluxo['card_inicial'] ?? '') !== '' ? (string) $fluxo['card_inicial'] : '',
+        'humano'      => $humano,
+        'porta'       => (string) ($fluxo['gatilho'] ?? ''),
+        'porta_valor' => ($fluxo['gatilho_valor'] ?? '') !== '' ? (string) $fluxo['gatilho_valor'] : null,
+        'cards'       => $mapa,
+    ];
+}
+
+/* Devolve a lista de ['regra','card','texto','bloqueia']. As mensagens sao
+   lidas pela cliente na tela do painel: dizem o que esta errado e onde. */
+function wa_fluxo_valida($fluxo, $cards, $outros = []) {
+    $g = wa_fluxo_grafo_de($fluxo, $cards);
+    $C = $g['cards'];
+    $probs = [];
+    $acha = function ($regra, $card, $texto, $bloqueia = true) use (&$probs) {
+        $probs[] = ['regra' => $regra, 'card' => $card, 'texto' => $texto, 'bloqueia' => $bloqueia];
+    };
+    $nome = function ($id) use ($C) {
+        $t = trim((string) ($C[$id]['titulo'] ?? ''));
+        return '"' . ($t !== '' ? $t : $id) . '"';
+    };
+    $existe = function ($id) use ($C) { return is_string($id) && $id !== '' && isset($C[$id]); };
+    $espera = function ($c) { return in_array($c['tipo'], WA_CARD_ESPERA, true); };
+    $listaDin = function ($c) { return $c['tipo'] === 'lista' && ($c['config']['fonte'] ?? null) === 'roteiros'; };
+
+    // Saidas de um card. $com_sr inclui o "sem resposta" (so o cron o segue).
+    $saidas = function ($c, $com_sr = true) use ($existe, $listaDin) {
+        $ids = [];
+        if (!$listaDin($c)) foreach ($c['opcoes'] as $o) $ids[] = $o['destino'];
+        $ids[] = $c['proximo'];
+        $ids[] = $c['fallback'];
+        if ($com_sr) $ids[] = $c['sem_resposta'];
+        return array_values(array_unique(array_filter($ids, $existe)));
+    };
+
+    $inicial_ok = $existe($g['inicial']);
+
+    // 1. Saida para card que nao existe: a conversa pararia sem ninguem ver.
+    if (!$inicial_ok) {
+        $acha(1, null, 'O card em que o fluxo começa não existe. Escolha por onde o fluxo começa.');
+    }
+    foreach ($C as $id => $c) {
+        if (!$listaDin($c)) foreach ($c['opcoes'] as $o) {
+            if (!$existe($o['destino'])) {
+                $acha(1, $id, 'No card ' . $nome($id) . ', o botão "' . $o['rotulo'] . '" não leva a nenhum card que exista.');
+            }
+        }
+        foreach (['proximo' => 'o card seguinte', 'fallback' => 'o card de "não entendi"', 'sem_resposta' => 'o card de "sem resposta"'] as $k => $rot) {
+            if ($c[$k] !== null && !$existe($c[$k])) {
+                $acha(1, $id, 'No card ' . $nome($id) . ', ' . $rot . ' aponta para um card que não existe mais.');
+            }
+        }
+    }
+
+    // 2. Espera sem lembrete e sem sem_resposta: o cliente cala e a conversa fica aberta para sempre.
+    foreach ($C as $id => $c) {
+        if ($espera($c) && !$c['lembrete_ativo'] && $c['sem_resposta'] === null) {
+            $acha(2, $id, 'O card ' . $nome($id) . ' espera uma resposta, mas não tem lembrete nem destino para "sem resposta". Se o cliente calar, a conversa fica parada. Ligue o lembrete ou escolha o que acontece sem resposta.');
+        }
+    }
+
+    // Alcance a partir do card inicial, seguindo todas as saidas.
+    $alcanca = [];
+    if ($inicial_ok) {
+        $fila = [$g['inicial']];
+        $alcanca[$g['inicial']] = true;
+        while ($fila) {
+            $id = array_shift($fila);
+            foreach ($saidas($C[$id]) as $d) {
+                if (!isset($alcanca[$d])) { $alcanca[$d] = true; $fila[] = $d; }
+            }
+        }
+    }
+
+    // 3. Card inalcancavel: trabalho da cliente que o cliente final nunca vai ver.
+    if ($inicial_ok) {
+        foreach ($C as $id => $c) {
+            if (!isset($alcanca[$id])) {
+                $acha(3, $id, 'O card ' . $nome($id) . ' não é alcançado por nenhum caminho a partir do começo do fluxo. Ligue algum card a ele ou apague-o.');
+            }
+        }
+    }
+
+    // 4. Sem saida para uma pessoa: o cliente fica sem ninguem. Fluxo chamado so precisa terminar.
+    if ($inicial_ok) {
+        $tem_humano = false;
+        $tem_term = false;
+        foreach ($alcanca as $id => $_) {
+            if ($C[$id]['tipo'] === 'humano') $tem_humano = true;
+            if (in_array($C[$id]['tipo'], WA_CARD_TERMINAL, true)) $tem_term = true;
+        }
+        if ($g['porta'] !== 'chamado' && !$tem_humano) {
+            $acha(4, null, 'Nenhum caminho deste fluxo leva a um card de atendimento humano ("Falar com a Laís"). Todo fluxo de entrada precisa dar ao cliente a saída para uma pessoa.');
+        } elseif ($g['porta'] === 'chamado' && !$tem_term) {
+            $acha(4, null, 'Nenhum caminho deste fluxo termina. Inclua um card de fim ou de atendimento humano.');
+        }
+    }
+
+    // 5. Rotulo que a Meta recusa (vazio, grande, repetido, botoes demais): a mensagem inteira nao sai.
+    foreach ($C as $id => $c) {
+        if ($c['tipo'] === 'botoes') { $max = 20; $un = 'botão'; }
+        elseif ($c['tipo'] === 'lista' && !$listaDin($c)) { $max = 24; $un = 'linha'; }
+        else continue;
+        $vistos = [];
+        if ($c['tipo'] === 'botoes' && count($c['opcoes']) === 0) {
+            $acha(5, $id, 'O card ' . $nome($id) . ' é de botões, mas não tem nenhum botão.');
+        }
+        if ($c['tipo'] === 'botoes' && count($c['opcoes']) > 3) {
+            $acha(5, $id, 'O card ' . $nome($id) . ' tem ' . count($c['opcoes']) . ' botões, e o WhatsApp aceita no máximo 3. Use uma lista se precisar de mais opções.');
+        }
+        foreach ($c['opcoes'] as $o) {
+            $r = trim($o['rotulo']);
+            $n = mb_strlen($r, 'UTF-8');
+            if ($r === '') {
+                $acha(5, $id, 'No card ' . $nome($id) . ', há ' . ($un === 'botão' ? 'um botão' : 'uma linha') . ' sem texto.');
+            } elseif ($n > $max) {
+                $acha(5, $id, 'No card ' . $nome($id) . ', o texto "' . $r . '" tem ' . $n . ' caracteres, e o limite do ' . $un . ' é ' . $max . '.');
+            }
+            $chave = mb_strtolower($r, 'UTF-8');
+            if ($r !== '' && isset($vistos[$chave])) {
+                $acha(5, $id, 'No card ' . $nome($id) . ', o texto "' . $r . '" aparece em mais de um ' . $un . '. O cliente não saberia diferenciar.');
+            }
+            $vistos[$chave] = true;
+            if ($c['tipo'] === 'lista' && isset($o['descricao']) && mb_strlen($o['descricao'], 'UTF-8') > 72) {
+                $acha(5, $id, 'No card ' . $nome($id) . ', a descrição da linha "' . $r . '" passa de 72 caracteres.');
+            }
+        }
+    }
+
+    // 6. Texto que a Cloud API recusa: contado no pior caso das variaveis, senao estoura depois de trocar o {roteiro}.
+    foreach ($C as $id => $c) {
+        if (!isset(WA_FLUXO_LIMITE[$c['tipo']])) continue;
+        $lim = WA_FLUXO_LIMITE[$c['tipo']];
+        if (trim((string) $c['texto']) === '') {
+            $acha(6, $id, 'O card ' . $nome($id) . ' não tem mensagem escrita. O cliente receberia uma mensagem vazia.');
+        } elseif (($n = wa_fluxo_tam_pior_caso($c['texto'])) > $lim) {
+            $acha(6, $id, 'A mensagem do card ' . $nome($id) . ' pode chegar a ' . $n . ' caracteres (contando o maior nome e roteiro possíveis), e o limite é ' . $lim . '. Encurte o texto.');
+        }
+        if ($c['lembrete_ativo'] && ($n = wa_fluxo_tam_pior_caso($c['lembrete_texto'])) > 4096) {
+            $acha(6, $id, 'O lembrete do card ' . $nome($id) . ' pode chegar a ' . $n . ' caracteres, e o limite é 4096. Encurte o texto.');
+        }
+    }
+
+    // 7. Lista sem linhas ou sem fonte: o cliente abre um menu vazio.
+    foreach ($C as $id => $c) {
+        if ($c['tipo'] !== 'lista') continue;
+        $fonte = $c['config']['fonte'] ?? null;
+        if ($fonte === 'roteiros') {
+            if ($c['proximo'] === null) {
+                $acha(7, $id, 'A lista ' . $nome($id) . ' mostra os roteiros, mas não diz para qual card ir depois que o cliente escolher um.');
+            }
+        } elseif ($fonte === 'estatica' || $fonte === null || $fonte === '') {
+            $n = count($c['opcoes']);
+            if ($n === 0) {
+                $acha(7, $id, 'A lista ' . $nome($id) . ' não tem nenhuma linha e não está ligada à lista de roteiros. O cliente abriria um menu vazio.');
+            } elseif ($n > 10) {
+                $acha(7, $id, 'A lista ' . $nome($id) . ' tem ' . $n . ' linhas, e o WhatsApp aceita no máximo 10.');
+            }
+        } else {
+            $acha(7, $id, 'A lista ' . $nome($id) . ' usa uma fonte de linhas desconhecida.');
+        }
+    }
+
+    // 8. Beco sem saida: a conversa entra e nunca mais sai (ciclo, ou card sem continuacao).
+    //    O "sem resposta" nao conta como saida: so o cron o segue, e o cliente que responde continua preso.
+    if ($inicial_ok) {
+        $sai = [];
+        foreach ($C as $id => $c) {
+            if (in_array($c['tipo'], WA_CARD_TERMINAL, true) || $c['tipo'] === 'ir_para_fluxo') $sai[$id] = true;
+        }
+        do {
+            $mudou = false;
+            foreach ($C as $id => $c) {
+                if (isset($sai[$id])) continue;
+                foreach ($saidas($c, false) as $d) {
+                    if (isset($sai[$d])) { $sai[$id] = true; $mudou = true; break; }
+                }
+            }
+        } while ($mudou);
+        $presos = [];
+        foreach ($alcanca as $id => $_) if (!isset($sai[$id])) $presos[] = $id;
+        if ($presos) {
+            $nomes = implode(', ', array_map($nome, array_slice($presos, 0, 5)));
+            $acha(8, $presos[0], count($presos) === 1
+                ? 'O card ' . $nome($presos[0]) . ' é um beco sem saída: a conversa chega nele e não consegue ir para lugar nenhum.'
+                : 'Estes cards formam um beco sem saída, a conversa entra e não consegue terminar: ' . $nomes . (count($presos) > 5 ? ' e outros' : '') . '. Ligue algum deles a um card de fim ou de atendimento humano.');
+        }
+    }
+
+    // 9. Duas portas iguais ativas: o cliente cairia em um fluxo ou no outro, ao acaso.
+    foreach ($outros as $o) {
+        if (($o['id'] ?? null) === $g['id'] || empty($o['ativo'])) continue;
+        $ov = ($o['gatilho_valor'] ?? '') !== '' ? (string) $o['gatilho_valor'] : null;
+        if (($o['gatilho'] ?? '') === $g['porta'] && $ov === $g['porta_valor']) {
+            $acha(9, null, 'Outro fluxo ativo já usa esta mesma porta de entrada. Desligue o outro ou escolha uma porta diferente para este.');
+            break;
+        }
+    }
+
+    // 10. Marca fora da whitelist: um fluxo nunca pode apagar venda nem se autorizar em campanha paga.
+    foreach ($C as $id => $c) {
+        if ($c['tipo'] !== 'marca') continue;
+        foreach ($c['config'] as $k => $v) {
+            if (!in_array($k, WA_FLUXO_CAMPOS_MARCAVEIS, true)) {
+                $acha(10, $id, 'O card ' . $nome($id) . ' tenta mudar o campo "' . $k . '", que um fluxo não pode alterar.');
+            } elseif ($k === 'status' && !in_array($v, WA_FLUXO_STATUS_PERMITIDOS, true)) {
+                $acha(10, $id, 'O card ' . $nome($id) . ' tenta colocar o cliente no status "' . (is_scalar($v) ? $v : '?') . '". Um fluxo só pode usar: ' . implode(', ', WA_FLUXO_STATUS_PERMITIDOS) . '.');
+            } elseif (in_array($k, ['qualif_data', 'qualif_grupo'], true) && !is_bool($v)) {
+                $acha(10, $id, 'O card ' . $nome($id) . ' usa um valor inválido em "' . $k . '" (só vale sim ou não).');
+            } elseif (in_array($k, ['interesses', 'espera'], true) && !in_array($v, ['+roteiro', '+destino'], true)) {
+                $acha(10, $id, 'O card ' . $nome($id) . ' usa um valor inválido em "' . $k . '".');
+            }
+        }
+    }
+
+    // 11. Salto para fluxo que nao atende: a conversa cairia no vazio.
+    $por_id = [];
+    foreach ($outros as $o) if (isset($o['id'])) $por_id[$o['id']] = $o;
+    foreach ($C as $id => $c) {
+        if ($c['tipo'] !== 'ir_para_fluxo') continue;
+        $alvo = $por_id[(string) ($c['config']['fluxo'] ?? '')] ?? null;
+        if ($alvo === null) {
+            $acha(11, $id, 'O card ' . $nome($id) . ' manda para outro fluxo que não existe. Escolha um fluxo da lista.');
+        } elseif (empty($alvo['versao_atual'])) {
+            $acha(11, $id, 'O card ' . $nome($id) . ' manda para um fluxo que ainda não foi publicado.');
+        } elseif (empty($alvo['ativo'])) {
+            $acha(11, $id, 'O card ' . $nome($id) . ' manda para um fluxo que está desligado.');
+        }
+    }
+
+    // 12. "Sem resposta" para card que espera: o cron agendaria uma espera dentro de outra.
+    foreach ($C as $id => $c) {
+        $d = $c['sem_resposta'];
+        if ($d !== null && $existe($d) && !in_array($C[$d]['tipo'], WA_SEM_RESPOSTA_TIPOS, true)) {
+            $acha(12, $id, 'No card ' . $nome($id) . ', "sem resposta" leva ao card ' . $nome($d) . ', que também espera uma resposta. Leve a um card de mensagem, de marca, de atendimento humano ou de fim.');
+        }
+    }
+
+    // Cards que algum caminho alcanca SEM roteiro escolhido. Quem escolhe o
+    // roteiro e a lista de roteiros (pelo proximo) ou a porta anuncio.
+    $sem_roteiro = [];
+    if ($inicial_ok) {
+        $ini_tem = $g['porta'] === 'anuncio';
+        $visto = [$g['inicial'] . '|' . (int) $ini_tem => true];
+        $fila = [[$g['inicial'], $ini_tem]];
+        while ($fila) {
+            [$id, $tem] = array_shift($fila);
+            if (!$tem) $sem_roteiro[$id] = true;
+            $c = $C[$id];
+            $viz = [];
+            if (!$listaDin($c)) foreach ($c['opcoes'] as $o) $viz[] = [$o['destino'], $tem];
+            $viz[] = [$c['proximo'], $listaDin($c) ? true : $tem];
+            $viz[] = [$c['fallback'], $tem];
+            $viz[] = [$c['sem_resposta'], $tem];
+            foreach ($viz as [$d, $t]) {
+                if (!$existe($d)) continue;
+                $k = $d . '|' . (int) $t;
+                if (!isset($visto[$k])) { $visto[$k] = true; $fila[] = [$d, $t]; }
+            }
+        }
+    }
+
+    // 13. PDF sem roteiro escolhido: sem slug no contexto ele nao tem o que mandar.
+    foreach ($C as $id => $c) {
+        if ($c['tipo'] === 'pdf' && isset($sem_roteiro[$id])) {
+            $acha(13, $id, 'O card ' . $nome($id) . ' envia o PDF de um roteiro, mas existe um caminho até ele em que o cliente não escolheu nenhum roteiro. Coloque antes uma lista de roteiros.');
+        }
+    }
+
+    // 14. Variavel que chegaria crua ao cliente, ou vazia por falta de roteiro.
+    $confere_vars = function ($id, $texto, $onde) use ($acha, $nome, $sem_roteiro) {
+        if ($texto === null || $texto === '') return;
+        $lista_vars = implode(', ', array_map(function ($x) { return '{' . $x . '}'; }, WA_FLUXO_VARS));
+        $sem = [];
+        preg_match_all('/\{[^{}]*\}/', $texto, $m);
+        foreach ($m[0] as $v) {
+            $limpa = substr($v, 1, -1);
+            if (!in_array($limpa, WA_FLUXO_VARS, true)) {
+                $acha(14, $id, 'No ' . $onde . ' do card ' . $nome($id) . ', "' . $v . '" não é uma variável válida. Use apenas ' . $lista_vars . ', em letras minúsculas e sem espaços.');
+            } elseif (in_array($limpa, WA_FLUXO_VARS_ROTEIRO, true) && isset($sem_roteiro[$id])) {
+                $sem[$v] = true;
+            }
+        }
+        // Chave solta, sem par: chegaria crua ao cliente.
+        if (preg_match('/[{}]/', preg_replace('/\{[^{}]*\}/', '', $texto))) {
+            $acha(14, $id, 'No ' . $onde . ' do card ' . $nome($id) . ' há uma chave { ou } sem par. Ela chegaria assim ao cliente.');
+        }
+        foreach (array_keys($sem) as $v) {
+            $acha(14, $id, 'No ' . $onde . ' do card ' . $nome($id) . ', ' . $v . ' só funciona depois que o cliente escolhe um roteiro, e existe um caminho até este card sem essa escolha.');
+        }
+    };
+    foreach ($C as $id => $c) {
+        $confere_vars($id, $c['texto'], 'texto');
+        if ($c['lembrete_ativo']) $confere_vars($id, $c['lembrete_texto'], 'lembrete');
+    }
+
+    // 15. AVISO: card que nenhum outro liga, trabalho esquecido no desenho.
+    $entradas = [];
+    foreach ($C as $id => $c) foreach ($saidas($c) as $d) if ($d !== $id) $entradas[$d] = true;
+    foreach ($C as $id => $c) {
+        if ($id !== $g['inicial'] && !isset($entradas[$id])) {
+            $acha(15, $id, 'Nenhum outro card leva ao card ' . $nome($id) . '.', false);
+        }
+    }
+    // 16. AVISO: sem card de fim, a conversa so termina por atendimento humano.
+    $tem_fim = false;
+    foreach ($C as $c) if ($c['tipo'] === 'fim') $tem_fim = true;
+    if (!$tem_fim) $acha(16, null, 'Este fluxo não tem nenhum card de fim.', false);
+
+    return $probs;
+}
+
 /* ---------- funcoes puras compartilhadas com o motor ---------- */
 
 /* Rede de seguranca contra placeholder vazio (ex.: {nome} quando quem
