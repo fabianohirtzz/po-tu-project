@@ -6,7 +6,10 @@
    (lib/wa-fluxo.php); este arquivo guarda as leis que ficam ACIMA dele e
    fala com o grafo em wa_processar / wa_fluxo_percorre.
    Estado (espelho do card atual, spec 6.5): aguardando | humano | encerrado.
-   'novo' so existe entre a criacao da conversa e a primeira resposta enviada.
+   'novo' tem dois sentidos: SEM card_atual, e a conversa recem-criada que
+   ainda nao respondeu nada; COM card_atual, e uma cadeia parada por falha de
+   envio (o card_atual e o proximo a executar e ninguem esta sendo aguardado).
+   A varredura de timeout so toca 'aguardando', nunca 'novo'.
 
    REGRA MAIS IMPORTANTE DO ARQUIVO: o eco (o que a cliente digita no
    celular) silencia o robo naquele contato para sempre. Sem isso, robo e
@@ -502,16 +505,18 @@ function wa_processar($ev) {
        sendo aguardado, por isso o estado nao e 'aguardando': a varredura de
        timeout trataria como "o cliente calou"). */
     $estado  = $conv['estado'] ?? '';
-    $espera = in_array($estado, ['aguardando', 'novo'], true) && !empty($conv['card_atual']);
+    $retoma = in_array($estado, ['aguardando', 'novo'], true) && !empty($conv['card_atual']);
 
-    /* ----- conversa parada num card que espera -----
+    /* ----- conversa com ponto marcado -----
+       Duas situacoes: aguardando a resposta de um card que espera, ou cadeia
+       parada por falha de envio (estado 'novo', ninguem sendo aguardado).
        A porta NAO e resolvida aqui (spec 6.11): mensagem que chega com a
        conversa esperando botao vai para o fallback daquele card, nunca para
        outro fluxo. O grafo e o da versao que a conversa carimbou ao entrar. */
-    if ($espera) {
+    if ($retoma) {
         $versao_id = (string) ($conv['fluxo_versao_id'] ?? '');
         if ($versao_id === '') {
-            error_log('wa_processar: conversa aguardando sem fluxo_versao_id | ' . $wa_id);
+            error_log('wa_processar: conversa com ponto marcado (aguardando ou cadeia parada) sem fluxo_versao_id | ' . $wa_id);
             wa_entrega_humana($wa_id, 'A conversa estava parada num card, mas sem versão de fluxo registrada. Entregue para atendimento humano.');
             return 'card_perdido';
         }
