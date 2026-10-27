@@ -52,7 +52,27 @@ $c = $base; $c[0]['opcoes'][0]['destino'] = 'fim'; $c[1]['fallback'] = 'fim';
 array_splice($c, 2, 1); // remove o card humano
 ok(in_array(4, bloqueios($fx, $c), true), 'regra 4: fluxo de porta propria sem humano bloqueia');
 $fx_chamado = array_merge($fx, ['gatilho' => 'chamado']);
-ok(!in_array(4, bloqueios($fx_chamado, $c), true), 'regra 4: fluxo de porta chamado nao exige humano');
+/* Fluxo `chamado` sem nenhum card que espera (o porte da "Lista de espera"
+   semeada: marca -> fim) nao precisa de humano. A isencao existe para nao
+   encher fluxo pequeno de card que ninguem quis. */
+$so_passa = [
+  ['id'=>'mk','fluxo_id'=>'f1','tipo'=>'marca','titulo'=>'Anota','texto'=>null,
+   'opcoes'=>[],'config'=>['espera'=>'+destino'],'proximo'=>'fim','fallback'=>null,
+   'sem_resposta'=>null,'lembrete_ativo'=>false,'lembrete_texto'=>null],
+  ['id'=>'fim','fluxo_id'=>'f1','tipo'=>'fim','titulo'=>'Fim','texto'=>'Avisamos voce.',
+   'opcoes'=>[],'config'=>[],'proximo'=>null,'fallback'=>null,'sem_resposta'=>null,'lembrete_ativo'=>false,'lembrete_texto'=>null],
+];
+$fx_ch_mk = array_merge($fx_chamado, ['card_inicial' => 'mk']);
+ok(bloqueios($fx_ch_mk, $so_passa) === [], 'regra 4: fluxo chamado que so passa e termina nao exige humano');
+/* Mas se ele TEM card que espera, exige. wa_fluxo_proximo resolve o socorro com
+   $grafo['humano']; num fluxo sem card humano esse valor e null, o roteamento
+   devolve motivo 'invalido' e wa_processar entrega a conversa a humana SEM
+   enviar nada: quem digitou duas vezes recebe silencio. */
+ok(in_array(4, bloqueios($fx_chamado, $c), true), 'regra 4: fluxo chamado COM card que espera e sem humano bloqueia');
+$c3 = $c;   // o mesmo fluxo, com o humano de volta
+array_splice($c3, 2, 0, [['id'=>'hum','fluxo_id'=>'f1','tipo'=>'humano','titulo'=>'Atendimento','texto'=>'Vou chamar a Lais.',
+  'opcoes'=>[],'config'=>[],'proximo'=>null,'fallback'=>null,'sem_resposta'=>null,'lembrete_ativo'=>false,'lembrete_texto'=>null]]);
+ok(!in_array(4, bloqueios($fx_chamado, $c3), true), 'regra 4: com o humano alcancavel, o mesmo fluxo chamado passa');
 $c2 = $c; $c2[0]['opcoes'][0]['destino'] = 'bv'; $c2[0]['sem_resposta'] = null; $c2[0]['fallback'] = 'bv'; $c2[1]['fallback'] = 'bv';
 array_splice($c2, 3, 1); // remove tambem o fim: nenhum terminal
 ok(in_array(4, bloqueios($fx_chamado, $c2), true), 'regra 4: nem chamado escapa de nao ter terminal nenhum');
@@ -68,6 +88,31 @@ $c = $base; $c[0]['opcoes'] = array_fill(0, 4, ['id'=>'x','rotulo'=>'Op','destin
 ok(in_array(5, bloqueios($fx, $c), true), 'regra 5: mais de 3 botoes');
 $c = $base; $c[0]['opcoes'][0]['rotulo'] = str_repeat('ç', 20);
 ok(!in_array(5, bloqueios($fx, $c), true), 'regra 5: 20 caracteres acentuados passam');
+
+/* regra 5: o ID da opcao tambem. wa_send_buttons RECUSA id vazio e id repetido,
+   e recusa de transporte e tratada como transitoria: a mensagem nunca sai, nada
+   avanca, e no card inicial isso seria silencio para todo cliente que entrasse
+   por aquela porta. A tela tem que travar o que o motor nao consegue enviar. */
+$c = $base; $c[0]['opcoes'][0]['id'] = '';
+ok(in_array(5, bloqueios($fx, $c), true), 'regra 5: opcao sem id');
+$c = $base; unset($c[0]['opcoes'][0]['id']);
+ok(in_array(5, bloqueios($fx, $c), true), 'regra 5: opcao sem a chave id (que o montador vira em string vazia)');
+$c = $base; $c[0]['opcoes'][] = ['id'=>'b1','rotulo'=>'Ver a programacao','destino'=>'fim'];
+ok(in_array(5, bloqueios($fx, $c), true), 'regra 5: id de opcao repetido no mesmo card');
+$c = $base; $c[0]['opcoes'][] = ['id'=>'b2','rotulo'=>'Ver a programacao','destino'=>'fim'];
+ok(!in_array(5, bloqueios($fx, $c), true), 'regra 5: dois botoes com ids e rotulos distintos passam');
+// Linha de lista estatica segue a mesma regra (id vazio sumiria da lista em silencio)
+$c = $base; $c[] = ['id'=>'le','fluxo_id'=>'f1','tipo'=>'lista','titulo'=>'Escolha','texto'=>'Qual?',
+  'opcoes'=>[['id'=>'','rotulo'=>'Uma linha','destino'=>'hum']],'config'=>['fonte'=>'estatica'],
+  'proximo'=>null,'fallback'=>'ops','sem_resposta'=>'fim','lembrete_ativo'=>true,'lembrete_texto'=>'Oi?'];
+$c[0]['opcoes'][] = ['id'=>'b2','rotulo'=>'Escolher','destino'=>'le'];
+ok(in_array(5, bloqueios($fx, $c), true), 'regra 5: linha de lista sem id');
+// Lista dinamica fica de fora: os ids dela sao os slugs do catalogo, nao do desenho
+$c = $base; $c[] = ['id'=>'ld','fluxo_id'=>'f1','tipo'=>'lista','titulo'=>'Roteiros','texto'=>'Qual?',
+  'opcoes'=>[['rotulo'=>'ignorada','destino'=>null]],'config'=>['fonte'=>'roteiros'],
+  'proximo'=>'hum','fallback'=>'ops','sem_resposta'=>'fim','lembrete_ativo'=>true,'lembrete_texto'=>'Oi?'];
+$c[0]['opcoes'][] = ['id'=>'b2','rotulo'=>'Ver roteiros','destino'=>'ld'];
+ok(!in_array(5, bloqueios($fx, $c), true), 'regra 5: a lista dinamica nao e julgada pelas opcoes do desenho');
 
 // regra 6: texto acima do limite, medido na expansao de pior caso
 $c = $base; $c[0]['texto'] = str_repeat('a', 1000) . '{roteiro}';  // 1000 + 60 > 1024

@@ -2,6 +2,11 @@
 require __DIR__ . '/../lib/wa-fluxo.php';
 function ok($cond, $msg) { if (!$cond) { fwrite(STDERR, "ASSERT: $msg\n"); exit(1); } }
 
+/* Quase todo desvio deste arquivo loga de proposito (error_log). Com dezenas de
+   linhas na saida, um warning de PHP de verdade passaria sem ninguem ver: aqui
+   o log vai para um arquivo e a saida do teste fica so com o que e do teste. */
+ini_set('error_log', sys_get_temp_dir() . '/po-test-wa-fluxo-executa.log');
+
 function card($id, $tipo, $extra = []) {
     return array_merge(['id' => $id, 'tipo' => $tipo, 'titulo' => $id, 'texto' => 'oi',
         'opcoes' => [], 'config' => [], 'proximo' => null, 'fallback' => null,
@@ -66,13 +71,23 @@ ok($ENVIADAS[0][0] === 'doc' && $ENVIADAS[0][1] === 'https://exemplo/t.pdf', 'ma
 ok($ENVIADAS[0][2] === 'Segue o Turquia com Antalia' && $ENVIADAS[0][3] === 'turquia.pdf', 'legenda com a variavel e arquivo pelo slug');
 ok($r['ok'] === true && $r['espera'] === false, 'card pdf nao espera');
 
-// 4. roteiro saiu do ar entre a escolha e o pdf
+/* 4. pdf sem roteiro: o catalogo VAZIO e o catalogo CHEIO sem o slug sao coisas
+   diferentes, e o card tem que separa-las. po_fetch_roteiros devolve [] em erro,
+   entao "vazio" tambem e o Supabase fora do ar ou o cache frio: tratar isso como
+   permanente entregaria a humana (que nunca devolve a conversa ao robo) quem
+   acabou de escolher o roteiro. Catalogo cheio sem o slug e permanente mesmo:
+   o roteiro saiu do ar (Review Focus 5). */
 zera(); $ROTEIROS = [];
 $r = wa_fluxo_executa($g, 'pdf', $fone, $ct, 'Marta');
-ok($r['ok'] === false && $r['terminal'] === 'humano', 'pdf de roteiro inexistente vai para o humano');
-ok($ENVIADAS === [], 'nenhum documento e enviado');
-// catalogo cheio mas sem o slug: o ctx devolvido esquece o slug fantasma
+ok($r['ok'] === false && $r['terminal'] === null, 'catalogo vazio (Supabase fora) e transitorio: nao entrega a conversa a humana');
+ok($r['erro'] !== null && $ENVIADAS === [], 'nada e enviado, e o erro fica registrado para a proxima tentativa');
+ok($r['ctx']['roteiro_slug'] === 'turquia', 'e o slug escolhido NAO e descartado: o catalogo vazio nao prova nada');
+// catalogo cheio mas sem o slug: permanente, vai para a humana, e o ctx esquece o slug fantasma
+zera();
 $ROTEIROS = [['slug' => 'outro', 'titulo' => 'Outro', 'periodo' => '', 'pdf_url' => 'u']];
+$r = wa_fluxo_executa($g, 'pdf', $fone, $ct, 'Marta');
+ok($r['ok'] === false && $r['terminal'] === 'humano', 'roteiro que saiu do ar (catalogo cheio, slug ausente) vai para o humano');
+ok($ENVIADAS === [], 'nenhum documento e enviado');
 $r = wa_fluxo_executa($g, 'pdf', $fone, ['roteiro_slug' => 'b2', 'tentativas' => 0], 'Marta');
 ok($r['terminal'] === 'humano' && $r['ctx']['roteiro_slug'] === null, 'slug desconhecido (botao antigo) e descartado do contexto');
 $ROTEIROS = $salva;

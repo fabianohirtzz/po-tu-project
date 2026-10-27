@@ -378,27 +378,48 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
         }
     }
 
-    // 4. Sem saida para uma pessoa: o cliente fica sem ninguem. Fluxo chamado so precisa terminar.
+    /* 4. Sem saida para uma pessoa: o cliente fica sem ninguem. Fluxo chamado
+       so precisa TERMINAR (a isencao existe para nao encher fluxo pequeno,
+       como a "Lista de espera", de card que ninguem quis) - mas a isencao cai
+       no instante em que ele tem card que ESPERA. Motivo: wa_fluxo_proximo
+       resolve o socorro (resposta fora do esperado no teto das tentativas) com
+       $grafo['humano']; num fluxo sem card humano esse valor e null, o
+       roteamento devolve motivo 'invalido' e wa_processar entrega a conversa a
+       humana sem enviar nada. Quem digitou duas vezes receberia silencio. */
     if ($inicial_ok) {
         $tem_humano = false;
         $tem_term = false;
+        $tem_espera = false;
         foreach ($alcanca as $id => $_) {
             if ($C[$id]['tipo'] === 'humano') $tem_humano = true;
             if (in_array($C[$id]['tipo'], WA_CARD_TERMINAL, true)) $tem_term = true;
+            if ($espera($C[$id])) $tem_espera = true;
         }
-        if ($g['porta'] !== 'chamado' && !$tem_humano) {
-            $acha(4, null, 'Nenhum caminho deste fluxo leva a um card de atendimento humano ("Falar com a Laís"). Todo fluxo de entrada precisa dar ao cliente a saída para uma pessoa.');
-        } elseif ($g['porta'] === 'chamado' && !$tem_term) {
-            $acha(4, null, 'Nenhum caminho deste fluxo termina. Inclua um card de fim ou de atendimento humano.');
+        if ($g['porta'] !== 'chamado') {
+            if (!$tem_humano) {
+                $acha(4, null, 'Nenhum caminho deste fluxo leva a um card de atendimento humano ("Falar com a Laís"). Todo fluxo de entrada precisa dar ao cliente a saída para uma pessoa.');
+            }
+        } else {
+            if (!$tem_term) {
+                $acha(4, null, 'Nenhum caminho deste fluxo termina. Inclua um card de fim ou de atendimento humano.');
+            }
+            if ($tem_espera && !$tem_humano) {
+                $acha(4, null, 'Este fluxo faz uma pergunta ao cliente, mas nenhum caminho dele leva a um card de atendimento humano ("Falar com a Laís"). Quando o cliente responde outra coisa duas vezes, o robô precisa ter uma pessoa para quem passar a conversa.');
+            }
         }
     }
 
-    // 5. Rotulo que a Meta recusa (vazio, grande, repetido, botoes demais): a mensagem inteira nao sai.
+    // 5. Rotulo (ou id) que a Meta recusa (vazio, grande, repetido, botoes demais): a mensagem inteira nao sai.
+    //    O ID entra aqui porque wa_send_buttons RECUSA id vazio e id repetido, e
+    //    recusa de transporte e lida como transitoria: nada sai, nada avanca, e no
+    //    card inicial isso vira silencio para sempre em quem entra por aquela porta.
+    //    A lista dinamica fica fora: os ids dela sao os slugs do catalogo.
     foreach ($C as $id => $c) {
         if ($c['tipo'] === 'botoes') { $max = 20; $un = 'botão'; }
         elseif ($c['tipo'] === 'lista' && !$listaDin($c)) { $max = 24; $un = 'linha'; }
         else continue;
         $vistos = [];
+        $ids = [];
         if ($c['tipo'] === 'botoes' && count($c['opcoes']) === 0) {
             $acha(5, $id, 'O card ' . $nome($id) . ' é de botões, mas não tem nenhum botão.');
         }
@@ -408,6 +429,17 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
         foreach ($c['opcoes'] as $o) {
             $r = trim($o['rotulo']);
             $n = mb_strlen($r, 'UTF-8');
+            $oid = trim((string) ($o['id'] ?? ''));
+            // "o botão" / "a linha", para a mensagem sair em portugues nos dois casos.
+            $art  = $un === 'botão' ? 'o' : 'a';
+            $este = $art . ' ' . $un;
+            $alvo = $r !== '' ? $este . ' "' . $r . '"' : ($un === 'botão' ? 'um botão' : 'uma linha') . ' sem texto';
+            if ($oid === '') {
+                $acha(5, $id, 'No card ' . $nome($id) . ', ' . $alvo . ' está sem identificação interna, e sem ela o WhatsApp recusa a mensagem inteira. Apague ' . $este . ' e crie de novo.');
+            } elseif (isset($ids[$oid])) {
+                $acha(5, $id, 'No card ' . $nome($id) . ', ' . $alvo . ' tem a mesma identificação interna de outr' . $art . ' ' . $un . ' deste card, e o WhatsApp recusa a mensagem inteira. Apague ' . $este . ' e crie de novo.');
+            }
+            $ids[$oid] = true;
             if ($r === '') {
                 $acha(5, $id, 'No card ' . $nome($id) . ', há ' . ($un === 'botão' ? 'um botão' : 'uma linha') . ' sem texto.');
             } elseif ($n > $max) {
@@ -888,6 +920,18 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
 
     case 'pdf':
         if ($roteiro === null) {
+            /* Mesma distincao que o descarte do slug faz 30 linhas acima, e por
+               isso ela tem que valer aqui tambem: po_fetch_roteiros devolve []
+               em ERRO, nao null, entao catalogo vazio e tanto "nao ha roteiro
+               ativo" quanto "o Supabase nao respondeu". Transitorio, porque
+               `humano` nunca devolve a conversa ao robo: entregar a humana quem
+               acabou de escolher o roteiro, por uma queda de banco, nao se
+               desfaz. Catalogo CHEIO sem o slug e que e permanente: o roteiro
+               saiu do ar e repetir recusaria igual, para sempre. */
+            if (!$roteiros()) {
+                error_log('wa_fluxo_executa: pdf com o catalogo vazio (slug "' . $slug . '"), transitorio: a proxima mensagem tenta de novo');
+                return $res(false, ['erro' => 'catalogo indisponivel']);
+            }
             error_log('wa_fluxo_executa: pdf sem roteiro no catalogo (slug "' . $slug . '"), indo para o humano');
             return $res(false, ['terminal' => 'humano', 'erro' => 'roteiro fora do catalogo']);
         }
