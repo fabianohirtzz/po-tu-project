@@ -214,6 +214,59 @@ function wa_send_list($para, $corpo, $botao, $itens) {
     ]);
 }
 
+/* Mensagem com botoes de resposta (ate 3). A Cloud API impoe: 3 botoes,
+   rotulo de ate 20 caracteres, corpo de ate 1024.
+
+   DIFERENCA DELIBERADA de wa_send_list: aquela TRUNCA, esta RECUSA. Rotulo
+   truncado muda o que o cliente le sem mudar o destino do clique, e o botao
+   passa a dizer uma coisa e levar a outra, sem que quem monta o fluxo veja.
+   Rotulos repetidos tambem recusam, porque o cliente nao distingue os dois.
+   Toda validacao e local: nada chega ao transporte, ja que a Meta cobra e
+   limita por chamada e so rejeita horas depois, sem dizer a regra. A medida
+   e em CARACTERES (mb_strlen), nunca em bytes. */
+function wa_send_buttons($para, $corpo, $botoes) {
+    $recusa = function ($motivo) {
+        return ['ok' => false, 'wamid' => null, 'erro' => $motivo];
+    };
+    $to = wa_destino($para);
+    if (!$to) return $recusa('telefone invalido: ' . $para);
+
+    $corpo = (string) $corpo;
+    if (trim($corpo) === '') return $recusa('corpo da mensagem vazio');
+    if (mb_strlen($corpo, 'UTF-8') > 1024) return $recusa('corpo acima de 1024 caracteres');
+
+    if (!is_array($botoes) || count($botoes) < 1) return $recusa('mensagem sem botoes');
+    if (count($botoes) > 3) return $recusa('mais de 3 botoes');
+
+    $lista = [];
+    $ids = [];
+    $rotulos = [];
+    foreach (array_values($botoes) as $b) {
+        $id = trim((string) ($b['id'] ?? ''));
+        $rotulo = trim((string) ($b['rotulo'] ?? ''));
+        if ($id === '') return $recusa('botao sem id');
+        if ($rotulo === '') return $recusa('botao sem rotulo');
+        if (mb_strlen($rotulo, 'UTF-8') > 20) return $recusa('rotulo acima de 20 caracteres: ' . $rotulo);
+        if (isset($ids[$id])) return $recusa('id de botao repetido: ' . $id);
+        $chave = mb_strtolower($rotulo, 'UTF-8');
+        if (isset($rotulos[$chave])) return $recusa('rotulo de botao repetido: ' . $rotulo);
+        $ids[$id] = true;
+        $rotulos[$chave] = true;
+        $lista[] = ['type' => 'reply', 'reply' => ['id' => $id, 'title' => $rotulo]];
+    }
+
+    return wa_envia([
+        'messaging_product' => 'whatsapp',
+        'to'                => $to,
+        'type'              => 'interactive',
+        'interactive'       => [
+            'type'   => 'button',
+            'body'   => ['text' => $corpo],
+            'action' => ['buttons' => $lista],
+        ],
+    ]);
+}
+
 /* Envio por TEMPLATE. Fora da janela de 24h a Cloud API nao aceita outra
    coisa, e a transmissao por definicao alcanca quem nao escreveu hoje.
 
