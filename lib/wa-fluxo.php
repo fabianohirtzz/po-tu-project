@@ -32,6 +32,7 @@ function wa_fluxo_set_deps($d) {
     $GLOBALS['WA_DEPS'] = array_merge($GLOBALS['WA_DEPS'] ?? [], $d);
 }
 function wa_fl_dep($nome) {
+    // Unica tabela de defaults: wa_dep (motor) delega para ca.
     if (isset($GLOBALS['WA_DEPS'][$nome])) return $GLOBALS['WA_DEPS'][$nome];
     $padrao = [
         'select'       => 'wa_db_select',
@@ -89,14 +90,35 @@ function wa_fluxo_vars_do_roteiro($r, $nome) {
         'roteiro' => is_array($r) ? (string) ($r['titulo'] ?? '') : '',
         'data'    => $data,
     ];
-    foreach (WA_FLUXO_VAR_MAX as $k => $max) $vars[$k] = mb_substr($vars[$k], 0, $max, 'UTF-8');
+    foreach (WA_FLUXO_VAR_MAX as $k => $max) $vars[$k] = wa_fluxo_corta($vars[$k], $max);
     return $vars;
+}
+
+/* Corta o valor de uma variavel no teto, em limite de palavra, com reticencia
+   so quando cortou de fato. Corte seco seria pior que feio: um periodo
+   cortado no meio ("27/10/2027 a 12/1") afirma uma data de volta que nao
+   existe. Sai com no maximo $max caracteres (o '…' conta um), entao o pior
+   caso de wa_fluxo_tam_pior_caso continua valendo. Idempotente. */
+function wa_fluxo_corta($v, $max) {
+    $v = (string) $v;
+    if (mb_strlen($v, 'UTF-8') <= $max) return $v;
+    $corte = mb_substr($v, 0, $max - 1, 'UTF-8');
+    // Recua ate o ultimo espaco, mas so se ele estiver razoavelmente perto
+    // do fim; senao uma palavra gigante comeria quase o valor inteiro.
+    $pos = mb_strrpos($corte, ' ', 0, 'UTF-8');
+    if ($pos !== false && $pos >= (int) ($max / 2)) $corte = mb_substr($corte, 0, $pos, 'UTF-8');
+    return rtrim($corte) . '…';
 }
 
 /* Substitui {nome}, {roteiro} e {data}. Qualquer outro {buraco} e REMOVIDO:
    texto montado no painel nao pode vazar chave crua para o cliente. */
 function wa_fluxo_texto($texto, $vars) {
-    foreach (WA_FLUXO_VARS as $k) $texto = str_replace('{' . $k . '}', (string) ($vars[$k] ?? ''), $texto);
+    // O teto e aplicado AQUI, no ponto de uso, e nao so em quem monta $vars:
+    // um chamador que monte o array a mao renderia mais que o orcamento que
+    // a validacao aprovou, e a Meta recusaria a mensagem inteira em silencio.
+    foreach (WA_FLUXO_VARS as $k) {
+        $texto = str_replace('{' . $k . '}', wa_fluxo_corta($vars[$k] ?? '', WA_FLUXO_VAR_MAX[$k]), $texto);
+    }
     $texto = preg_replace('/\{[a-z_]+\}/', '', $texto);
     return wa_limpa_pontuacao($texto);
 }

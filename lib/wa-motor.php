@@ -28,19 +28,7 @@ function wa_motor_set_deps($d) {
 }
 function wa_motor_set_anuncios($mapa) { $GLOBALS['WA_ANUNCIOS'] = $mapa; }
 
-function wa_dep($nome) {
-    if (isset($GLOBALS['WA_DEPS'][$nome])) return $GLOBALS['WA_DEPS'][$nome];
-    $padrao = [
-        'roteiros'  => 'po_fetch_roteiros',
-        'select'    => 'wa_db_select',
-        'insert'    => 'wa_db_insert',
-        'update'    => 'wa_db_update',
-        'send_text' => 'wa_send_text',
-        'send_doc'  => 'wa_send_document',
-        'send_list' => 'wa_send_list',
-    ];
-    return $padrao[$nome];
-}
+function wa_dep($nome) { return wa_fl_dep($nome); }
 function wa_call($nome, ...$args) { return call_user_func_array(wa_dep($nome), $args); }
 
 /* ---------- textos ---------- */
