@@ -242,7 +242,9 @@ function wa_fluxo_proximo($grafo, $card_id, $resposta, $ctx) {
 /* Destino do "sem resposta" do card, ou null. */
 function wa_fluxo_sem_resposta($grafo, $card_id) {
     $d = $grafo['cards'][$card_id]['sem_resposta'] ?? null;
-    return is_string($d) && $d !== '' ? $d : null;
+    // Mesma guarda do roteamento: destino que nao existe no grafo mandaria a
+    // conversa para um card fantasma, e ela pararia sem ninguem ver.
+    return is_string($d) && $d !== '' && isset($grafo['cards'][$d]) ? $d : null;
 }
 
 /* ---------- funcoes puras compartilhadas com o motor ---------- */

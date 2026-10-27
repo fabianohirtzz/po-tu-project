@@ -64,19 +64,30 @@ ok($r['card'] === 'hum' && $r['motivo'] === 'socorro', 'no teto, socorro vai par
 ok($r['ctx']['tentativas'] === 0, 'socorro zera o contador');
 
 // 7. card que NAO espera nunca consulta a resposta: segue por proximo
-foreach ([['pdf', 'mrc'], ['mrc', 'dt'], ['prog', 'lst']] as [$de, $para]) {
+foreach ([['pdf', 'mrc'], ['mrc', 'dt']] as [$de, $para]) {
     $r = wa_fluxo_proximo($grafo, $de, 'qualquer coisa', $ctx0);
-    ok($r['card'] === $para, "card $de segue por proximo, ignorando a resposta");
+    ok($r['card'] === $para && $r['motivo'] === 'proximo', "card $de segue por proximo, ignorando a resposta");
 }
+// 7b. `prog` e uma LISTA (espera): NAO ignora a resposta. Texto digitado vira
+// roteiro_slug. Contrato visivel: a execucao (Task 7) tem de conferir o slug
+// contra o catalogo, porque esta funcao pura nao conhece os roteiros.
+$r = wa_fluxo_proximo($grafo, 'prog', 'qualquer coisa', $ctx0);
+ok($r['card'] === 'lst' && $r['motivo'] === 'escolheu', 'lista dinamica escolhe, nao so segue');
+ok($r['ctx']['roteiro_slug'] === 'qualquer coisa', 'a lista dinamica grava a resposta crua como slug');
 
 // 8. terminal nao tem proximo
 foreach (['hum', 'fim'] as $t) {
-    ok(wa_fluxo_proximo($grafo, $t, 'x', $ctx0)['card'] === null, "card $t e terminal");
+    $r = wa_fluxo_proximo($grafo, $t, 'x', $ctx0);
+    ok($r['card'] === null && $r['motivo'] === 'terminal', "card $t e terminal");
 }
 
 // 9. ir_para_fluxo se anuncia pelo motivo, e o destino sai da config
 $r = wa_fluxo_proximo($grafo, 'vai', '', $ctx0);
-ok($r['motivo'] === 'ir_para_fluxo', 'ir_para_fluxo tem motivo proprio');
+ok($r['card'] === null && $r['motivo'] === 'ir_para_fluxo', 'ir_para_fluxo tem card null e motivo proprio');
+
+// 9b. mesmo com `proximo` preenchido, ir_para_fluxo nao segue por ele
+$g7 = $grafo; $g7['cards']['vai']['proximo'] = 'lst';
+ok(wa_fluxo_proximo($g7, 'vai', '', $ctx0)['card'] === null, 'ir_para_fluxo nunca devolve card, nem com proximo');
 
 // 10. card inexistente e tipo fora da lista nao estouram: devolvem invalido
 ok(wa_fluxo_proximo($grafo, 'nao-existe', 'x', $ctx0)['motivo'] === 'invalido', 'card inexistente e invalido');
@@ -85,12 +96,33 @@ ok(wa_fluxo_proximo($g2, 'zz', 'x', $ctx0)['motivo'] === 'invalido', 'tipo fora 
 
 // 11. fallback ausente num card que espera: cai no humano, nunca em null
 $g3 = $grafo; $g3['cards']['dt']['fallback'] = null;
-ok(wa_fluxo_proximo($g3, 'dt', 'bla', $ctx0)['card'] === 'hum', 'sem fallback, socorro imediato');
+$r = wa_fluxo_proximo($g3, 'dt', 'bla', $ctx0);
+ok($r['card'] === 'hum' && $r['motivo'] === 'socorro', 'sem fallback, socorro imediato');
 
 // 12. wa_fluxo_sem_resposta
 ok(wa_fluxo_sem_resposta($grafo, 'dt') === 'fim', 'sem_resposta do card');
 ok(wa_fluxo_sem_resposta($grafo, 'bv') === null, 'card sem sem_resposta devolve null');
 ok(wa_fluxo_sem_resposta($grafo, 'nao-existe') === null, 'card inexistente devolve null');
+$g6 = $grafo; $g6['cards']['dt']['sem_resposta'] = 'sumiu';
+ok(wa_fluxo_sem_resposta($g6, 'dt') === null, 'sem_resposta para card inexistente devolve null');
+
+// 12b. contrato: exatamente tres chaves, em todo caminho
+foreach (array_keys($grafo['cards']) as $id) {
+    foreach (['x', 'b2', ''] as $resp) {
+        $r = wa_fluxo_proximo($grafo, $id, $resp, $ctx0);
+        ok(array_keys($r) === ['card', 'ctx', 'motivo'], "retorno de $id/'$resp' tem so card, ctx e motivo");
+    }
+}
+ok(array_keys(wa_fluxo_proximo($grafo, 'nao-existe', 'x', $ctx0)) === ['card', 'ctx', 'motivo'], 'invalido tem so tres chaves');
+
+// 12c. o slug ja escolhido sobrevive ao card seguinte (senao o PDF sai do roteiro errado)
+$ctxS = ['roteiro_slug' => 'turquia', 'tentativas' => 1];
+$r = wa_fluxo_proximo($grafo, 'bv', 'b1', $ctxS);
+ok($r['motivo'] === 'opcao' && $r['ctx']['roteiro_slug'] === 'turquia', 'opcao preserva o slug do contexto');
+$r = wa_fluxo_proximo($grafo, 'pdf', 'x', $ctxS);
+ok($r['ctx']['roteiro_slug'] === 'turquia', 'card que nao espera preserva o slug');
+$r = wa_fluxo_proximo($grafo, 'dt', 'bla', $ctxS);
+ok($r['motivo'] === 'fallback' && $r['ctx']['roteiro_slug'] === 'turquia', 'fallback preserva o slug');
 
 // 13. a funcao e PURA: o grafo e o ctx que entraram nao mudam
 $antes = $grafo; $ctx = $ctx0;
