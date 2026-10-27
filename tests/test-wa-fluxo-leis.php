@@ -332,6 +332,19 @@ ok(count($ENVIADAS) === 2 && $ENVIADAS[1][2] === 'Avisamos quando houver data no
 ok(conv()['fluxo_versao_id'] === 'v-f-espera', 'entrar em outro fluxo carimba a versao DELE');
 ok(conv()['estado'] === 'encerrado', 'e o fim do outro fluxo encerra');
 ok($DB['po_leads'][0]['espera'] === ['turquia'], 'o contexto atravessou o salto: o destino foi para a lista de espera');
+// Salto a partir de uma conversa que ja estava em andamento (a entrada nao
+// carimbou nada nesta mensagem): o salto e quem carimba a versao do destino.
+zera();
+add_fluxo('f-menu', 'palavra', 'menu', mini('m1', [
+    'm1' => fx_card('m1', 'botoes', ['texto' => 'Quer entrar na lista de espera?', 'fallback' => 'm1',
+        'opcoes' => [['id' => 'sim', 'rotulo' => 'Sim', 'destino' => 'm2']]]),
+    'm2' => fx_card('m2', 'ir_para_fluxo', ['config' => ['fluxo' => 'f-espera']]),
+]));
+add_fluxo('f-espera', 'chamado', null, mini('e1', ['e1' => fx_card('e1', 'fim', ['texto' => 'Avisamos.'])]));
+wa_processar(ev('mensagem', 'menu'));
+ok(conv()['fluxo_versao_id'] === 'v-f-menu', 'preparo: a conversa entrou pelo fluxo do menu');
+ok(wa_processar(clica('sim')) === 'fluxo', 'o clique atravessa o salto');
+ok(conv()['fluxo_versao_id'] === 'v-f-espera' && conv()['estado'] === 'encerrado', 'e a conversa passa a pertencer ao fluxo de destino');
 // destino ausente ou desligado cai no mesmo caminho do card perdido
 zera();
 add_fluxo('f-quebra', 'palavra', 'quebra', mini('q1', ['q1' => fx_card('q1', 'ir_para_fluxo', ['config' => ['fluxo' => 'nao-existe']])]));
