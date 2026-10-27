@@ -15,6 +15,7 @@
 
 require_once __DIR__ . '/po-data.php';
 require_once __DIR__ . '/wa-db.php';
+require_once __DIR__ . '/wa-fluxo.php';
 require_once __DIR__ . '/wa-send.php';
 require_once __DIR__ . '/wa-roteiro.php';
 require_once __DIR__ . '/wa-fone.php';
@@ -66,65 +67,6 @@ function wa_texto($chave, $vars = []) {
     // Placeholder sem valor nao pode vazar para o cliente.
     $t = preg_replace('/\{[a-z_]+\}/', '', $t);
     return wa_limpa_pontuacao($t);
-}
-
-/* Rede de seguranca contra placeholder vazio (ex.: {nome} quando quem
-   chama nao tem o nome do lead a mao): sem isto sobra pontuacao orfa no
-   texto que vai pro cliente, tipo "Oi , tudo bem?" em vez de "Oi, tudo
-   bem?". Nao existe pra "consertar" a falta do dado, so pra nenhum texto
-   sair visivelmente quebrado quando isso acontece (revisao: Important 2). */
-function wa_limpa_pontuacao($t) {
-    $t = preg_replace('/ {2,}/', ' ', $t);           // espaco duplo
-    $t = preg_replace('/\s+([,.!?;:])/', '$1', $t);  // espaco antes de pontuacao
-    $t = preg_replace('/([,.!?;:])\1+/', '$1', $t);  // pontuacao duplicada
-    /* Virgula orfa ANTES do placeholder. A regra acima so junta pontuacao
-       IGUAL, entao "Perfeito, {nome}." com nome vazio virava "Perfeito,." e
-       saia assim no WhatsApp do cliente. So a forma "Oi {nome}," escapava, o
-       que obrigava todo texto da tela a comecar por saudacao. Vale tambem
-       para os textos que estao no banco desde o seed. */
-    $t = preg_replace('/[,;:]\s*([.!?])/', '$1', $t);
-    return trim($t);
-}
-
-/* ---------- log do que o robo manda ----------
-   Duas coisas de uma vez:
-
-   1) po_wa_mensagens vira o log completo que a spec promete (secao 4) e
-      que a aba de conversa do lead vai ler. Antes so entrava mensagem do
-      cliente e eco, entao a aba nasceria mostrando as respostas sem as
-      perguntas.
-
-   2) E o unico jeito de reconhecer o proprio envio quando ele volta como
-      eco. Nada no payload da Meta distingue "a dona digitou no celular" de
-      "nos enviamos pela Cloud API": se a configuracao de coexistencia
-      ecoar tambem o que sai pela API, o primeiro PDF que o robo mandar
-      volta como eco, vira handoff e silencia o robo naquele contato para
-      sempre - em toda conversa, e o sintoma pareceria "o robo so responde
-      uma vez".
-
-   Envio que falhou nao entra: sem wamid nao ha o que reconhecer depois. */
-function wa_registra_saida($wa_id, $envio, $tipo, $texto) {
-    if (empty($envio['ok']) || empty($envio['wamid'])) return;
-    wa_call('insert', 'po_wa_mensagens', [
-        'wa_id'   => $wa_id,
-        'wamid'   => $envio['wamid'],
-        'direcao' => 'out',
-        'autor'   => 'robo',
-        'tipo'    => $tipo,
-        'texto'   => $texto,
-        'ts'      => gmdate('c'),
-    ]);
-}
-
-/* O eco carrega o wamid da mensagem ecoada. Se ele ja esta no log como
-   nosso, o evento e o proprio envio voltando, nao a dona falando. */
-function wa_msg_do_robo($wamid) {
-    if ($wamid === '' || $wamid === null) return false;
-    $linhas = wa_call('select', 'po_wa_mensagens', 'wamid=eq.' . rawurlencode($wamid));
-    foreach ($linhas as $l) {
-        if (($l['wamid'] ?? null) === $wamid) return ($l['autor'] ?? '') === 'robo';
-    }
-    return false;
 }
 
 /* Envia texto puro, mas nunca com o corpo vazio: uma chave apagada do
@@ -359,11 +301,6 @@ function wa_msgs_do_cliente_depois($wa_id, $desde) {
         if ($ts && $ts > $corte) $n++;
     }
     return $n;
-}
-
-function wa_acha_roteiro($slug, $roteiros) {
-    foreach ($roteiros as $r) if (($r['slug'] ?? '') === $slug) return $r;
-    return null;
 }
 
 /* ---------- envio do roteiro ---------- */
