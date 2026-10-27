@@ -49,9 +49,17 @@ foreach (['po_wa_contatos','po_wa_conversas','po_wa_mensagens','po_wa_anuncios',
     ok(tabela_existe($base, $t), "tabela $t existe (rodou a migration?)");
 }
 
-// As colunas novas de po_leads: pedir a coluna por nome devolve 400 se nao existir.
-foreach (['wa_id','ctwa_clid','ad_id','qualif_data','qualif_grupo','qualif_at','proposta_at'] as $c) {
+/* As colunas novas: pedir a coluna por nome devolve 400 se nao existir.
+   Conferir so as TABELAS nao basta. Uma migration como a do fluxo cria tabela E
+   roda `alter table ... add column`; se a parte do alter falhar sozinha, a sonda
+   de tabela passa verde e o motor quebra em producao - o PostgREST devolve 400
+   para coluna desconhecida e wa_conversa_set falha calado, entao o robo nunca
+   grava onde a conversa esta e repete o primeiro card para sempre. */
+foreach (['wa_id','ctwa_clid','ad_id','qualif_data','qualif_grupo','qualif_at','proposta_at','interesses','espera'] as $c) {
     ok(po_http_get($base . 'po_leads?select=' . $c . '&limit=0', 0) !== null, "po_leads.$c existe");
+}
+foreach (['fluxo_versao_id','card_atual','tentativas'] as $c) {
+    ok(po_http_get($base . 'po_wa_conversas?select=' . $c . '&limit=0', 0) !== null, "po_wa_conversas.$c existe");
 }
 
 /* Os textos iniciais precisam estar la, senao o robo manda mensagem vazia.

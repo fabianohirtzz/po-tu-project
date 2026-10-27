@@ -1334,7 +1334,34 @@ git commit -m "feat(fluxo): o fluxo semeado, publicado na versao 1 e desligado"
 
 O Plano A **não vai para o ar nesta sequência**. O que fica pronto é código e suíte. Antes de publicar:
 
-1. Rodar as duas migrations no Supabase, nesta ordem.
+1. Rodar as duas migrations no Supabase, nesta ordem. A conversão de estado do
+   fim de `2026-10-27-fluxo-conversa.sql` é de **rodada única** (está escrito no
+   cabeçalho dela): reaplicada depois do go-live, ela colapsa em `encerrado` o
+   marcador de cadeia parada (`novo` **com** `card_atual`) e as conversas
+   recém-criadas, e essas pessoas voltariam a resolver a porta e a receber as
+   boas-vindas e o PDF outra vez.
 2. Conferir no banco que os dois fluxos existem com `ativo = false` e `versao_atual` apontando para a versão 1.
-3. Subir por FTP: `lib/wa-fluxo.php`, `lib/wa-send.php`, `lib/wa-motor.php`, `lib/wa-timeout.php`. **Nenhum arquivo de `painel/`, então nenhum `?v=` a subir neste plano.**
-4. **Não** cadastrar cron no cPanel e **não** inscrever o webhook: o robô segue inerte, e ligar é decisão da cliente.
+3. **Conferir as cinco COLUNAS novas, não só as três tabelas.** Se a parte de
+   `alter table` da migration falhar sozinha, as tabelas existem, a sonda de
+   tabela passa verde e o motor quebra em produção: o PostgREST devolve 400 para
+   coluna desconhecida e `wa_conversa_set` falha calado, então o robô nunca
+   grava onde a conversa está e repete o primeiro card para sempre.
+   `select fluxo_versao_id, card_atual, tentativas from po_wa_conversas limit 1`
+   e `select interesses, espera from po_leads limit 1`.
+   (`tests/test-wa-schema.php` faz a mesma conferência, mas só roda com o
+   `config.local.php` na mão.)
+4. Subir por FTP, **nesta ordem**: `lib/wa-fluxo.php` → `lib/wa-send.php` →
+   `lib/wa-motor.php` → `lib/wa-timeout.php`. **`wa-fluxo.php` sobe ANTES de
+   `wa-motor.php`**, porque o motor faz `require_once __DIR__ . '/wa-fluxo.php'`:
+   num deploy FTP arquivo a arquivo, a janela em que o motor novo está no ar sem
+   a biblioteca nova faz `whatsapp.php` e `wa-cron.php` darem **fatal error**. É
+   a mesma regra que o CLAUDE.md já encarna para o painel ("os JS novos primeiro,
+   o `index.html` por último"). **Nenhum arquivo de `painel/`, então nenhum `?v=`
+   a subir neste plano.**
+5. **Não** cadastrar cron no cPanel e **não** inscrever o webhook: o robô segue inerte, e ligar é decisão da cliente.
+6. Quando a cliente for ligar, **ligar a "Lista de espera" ANTES da "Boas-vindas
+   e triagem"**: a regra 11 exige que o destino de um `ir_para_fluxo` esteja
+   publicado **e ativo**, e a triagem salta para a espera. Com a espera
+   desligada, a triagem não republica (é um bloqueio, não um aviso). Isso já
+   está travado em `tests/test-wa-fluxo-semeado.php`, que exige exatamente um
+   bloqueio (regra 11) nesse estado.
