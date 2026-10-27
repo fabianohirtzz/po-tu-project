@@ -748,6 +748,165 @@ function wa_fluxo_porta($ev, $fluxos) {
     return $nova ? $nova[0] : null;
 }
 
+/* ---------- execucao de um card: o lado que fala com o cliente ----------
+   Unica parte do interpretador que manda mensagem de verdade. A LEI daqui:
+   o estado so avanca se o envio saiu. `ok` so e true quando a Cloud API
+   devolveu ok E um wamid; quem chama (wa_processar) so grava o card novo na
+   conversa com ok === true. Sem isso o lead fica "aguardando resposta" de uma
+   mensagem que nunca chegou, e o cron o encerra sozinho.
+
+   Retorna ['ok','wamid','espera','terminal','ctx','erro']:
+   - terminal: null | 'humano' | 'fim'. Vem junto de ok=false so quando o
+     proprio card nao tem o que fazer (pdf sem roteiro): quem chama entrega a
+     conversa ao humano em vez de repetir o card.
+   - ctx: o contexto, com o slug descartado se ele nao existe mais no catalogo.
+   `ir_para_fluxo` nao envia nada: quem carrega o outro grafo e o chamador. */
+const WA_FLUXO_SITE = 'https://pereiraoliveiraturismo.com.br';
+
+function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
+    $res = function ($ok, $extra = []) use (&$ctx) {
+        return array_merge(['ok' => $ok, 'wamid' => null, 'espera' => false, 'terminal' => null, 'ctx' => $ctx, 'erro' => null], $extra);
+    };
+    $recusa = function ($motivo) use ($res, $card_id) {
+        error_log('wa_fluxo_executa: card ' . $card_id . ': ' . $motivo);
+        return $res(false, ['erro' => $motivo]);
+    };
+    $card = $grafo['cards'][$card_id] ?? null;
+    if (!is_array($card) || !in_array($card['tipo'] ?? null, WA_CARD_TIPOS, true)) {
+        return $recusa('card inexistente ou de tipo desconhecido');
+    }
+    $tipo = $card['tipo'];
+    if ($tipo === 'ir_para_fluxo') return $res(true);
+
+    // O catalogo e lido uma vez por execucao.
+    $catalogo = null;
+    $roteiros = function () use (&$catalogo) {
+        if ($catalogo === null) {
+            $c = wa_fl_call('roteiros');
+            $catalogo = is_array($c) ? $c : [];
+        }
+        return $catalogo;
+    };
+
+    // O slug do contexto pode ser lixo: o roteamento grava qualquer resposta
+    // de uma lista dinamica, e o roteiro pode ter saido do ar. Aqui, que tem o
+    // catalogo, e que se confere. Catalogo VAZIO nao prova nada (Supabase
+    // fora): nesse caso o roteiro vale null so nesta execucao e o slug segue
+    // no contexto.
+    $slug = (string) ($ctx['roteiro_slug'] ?? '');
+    $roteiro = null;
+    if ($slug !== '') {
+        $roteiro = wa_acha_roteiro($slug, $roteiros());
+        if ($roteiro === null && $roteiros()) {
+            error_log('wa_fluxo_executa: slug fora do catalogo descartado: ' . $slug);
+            $ctx['roteiro_slug'] = null;
+        }
+    }
+
+    $corpo = wa_fluxo_texto((string) ($card['texto'] ?? ''), wa_fluxo_vars_do_roteiro($roteiro, $nome));
+    $vazio = trim($corpo) === '';
+
+    // Registra a saida (o log que separa o eco do robo do eco da dona) e
+    // decide o ok: so com wamid.
+    $saiu = function ($envio, $tipo_log, $texto, $espera) use ($wa_id, $res, $card_id) {
+        wa_registra_saida($wa_id, $envio, $tipo_log, $texto);
+        if (empty($envio['ok']) || empty($envio['wamid'])) {
+            $erro = (string) ($envio['erro'] ?? 'envio sem confirmacao');
+            error_log('wa_fluxo_executa: envio falhou no card ' . $card_id . ': ' . $erro);
+            return $res(false, ['erro' => $erro]);
+        }
+        return $res(true, ['wamid' => $envio['wamid'], 'espera' => $espera]);
+    };
+
+    switch ($tipo) {
+    case 'texto':
+        if ($vazio) return $recusa('texto do card vazio');
+        return $saiu(wa_fl_call('send_text', $wa_id, $corpo), 'text', $corpo, false);
+
+    case 'botoes':
+        if ($vazio) return $recusa('texto do card vazio');
+        $botoes = [];
+        foreach ($card['opcoes'] ?? [] as $o) $botoes[] = ['id' => (string) ($o['id'] ?? ''), 'rotulo' => (string) ($o['rotulo'] ?? '')];
+        return $saiu(wa_fl_call('send_buttons', $wa_id, $corpo, $botoes), 'buttons', $corpo, true);
+
+    case 'lista':
+        if ($vazio) return $recusa('texto do card vazio');
+        $itens = [];
+        if (($card['config']['fonte'] ?? null) === 'roteiros') {
+            $ano = trim((string) ($card['config']['ano'] ?? ''));
+            foreach ($roteiros() as $r) {
+                if ($ano !== '' && po_ano($r) !== $ano) continue;
+                $id = (string) ($r['slug'] ?? '');
+                $titulo = trim((string) ($r['titulo'] ?? ''));
+                if ($id === '' || $titulo === '') continue;
+                $quando = (string) ($r['data_label'] ?? '') ?: (string) ($r['periodo'] ?? '');
+                // Titulo de linha 24 e descricao 72: a variavel {roteiro} tem teto 60, entao so aqui se corta.
+                $itens[] = ['id' => $id, 'titulo' => wa_fluxo_corta($titulo, 24), 'descricao' => wa_fluxo_corta($quando, 72)];
+            }
+        } else {
+            foreach ($card['opcoes'] ?? [] as $o) {
+                $titulo = trim((string) ($o['rotulo'] ?? ''));
+                if ($titulo === '' || (string) ($o['id'] ?? '') === '') continue;
+                $itens[] = ['id' => (string) $o['id'], 'titulo' => wa_fluxo_corta($titulo, 24),
+                            'descricao' => wa_fluxo_corta((string) ($o['descricao'] ?? ''), 72)];
+            }
+        }
+        $itens = array_slice($itens, 0, 10);
+        // A Graph recusa lista de zero linhas e a mensagem inteira nao sai.
+        // O corpo ja pergunta qual viagem interessa: como texto, sai sempre.
+        if (!$itens) {
+            return $saiu(wa_fl_call('send_text', $wa_id, $corpo), 'text', $corpo, true);
+        }
+        $botao = wa_fluxo_corta(trim((string) ($card['config']['botao'] ?? '')) ?: 'Ver roteiros', 20);
+        return $saiu(wa_fl_call('send_list', $wa_id, $corpo, $botao, $itens), 'list', $corpo, true);
+
+    case 'pdf':
+        if ($roteiro === null) {
+            error_log('wa_fluxo_executa: pdf sem roteiro no catalogo (slug "' . $slug . '"), indo para o humano');
+            return $res(false, ['terminal' => 'humano', 'erro' => 'roteiro fora do catalogo']);
+        }
+        if (empty($roteiro['pdf_url'])) {
+            // Sem PDF a conversa nao morre: o link da pagina sempre existe.
+            $texto = trim($corpo . "\n\n" . WA_FLUXO_SITE . '/roteiros/' . $slug);
+            return $saiu(wa_fl_call('send_text', $wa_id, $texto), 'text', $texto, false);
+        }
+        return $saiu(wa_fl_call('send_doc', $wa_id, $roteiro['pdf_url'], $slug . '.pdf', $corpo), 'document', $corpo, false);
+
+    case 'marca':
+        $campos = wa_fluxo_campos_marca($card['config'] ?? [], ['roteiro_slug' => $roteiro !== null ? $slug : null]);
+        // interesses e espera ACRESCENTAM ao que a ficha ja tem (quem compara
+        // dois roteiros fica com os dois). Ler com a variante estrita: um erro
+        // lido como "vazio" apagaria o que estava la ao gravar por cima.
+        foreach (['interesses', 'espera'] as $c) {
+            if (!isset($campos[$c])) continue;
+            $linhas = wa_fl_call('select_estrito', 'po_leads', 'wa_id=eq.' . rawurlencode($wa_id) . '&select=' . $c . '&limit=1');
+            if ($linhas === null) {
+                error_log('wa_fluxo_executa: leitura de ' . $c . ' falhou, nao grava para nao apagar');
+                unset($campos[$c]);
+                continue;
+            }
+            $atual = $linhas[0][$c] ?? [];
+            if (is_string($atual)) $atual = json_decode($atual, true);
+            $campos[$c] = array_values(array_unique(array_merge(is_array($atual) ? $atual : [], $campos[$c])));
+        }
+        // Cinto e suspensorio: so a whitelist chega ao banco.
+        $campos = array_intersect_key($campos, array_flip(WA_FLUXO_CAMPOS_MARCAVEIS));
+        if ($campos && !wa_fl_call('update', 'po_leads', 'wa_id=eq.' . rawurlencode($wa_id), $campos)) {
+            return $recusa('gravacao da marca falhou');
+        }
+        return $res(true);
+
+    case 'humano':
+    case 'fim':
+        $terminal = $tipo === 'humano' ? 'humano' : 'fim';
+        if ($vazio) return $res(true, ['terminal' => $terminal]);
+        $r = $saiu(wa_fl_call('send_text', $wa_id, $corpo), 'text', $corpo, false);
+        if ($r['ok']) $r['terminal'] = $terminal;
+        return $r;
+    }
+    return $recusa('tipo sem execucao');
+}
+
 /* ---------- funcoes puras compartilhadas com o motor ---------- */
 
 /* Rede de seguranca contra placeholder vazio (ex.: {nome} quando quem
