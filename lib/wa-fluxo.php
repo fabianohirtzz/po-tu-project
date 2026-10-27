@@ -163,6 +163,88 @@ function wa_fluxo_campos_marca($config, $ctx) {
     return $campos;
 }
 
+/* ---------- roteamento puro ----------
+   Dada a resposta do cliente, qual card vem agora. Nenhuma rede, nenhum
+   banco, nenhum relogio: grafo, resposta e contexto entram, o proximo card
+   sai. Quem envia e quem grava e a execucao, nao esta secao.
+
+   Teto de respostas fora do esperado (texto, audio, botao antigo) antes de
+   o robo desistir e chamar a dona. Com 2, a terceira vai para o humano. */
+const WA_FLUXO_MAX_TENTATIVAS = 2;
+
+/* Retorna ['card' => ?string, 'ctx' => array, 'motivo' => string].
+   motivo: opcao | escolheu | fallback | socorro | invalido | ir_para_fluxo
+   mais dois que nomeiam os "sem proximo" que, sem nome, seriam um null mudo:
+   proximo (card que nao espera) e terminal (humano/fim).
+   `ir_para_fluxo` so se anuncia (card null): o destino esta em
+   config.fluxo e quem carrega o outro grafo e o executor. */
+function wa_fluxo_proximo($grafo, $card_id, $resposta, $ctx) {
+    $card = $grafo['cards'][$card_id] ?? null;
+    if (!is_array($card) || !in_array($card['tipo'] ?? null, WA_CARD_TIPOS, true)) {
+        return ['card' => null, 'ctx' => $ctx, 'motivo' => 'invalido'];
+    }
+    $tipo = $card['tipo'];
+    if (in_array($tipo, WA_CARD_TERMINAL, true)) {
+        return ['card' => null, 'ctx' => $ctx, 'motivo' => 'terminal'];
+    }
+    if ($tipo === 'ir_para_fluxo') {
+        return ['card' => null, 'ctx' => $ctx, 'motivo' => 'ir_para_fluxo'];
+    }
+
+    $existe = function ($id) use ($grafo) {
+        return is_string($id) && $id !== '' && isset($grafo['cards'][$id]);
+    };
+
+    // Card que nao espera nunca olha a resposta.
+    if (!in_array($tipo, WA_CARD_ESPERA, true)) {
+        if ($existe($card['proximo'] ?? null)) {
+            return ['card' => $card['proximo'], 'ctx' => $ctx, 'motivo' => 'proximo'];
+        }
+        return ['card' => null, 'ctx' => $ctx, 'motivo' => 'invalido'];
+    }
+
+    $resposta = (string) $resposta;
+    $certo = ['roteiro_slug' => $ctx['roteiro_slug'] ?? null, 'tentativas' => 0];
+
+    // Lista dinamica: a resposta e o slug e o destino e um so (proximo). Esta
+    // funcao e pura e nao sabe quais roteiros existem; conferir o slug contra
+    // o catalogo e da execucao. Resposta vazia nao e escolha.
+    if ($tipo === 'lista' && ($card['config']['fonte'] ?? null) === 'roteiros') {
+        if ($resposta !== '' && $existe($card['proximo'] ?? null)) {
+            $certo['roteiro_slug'] = $resposta;
+            return ['card' => $card['proximo'], 'ctx' => $certo, 'motivo' => 'escolheu'];
+        }
+    } else {
+        // So as opcoes DESTE card: o id de um botao de mensagem antiga existe
+        // no grafo, mas nao aqui, e tem que cair no fallback.
+        foreach ($card['opcoes'] ?? [] as $o) {
+            if ($resposta !== '' && (string) ($o['id'] ?? '') === $resposta && $existe($o['destino'] ?? null)) {
+                return ['card' => $o['destino'], 'ctx' => $certo, 'motivo' => 'opcao'];
+            }
+        }
+    }
+
+    $tentativas = (int) ($ctx['tentativas'] ?? 0);
+    if ($existe($card['fallback'] ?? null) && $tentativas < WA_FLUXO_MAX_TENTATIVAS) {
+        $ctx['tentativas'] = $tentativas + 1;
+        return ['card' => $card['fallback'], 'ctx' => $ctx, 'motivo' => 'fallback'];
+    }
+
+    // Socorro: sem fallback ou no teto. Zera o contador.
+    $ctx['tentativas'] = 0;
+    $humano = $grafo['humano'] ?? null;
+    if ($existe($humano)) {
+        return ['card' => $humano, 'ctx' => $ctx, 'motivo' => 'socorro'];
+    }
+    return ['card' => null, 'ctx' => $ctx, 'motivo' => 'invalido'];
+}
+
+/* Destino do "sem resposta" do card, ou null. */
+function wa_fluxo_sem_resposta($grafo, $card_id) {
+    $d = $grafo['cards'][$card_id]['sem_resposta'] ?? null;
+    return is_string($d) && $d !== '' ? $d : null;
+}
+
 /* ---------- funcoes puras compartilhadas com o motor ---------- */
 
 /* Rede de seguranca contra placeholder vazio (ex.: {nome} quando quem
