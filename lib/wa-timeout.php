@@ -62,23 +62,23 @@ function wa_cron_autorizado($chave_configurada, $chave_recebida) {
    "perdeu so pela data" da transmissao (wa_camp_perdeu_data) seleciona
    status='perdido', entao um caminho de encerramento que esquecesse o carimbo
    faria aquele publico murchar em silencio. */
-function wa_to_encerra($wa, $campos = []) {
+function wa_to_encerra($wa, $campos = [], $carimba = true) {
     wa_to_call('update', 'po_wa_conversas', 'wa_id=eq.' . rawurlencode($wa),
         $campos + ['estado' => 'encerrado']);
-    wa_to_call('update', 'po_leads', 'wa_id=eq.' . rawurlencode($wa), ['status' => 'perdido']);
+    if ($carimba) wa_to_call('update', 'po_leads', 'wa_id=eq.' . rawurlencode($wa), ['status' => 'perdido']);
 }
 
 /* Executa o card de "sem resposta" e fecha a conversa. So chamada DENTRO da
-   janela de 24h. Devolve true quando a conversa foi resolvida (encerrada ou
-   entregue a humana) e false quando deve ficar como esta para a proxima
+   janela de 24h. Devolve 'encerrada' ou 'humana' quando a conversa foi
+   resolvida, e false quando deve ficar como esta para a proxima
    varredura (envio que falhou sem destino terminal: a janela ainda esta
    aberta, vale tentar de novo). Executa UM card, sem seguir o `proximo`:
    seguir poderia chegar a um card que espera. */
-function wa_to_sem_resposta($c, $grafo, $nome) {
+function wa_to_sem_resposta($c, $grafo, $nome, $agora) {
     $wa    = $c['wa_id'];
     $atual = (string) $c['card_atual'];
     $dest  = wa_fluxo_sem_resposta($grafo, $atual);
-    if ($dest === null) { wa_to_encerra($wa); return true; }
+    if ($dest === null) { wa_to_encerra($wa); return 'encerrada'; }
 
     // O cron executa sem ninguem olhando e NAO confia na validacao de quem
     // publicou: card que espera (botoes, lista) mandaria uma pergunta de
@@ -86,8 +86,17 @@ function wa_to_sem_resposta($c, $grafo, $nome) {
     if (!in_array($grafo['cards'][$dest]['tipo'] ?? '', WA_SEM_RESPOSTA_TIPOS, true)) {
         error_log('wa_varre_timeouts: sem_resposta de ' . $atual . ' aponta para card de tipo nao permitido (' . $dest . '), encerrando sem executar | ' . $wa);
         wa_to_encerra($wa);
-        return true;
+        return 'encerrada';
     }
+
+    // Um card `marca` pode gravar o status do lead (e a spec 6.4 deixa ele
+    // dizer outra coisa que nao `perdido`). Entao o carimbo vem ANTES dele:
+    // carimbar depois atropelaria o que ele acabou de escrever. Nos outros
+    // tipos o carimbo fica para o encerramento, depois de o envio ter saido
+    // (envio falho que tenta de novo na proxima varredura nao pode deixar o
+    // lead perdido com a conversa ainda aberta).
+    $marca = ($grafo['cards'][$dest]['tipo'] ?? '') === 'marca';
+    if ($marca) wa_to_call('update', 'po_leads', 'wa_id=eq.' . rawurlencode($wa), ['status' => 'perdido']);
 
     $ctx = ['roteiro_slug' => $c['roteiro_slug'] ?? null, 'tentativas' => (int) ($c['tentativas'] ?? 0)];
     $r = wa_to_call('executa', $grafo, $dest, $wa, $ctx, $nome);
@@ -97,14 +106,14 @@ function wa_to_sem_resposta($c, $grafo, $nome) {
         // humana recebe de qualquer jeito. Nao e encerramento, entao o lead
         // nao e carimbado perdido: quem decide e a pessoa que assume.
         wa_to_call('update', 'po_wa_conversas', 'wa_id=eq.' . rawurlencode($wa), [
-            'estado' => 'humano', 'card_atual' => $dest, 'lembrete_at' => null, 'silenciado_at' => gmdate('c'),
+            'estado' => 'humano', 'card_atual' => $dest, 'lembrete_at' => null, 'silenciado_at' => gmdate('c', $agora),
         ]);
         wa_nota_lead($wa, 'O cliente não respondeu a tempo e o fluxo entregou a conversa para atendimento humano.');
-        return true;
+        return 'humana';
     }
     if (($r['terminal'] ?? null) === 'fim' || !empty($r['ok'])) {
-        wa_to_encerra($wa, ['card_atual' => $dest, 'lembrete_at' => null]);
-        return true;
+        wa_to_encerra($wa, ['card_atual' => $dest, 'lembrete_at' => null], !$marca);
+        return 'encerrada';
     }
     error_log('wa_varre_timeouts: sem_resposta nao saiu (' . ($r['erro'] ?? '?') . '), tenta de novo na proxima varredura | ' . $wa);
     return false;
@@ -145,7 +154,13 @@ function wa_varre_timeouts($agora = null) {
         $idade = $agora - $desde;
 
         if ($lembrete) {
-            if (($agora - $lembrete) < WA_HORAS_ENCERRA * 3600) continue;
+            // O encerramento vive DENTRO da janela, porque dentro dela esta
+            // tudo que o robo pode dizer (a despedida do sem_resposta). Lembrete
+            // + 24h cairia sempre depois das 24h e a despedida seria descartada
+            // em silencio; a janela e restricao de plataforma, o "24h depois do
+            // lembrete" e preferencia. Uma hora de folga para o cron acertar.
+            $quando = min($lembrete + WA_HORAS_ENCERRA * 3600, $desde + (WA_HORAS_JANELA - 1) * 3600);
+            if ($agora < $quando) continue;
         } elseif ($idade < WA_HORAS_LEMBRETE * 3600) {
             continue;
         }
@@ -217,7 +232,8 @@ function wa_varre_timeouts($agora = null) {
             // no momento em que o lembrete sairia (ainda dentro da janela).
         }
 
-        if (wa_to_sem_resposta($c, $grafo, $nome)) $encerrados++;
+        // Entregar a humana nao e encerrar: so a conversa fechada conta.
+        if (wa_to_sem_resposta($c, $grafo, $nome, $agora) === 'encerrada') $encerrados++;
     }
 
     return $resultado();

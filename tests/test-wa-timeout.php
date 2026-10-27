@@ -35,6 +35,14 @@ $GRAFO = ['id' => 'f1', 'nome' => 'Teste', 'inicial' => 'c_bot', 'humano' => 'c_
                  'sem_resposta'=>'c_aviso','lembrete_ativo'=>false,'lembrete_texto'=>null],
     'c_aviso'=> ['id'=>'c_aviso','tipo'=>'texto','texto'=>'Qualquer coisa, estou por aqui.','opcoes'=>[],'config'=>[],'proximo'=>null,'fallback'=>null,
                  'sem_resposta'=>null,'lembrete_ativo'=>false,'lembrete_texto'=>null],
+    // espera, lembrete LIGADO e sem_resposta definido: e o padrao do banco (lembrete_ativo default true)
+    'c_both' => ['id'=>'c_both','tipo'=>'botoes','texto'=>'Quer ver?','opcoes'=>[],'config'=>[],'proximo'=>null,'fallback'=>null,
+                 'sem_resposta'=>'c_aviso','lembrete_ativo'=>true,'lembrete_texto'=>'Oi {nome}, ainda por ai?'],
+    // sem_resposta para um `marca` que grava status (a spec 6.4 deixa o marca vencer o perdido)
+    'c_off_m'=> ['id'=>'c_off_m','tipo'=>'botoes','texto'=>'Quer ver?','opcoes'=>[],'config'=>[],'proximo'=>null,'fallback'=>null,
+                 'sem_resposta'=>'c_marca','lembrete_ativo'=>false,'lembrete_texto'=>null],
+    'c_marca'=> ['id'=>'c_marca','tipo'=>'marca','texto'=>null,'opcoes'=>[],'config'=>['status'=>'atendimento'],'proximo'=>null,'fallback'=>null,
+                 'sem_resposta'=>null,'lembrete_ativo'=>false,'lembrete_texto'=>null],
     'c_txt'  => ['id'=>'c_txt','tipo'=>'fim','texto'=>'Vou encerrar por aqui, {nome}.','opcoes'=>[],'config'=>[],'proximo'=>null,'fallback'=>null,
                  'sem_resposta'=>null,'lembrete_ativo'=>false,'lembrete_texto'=>null],
     'c_hum'  => ['id'=>'c_hum','tipo'=>'humano','texto'=>'Vou passar para a equipe.','opcoes'=>[],'config'=>[],'proximo'=>null,'fallback'=>null,
@@ -49,7 +57,7 @@ $ROTEIROS = [['slug' => 'turquia', 'titulo' => 'Turquia com Antalia', 'periodo' 
    essas e a guarda no laco, nao so o filtro que iria na query real. */
 function varre($conversas, $agora, $opt = []) {
     global $GRAFO, $ROTEIROS;
-    $M = ['envios' => [], 'conv' => [], 'lead' => [], 'log' => [], 'query' => null, 'grafo_chamado' => 0, 'executa' => []];
+    $M = ['envios' => [], 'conv' => [], 'lead' => [], 'log' => [], 'query' => null, 'seq' => [], 'grafo_chamado' => 0, 'executa' => []];
     $leads = [['wa_id' => '+5548900000002', 'nome' => 'Marta']];
     $grafo_dep = array_key_exists('grafo', $opt) ? $opt['grafo'] : $GRAFO;
     $envio_ok = $opt['envio_ok'] ?? true;
@@ -57,7 +65,7 @@ function varre($conversas, $agora, $opt = []) {
     wa_motor_set_deps([
         'select' => function ($t, $q) { return []; },
         'insert' => function ($t, $linha) use (&$M) { $M['log'][] = [$t, $linha]; return $linha; },
-        'update' => function ($t, $q, $c) { return true; },
+        'update' => function ($t, $q, $c) use (&$M) { if ($t === 'po_leads') $M['seq'][] = ['executa', $c]; return true; },
     ]);
     wa_fluxo_set_deps([
         'roteiros'  => function () use ($ROTEIROS) { return $ROTEIROS; },
@@ -82,7 +90,7 @@ function varre($conversas, $agora, $opt = []) {
             preg_match('/wa_id=eq\.([^&]+)/', $q, $m);
             $wa = isset($m[1]) ? urldecode($m[1]) : '?';
             if ($t === 'po_wa_conversas') $M['conv'][$wa][] = $c;
-            if ($t === 'po_leads') $M['lead'][$wa][] = $c;
+            if ($t === 'po_leads') { $M['lead'][$wa][] = $c; $M['seq'][] = ['cron', $c]; }
             return true;
         },
         'send_text' => function ($para, $txt) use (&$M, $envio_ok) {
@@ -132,7 +140,7 @@ $M = varre([conv($W, 'aguardando', 'c_bot', 20)], $agora);
 ok($M['r']['lembretes'] === 1, 'em 20h exatas o lembrete sai');
 
 // Ja levou lembrete ha pouco: espera mais, esteja a janela aberta ou nao
-$M = varre([conv($W, 'aguardando', 'c_bot', 22, 2), conv('+5548900000003', 'aguardando', 'c_bot', 27, 2)], $agora);
+$M = varre([conv($W, 'aguardando', 'c_bot', 22, 2)], $agora);
 ok($M['envios'] === [] && $M['conv'] === [] && $M['lead'] === [], 'lembrete enviado ha 2h: a conversa espera mais, sem novo lembrete nem encerramento');
 
 /* 4. Card com lembrete desligado nao manda lembrete */
@@ -210,6 +218,35 @@ ok(($M['conv'][$W][0]['card_atual'] ?? '') === 'c_aviso' && ($M['conv'][$W][0]['
 $M = varre([conv($W, 'aguardando', 'c_off', 21)], $agora, ['envio_ok' => false]);
 ok(($M['conv'][$W][0]['estado'] ?? '') === 'encerrado' && ($M['lead'][$W][0]['status'] ?? '') === 'perdido', 'fim com aviso falhado: encerra e carimba');
 
+/* 10b. O PADRAO DO BANCO: lembrete ligado E sem_resposta. A despedida tem de SAIR,
+   e antes da borda da janela (lembrete + 24h cairia sempre depois dela). */
+// lembrete saiu em desde+20h; em desde+22h30 ainda espera
+$M = varre([conv($W, 'aguardando', 'c_both', 22.5, 2.5)], $agora);
+ok($M['envios'] === [] && $M['conv'] === [], 'ate 1h antes da borda a conversa ainda espera');
+// em desde+23h (o min de lembrete+24h e desde+23h) a despedida sai, DENTRO da janela
+$M = varre([conv($W, 'aguardando', 'c_both', 23.2, 3.2)], $agora);
+ok($M['executa'] === ['c_aviso'], 'lembrete ligado: a despedida do sem_resposta e executada');
+ok($M['envios'] === [[$W, 'executa', 'Qualquer coisa, estou por aqui.']], 'e sai (veio: ' . json_encode($M['envios']) . ')');
+ok($M['r']['encerrados'] === 1 && $M['r']['fora_da_janela'] === 0, 'encerra dentro da janela, nao conta como fora dela');
+ok(($M['lead'][$W][0]['status'] ?? '') === 'perdido', 'e carimba perdido');
+// a despedida sai ANTES das 24h: nenhuma varredura dentro da janela a deixa para depois
+foreach ([23.0, 23.5, 23.99] as $idade_h) {
+    $M = varre([conv($W, 'aguardando', 'c_both', $idade_h, $idade_h - 20)], $agora);
+    ok($M['executa'] === ['c_aviso'], "despedida sai com {$idade_h}h de espera");
+}
+// o fluxo completo, do lembrete a despedida, numa conversa so
+$M = varre([conv($W, 'aguardando', 'c_both', 20.5)], $agora);
+ok($M['r']['lembretes'] === 1 && $M['envios'][0][1] === 'lembrete', 'primeiro o lembrete (20h30)');
+
+/* 10c. sem_resposta para `marca`: o status que ele grava VENCE o perdido */
+$M = varre([conv($W, 'aguardando', 'c_off_m', 21)], $agora);
+ok($M['executa'] === ['c_marca'], 'o marca e executado');
+$ult = null; foreach ($M['seq'] as $e) if (isset($e[1]['status'])) $ult = $e[1]['status'];
+ok($ult === 'atendimento', 'o ultimo status gravado e o do marca, nao perdido (veio: ' . json_encode($M['seq']) . ')');
+ok(($M['seq'][0][0] ?? '') === 'cron' && ($M['seq'][0][1]['status'] ?? '') === 'perdido' && ($M['seq'][1][0] ?? '') === 'executa', 'o perdido e carimbado ANTES do marca, para o marca poder vencer');
+ok(($M['conv'][$W][0]['estado'] ?? '') === 'encerrado' && ($M['conv'][$W][0]['card_atual'] ?? '') === 'c_marca', 'e a conversa encerra no marca');
+ok($M['r']['encerrados'] === 1, 'conta como encerrada');
+
 /* 11. sem_resposta para card que ESPERA nunca e executado pelo cron */
 $M = varre([conv($W, 'aguardando', 'c_ruim', 21)], $agora);
 ok($M['executa'] === [] && $M['envios'] === [], 'o cron recusa executar card que espera');
@@ -217,7 +254,8 @@ ok(($M['conv'][$W][0]['estado'] ?? '') === 'encerrado', 'e encerra em vez de man
 
 /* 12. sem_resposta para a humana: entrega, nao carimba perdido */
 $M = varre([conv($W, 'aguardando', 'c_p_hum', 21)], $agora);
-ok(($M['conv'][$W][0]['estado'] ?? '') === 'humano' && !empty($M['conv'][$W][0]['silenciado_at']), 'entregue a humana e silenciada');
+ok(($M['conv'][$W][0]['estado'] ?? '') === 'humano' && ($M['conv'][$W][0]['silenciado_at'] ?? '') === gmdate('c', $agora), 'entregue a humana e silenciada, com o relogio da varredura');
+ok($M['r']['encerrados'] === 0, 'entregar a humana nao conta como encerrada');
 ok(!isset($M['lead'][$W][0]['status']), 'entrega a humana nao e encerramento: nao carimba perdido');
 // mesmo com o aviso falhando, a humana recebe
 $M = varre([conv($W, 'aguardando', 'c_p_hum', 21)], $agora, ['envio_ok' => false]);
