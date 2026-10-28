@@ -31,7 +31,7 @@ header('Cache-Control: no-store');
    vaza para log, print e suporte. */
 function ffail($code, $msg) {
     http_response_code($code);
-    echo json_encode(['ok' => false, 'error' => $msg], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => false, 'error' => $msg], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
 }
 
@@ -165,9 +165,11 @@ if ($modo === 'publicar') {
             JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
-    // As paginas do site leem o fluxo por cache em disco de 10 min.
+    /* Limpa o cache do SITE PUBLICO (roteiros, avaliacoes, instagram). O fluxo
+       em si nao e cacheado: o motor le por wa_db_select_estrito, sem cache em
+       disco. A chamada existe por decisao do plano, nao por necessidade do fluxo. */
     po_cache_limpa();
-    fok(['versao' => (int) $r['versao'], 'problemas' => $r['problemas']]);
+    fok(['versao' => (int) $r['versao'], 'problemas' => $r['problemas'] ?? []]);
 }
 
 /* ------------------------------------------------------------

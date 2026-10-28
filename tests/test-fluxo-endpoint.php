@@ -79,6 +79,7 @@ function fx_dados($caso) {
         if ($caso === 'lig-vazio-igual-nulo') { $f1['gatilho_valor'] = ''; }
         if ($caso === 'lig-nunca-publicado') $f2['versao_atual'] = null;
     }
+    if ($caso === 'lig-falha-desligado') $f1['ativo'] = false;   // ocupante da porta ja desligado
     if ($caso === 'lig-falha-ligado') { $f2['ativo'] = true; $f2['gatilho'] = 'chamado'; }
     if ($caso === 'ligar-ja-ligado') { $f2['ativo'] = true; $f2['gatilho'] = 'chamado'; }
     if ($caso === 'conf-r9') { $f2['gatilho'] = 'mensagem_nova'; $f2['gatilho_valor'] = null; }
@@ -101,13 +102,13 @@ function fx_filho($caso) {
 
     /* "fora-X" derruba a tabela X; "conf-fora-X" faz o mesmo no modo conferir. */
     $fora = null;
-    if (preg_match('/^(?:conf-)?fora-(fluxos|cards|versoes)$/', $caso, $mm)) {
+    if (preg_match('/^(?:conf-|lig-|desl-)?fora-(fluxos|cards|versoes)$/', $caso, $mm)) {
         $fora = ['fluxos' => 'po_wa_fluxos', 'cards' => 'po_wa_cards', 'versoes' => 'po_wa_fluxo_versoes'][$mm[1]];
     }
 
     if ($caso === 'pub-fora-cards') $fora = 'po_wa_cards';
     $dados = fx_dados($caso);
-    $falha_escrita = in_array($caso, ['lig-falha', 'desl-falha', 'lig-falha-ligado', 'lig-falha-outro-valor'], true);
+    $falha_escrita = in_array($caso, ['lig-falha', 'desl-falha', 'lig-falha-ligado', 'lig-falha-outro-valor', 'lig-falha-desligado'], true);
     wa_fluxo_set_deps(['select_estrito' => function ($tabela, $query) use (&$chamadas, &$dados, $fora) {
         $chamadas[] = ['tabela' => $tabela, 'query' => $query];
         if ($tabela === $fora) return null;
@@ -189,6 +190,8 @@ function fx_filho($caso) {
         case 'lig-falha':
         case 'lig-falha-ligado':
         case 'lig-falha-outro-valor':
+        case 'lig-falha-desligado':
+        case 'lig-fora-fluxos':
         case 'lig-ocupada':
         case 'lig-vazio-igual-nulo':
         case 'lig-nunca-publicado':
@@ -197,6 +200,7 @@ function fx_filho($caso) {
         case 'lig-inexistente':  $_POST = ['modo' => 'ligar', 'fluxo_id' => 'nao-existe'] + $conf; break;
         case 'desl-ok':
         case 'desl-invalido':
+        case 'desl-fora-fluxos':
         case 'desl-falha':       $_POST = ['modo' => 'desligar'] + $conf; break;
         case 'desl-sem-id':      $_POST = ['modo' => 'desligar', 'fluxo_id' => ''] + $conf; break;
         case 'desl-inexistente': $_POST = ['modo' => 'desligar', 'fluxo_id' => 'nao-existe'] + $conf; break;
@@ -226,7 +230,7 @@ if (PHP_SAPI === 'cli' && isset($argv[1])) { fx_filho($argv[1]); }
    e texto que a cliente escreveu no painel, nao dado de cliente; por isso este
    e o unico erro fora do conjunto de literais, e mesmo assim so no formato
    exato abaixo (nada de telefone ou ficha cabe nessa frase). */
-const FX_ERRO_PORTA = '/^Já existe outro fluxo ligado nesta porta de entrada: "[^"]{1,200}"\. Desligue esse fluxo antes ou mude a porta deste\.$/u';
+const FX_ERRO_PORTA = '/^Já existe outro fluxo ligado nesta porta de entrada: ".*"\. Desligue esse fluxo antes ou mude a porta deste\.$/su';
 
 function fx_roda($caso) {
     $out = []; $cod = 0;
@@ -476,9 +480,17 @@ ok($r['codigo'] === 502, 'escrita que falha sem conflito, 502 (deu: ' . $r['codi
 
 /* A falha de escrita NAO e porta ocupada quando o "ocupante" e o proprio fluxo
    (ja ligado) ou outro de valor de porta diferente: nada de 409 inventado. */
-foreach (['lig-falha-ligado', 'lig-falha-outro-valor'] as $caso) {
+foreach (['lig-falha-ligado', 'lig-falha-outro-valor', 'lig-falha-desligado'] as $caso) {
     $r = fx_roda($caso);
     ok($r['codigo'] === 502, "$caso: 502, nao acusa quem nao ocupa a porta (deu: " . $r['codigo'] . ' ' . json_encode($r['json']) . ')');
+}
+
+/* Leitura que falha nunca e 404: com o banco fora, desligar um fluxo LIGADO
+   diria "nao existe" e o robo seguiria atendendo. */
+foreach (['lig-fora-fluxos', 'desl-fora-fluxos'] as $caso) {
+    $r = fx_roda($caso);
+    ok($r['codigo'] === 502, "$caso: banco fora vira 502, nunca 404 (deu: " . $r['codigo'] . ')');
+    ok(fx_escritas($r) === [], "$caso: e nada e escrito");
 }
 
 /* Nunca publicado nao liga. */
