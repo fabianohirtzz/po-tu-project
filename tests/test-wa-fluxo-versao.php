@@ -142,7 +142,13 @@ ok(wa_fluxo_grafo($v1)['cards']['bv']['texto'] === 'Oi {nome}', 'conversa presa 
 ok(wa_fluxo_grafo($v2)['cards']['bv']['texto'] === 'Ola {nome}, versao nova', 'a versao 2 leva a edicao');
 
 // 5. a validacao roda DENTRO de wa_fluxo_publica, nao so no endpoint
-$fonte = file_get_contents(__DIR__ . '/../lib/wa-fluxo.php');
+/* Normaliza o fim de linha: `core.autocrlf=true` neste repo, entao o mesmo
+   arquivo chega LF no worktree e CRLF no checkout principal, e um regex
+   ancorado em 
+ deixa de casar sem nada ter mudado no codigo. */
+$fonte = str_replace("
+", "
+", file_get_contents(__DIR__ . '/../lib/wa-fluxo.php'));
 ok(preg_match('/function wa_fluxo_publica.*?wa_fluxo_valida\s*\(/s', $fonte),
    'wa_fluxo_publica chama wa_fluxo_valida: nao existe caminho que publique sem validar');
 // Travas de fonte no ponto de chamada: a leitura e estrita e publicar nunca cita `ativo`.
