@@ -1297,4 +1297,48 @@ assert.ok(painelHtml.indexOf('src="app.js') < painelHtml.indexOf('src="fluxo.js'
 assert.ok(!('textos.js' in lockJson), 'o assets-lock.json nao tem mais o textos.js');
 assert.ok('fluxo.js' in lockJson && 'fluxo.css' in lockJson, 'e tem o fluxo.js e o fluxo.css');
 
+/* ====================== RODADA DE CORRECAO 2 (revisao final) ====================== */
+
+/* (1) todo botao da tela com btn-primary/btn-ghost leva tambem a classe base `btn`
+   (e ela que da padding, raio e tamanho no painel.css; sem ela o alvo de toque tem 16px) */
+const botoesSemBase = html => [...html.matchAll(/<button[^>]*class="([^"]*)"/g)].map(x => x[1].split(/\s+/))
+  .filter(c => (c.includes('btn-primary') || c.includes('btn-ghost')) && !c.includes('btn'));
+const estadosBarra = [undefined, LIMPO, { ...LIMPO, editadoDesde: true }];
+const fluxosBarra = [{ ...base6 }, { ...base6, ativo: true }, { ...base6, versao_atual: null }];
+let nBotoes = 0;
+for (const e of estadosBarra) for (const f of fluxosBarra) {
+  const html = F.poFluxoBarra(f, e, [f]);
+  nBotoes += [...html.matchAll(/<button[^>]*class="[^"]*btn-(?:primary|ghost)/g)].length;
+  assert.deepEqual(botoesSemBase(html), [], 'barra: todo botao tem a classe base btn');
+}
+assert.ok(nBotoes >= 12, 'a verificacao enxergou os botoes da barra (' + nBotoes + ')');
+const gBot = F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', opcoes: [{ id: 'o', rotulo: 'A' }] });
+assert.equal([...gBot.matchAll(/<button[^>]*class="[^"]*btn-(?:primary|ghost)/g)].length, 2, 'a gaveta tem Salvar e Cancelar');
+assert.deepEqual(botoesSemBase(gBot), [], 'gaveta: Salvar e Cancelar tem a classe base btn');
+assert.deepEqual(botoesSemBase('<button class="btn-primary">x</button>'), [['btn-primary']], 'a verificacao pega o botao sem btn');
+assert.ok(!/class="btn-(?:primary|ghost)/.test(semComentario), 'o fonte nao emite btn-primary/btn-ghost sem a base');
+assert.ok(/\.btn\{/.test(readFileSync(new URL('../painel/painel.css', import.meta.url), 'utf8')), 'a classe base btn existe no painel.css');
+
+/* (2) depois de salvar, a lista de problemas da tela acompanha a barra */
+{
+  const a = ambiente({ conferir: JSON_(200, { ok: true, problemas: [] }),
+    publicar: JSON_(400, { ok: false, problemas: [PB(6, 'a', 'A mensagem do card pode chegar a 1200 caracteres', true)] }) }, [mkFluxo()]);
+  Object.assign(a.conf('f1'), { conferido: true, problemas: [], editadoDesde: false });
+  await a.poFluxoPublicar();
+  assert.ok(a.res().includes('1200 caracteres'), 'antes de salvar, a tela mostra o problema');
+  a.els['#fl-gaveta'].querySelector = s => (s === '[data-campo="texto"]' ? { value: 'curto' } : null);
+  await a.poFluxoGavetaSalva();
+  assert.ok(!a.res().includes('1200 caracteres'), 'depois do salvar limpo, o problema velho SAI da tela');
+  assert.ok(a.res().includes('sem problemas'), 'e a tela diz o que a conferencia nova achou');
+  assert.ok(a.els['#fl-resultado'].innerHTML.includes('sem problemas'), 'tambem no elemento');
+  assert.ok(!/ disabled/.test(tagBotao(a.els['#fl-barra'].innerHTML, 'publicar')), 'com o Publicar aceso');
+  // conferencia nova com bloqueio: a tela mostra o NOVO, nao o velho
+  const b = ambiente({ conferir: JSON_(200, { ok: true, problemas: [PB(6, 'a', 'Outro problema novo', true)] }),
+    publicar: JSON_(400, { ok: false, problemas: [PB(6, 'a', 'Problema velho', true)] }) }, [mkFluxo()]);
+  Object.assign(b.conf('f1'), { conferido: true, problemas: [], editadoDesde: false });
+  await b.poFluxoPublicar();
+  b.els['#fl-gaveta'].querySelector = s => (s === '[data-campo="texto"]' ? { value: 'curto' } : null);
+  await b.poFluxoGavetaSalva();
+  assert.ok(b.res().includes('Outro problema novo') && !b.res().includes('Problema velho'), 'a lista e a da conferencia nova');
+}
 console.log('test-fluxo-painel OK');

@@ -531,13 +531,13 @@ function poFluxoBarra(fluxo, estado, fluxos) {
   const ordem = poFluxoOrdemLigar(fluxos);
   const porque = poFluxoPorqueNao(estado);
   const liga = f.ativo
-    ? '<button type="button" class="btn-ghost" data-bar="desligar">Desligar</button>'
-    : '<button type="button" class="btn-primary" data-bar="ligar"' + (poFluxoPodeLigar(f) ? '' : ' disabled') + '>Ligar</button>';
+    ? '<button type="button" class="btn btn-ghost" data-bar="desligar">Desligar</button>'
+    : '<button type="button" class="btn btn-primary" data-bar="ligar"' + (poFluxoPodeLigar(f) ? '' : ' disabled') + '>Ligar</button>';
   return '<div class="fl-barra__estado">' + poFluxoEstado(f) + '</div>' +
     (ordem ? '<p class="fl-ordem">' + esc(ordem) + '</p>' : '') +
     '<div class="fl-barra__acoes">' +
-    '<button type="button" class="btn-ghost" data-bar="conferir">Conferir</button>' +
-    '<button type="button" class="btn-primary" data-bar="publicar"' + (poFluxoPodePublicar(estado) ? '' : ' disabled') + '>Publicar</button>' +
+    '<button type="button" class="btn btn-ghost" data-bar="conferir">Conferir</button>' +
+    '<button type="button" class="btn btn-primary" data-bar="publicar"' + (poFluxoPodePublicar(estado) ? '' : ' disabled') + '>Publicar</button>' +
     liga + '</div>' +
     '<p class="fl-dica">Publicar grava a versão e não liga o fluxo. Ligar é um passo à parte.</p>' +
     (porque ? '<p class="fl-dica">' + esc(porque) + '</p>' : '');
@@ -623,8 +623,8 @@ function poFluxoGaveta(card) {
     h += campoTexto('lembrete_texto', 'Mensagem do lembrete', c.lembrete_texto, 4096, 4);
   }
   h += '</div><div class="fl-gaveta__rodape"><div class="fl-gaveta__status" data-status role="status"></div>' +
-    '<button type="button" class="btn-primary" data-acao="salvar">Salvar</button>' +
-    '<button type="button" class="btn-ghost" data-acao="fechar">Cancelar</button></div>';
+    '<button type="button" class="btn btn-primary" data-acao="salvar">Salvar</button>' +
+    '<button type="button" class="btn btn-ghost" data-acao="fechar">Cancelar</button></div>';
   return h;
 }
 
@@ -915,6 +915,10 @@ async function poFluxoGavetaSalva() {
       conf.problemas = j.problemas;
       conf.editadoDesde = conf.edicoes !== edicoes;
       poFluxoDesenhaBarra();
+      /* A lista de problemas da tela tem de acompanhar a barra: senao o Publicar
+         acende em cima do problema antigo, que o render reinjetou. */
+      const atual = poFluxoAtual();
+      if (atual && String(atual.id) === String(f.id)) poFluxoResultadoHtml(poFluxoResultado('conferir', { http: 200, j: j }, atual.cards));
     }
     if (PO_FLUXO_CARD !== String(id)) return;
     poFluxoStatus('Salvo. ' + poFluxoProblemas(j.problemas, id));
