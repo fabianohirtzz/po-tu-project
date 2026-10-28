@@ -173,6 +173,7 @@ function poFluxoCanvas(fluxo) {
     const previa = poFluxoPrevia(c.texto);
     if (previa) h += 8 + 20 * Math.ceil(previa.length / 30);
     h += 44;
+    if (poFluxoEditavel(c)) h += 44;   // o botao "Editar texto" (~41px) tambem ocupa o no
     if (saidas.length) h += 20 + saidas.reduce(function (s, n) { return s + 22 * Math.ceil(n / 30); }, 0);
     return Math.max(150, h);
   };
@@ -312,9 +313,15 @@ function poFluxoOpcoesComRotulos(opcoes, rotulos) {
   if (typeof l === 'string') { try { l = JSON.parse(l); } catch (e) { l = []; } }
   if (!Array.isArray(l)) return [];
   const novos = Array.isArray(rotulos) ? rotulos : [];
-  return l.map(function (o, i) {
-    if (!o || typeof o !== 'object' || novos[i] == null) return o;
-    return Object.assign({}, o, { rotulo: String(novos[i]).trim() });
+  /* A gaveta desenha so as entradas VALIDAS (poFluxoOpcoes descarta lixo), entao o
+     rotulo k pertence a k-esima entrada valida, nao ao indice cru: avancar o
+     ponteiro em toda entrada gravaria o rotulo de uma opcao na outra. */
+  let k = 0;
+  return l.map(function (o) {
+    if (!o || typeof o !== 'object') return o;
+    const novo = novos[k++];
+    if (novo == null) return o;
+    return Object.assign({}, o, { rotulo: String(novo).trim() });
   });
 }
 
@@ -413,7 +420,7 @@ function poFluxoGaveta(card) {
       h += '<p class="fl-aviso">Este card tem ' + opcoes.length + ' botões e o WhatsApp aceita no máximo ' + max + '. Não dá para salvar assim.</p>';
     }
     opcoes.forEach(function (o, i) {
-      h += '<input type="text" class="fl-campo" data-campo="rotulo" data-i="' + i + '" value="' + esc(o.rotulo) + '" aria-label="Texto da opção ' + (i + 1) + '">';
+      h += '<input type="text" class="fl-campo" data-campo="rotulo" value="' + esc(o.rotulo) + '" aria-label="Texto da opção ' + (i + 1) + '">';
     });
     h += '</fieldset>';
   }

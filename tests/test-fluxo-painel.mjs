@@ -528,4 +528,88 @@ assert.equal(conta(gx, ESCAPADO), 4, 'titulo, texto, lembrete e rotulo saem esca
 assert.ok(!gx.includes("='"), 'gaveta nao emite atributo com aspa simples');
 assert.ok(!F.poFluxoCard({ id: XSS, tipo: 'texto', titulo: XSS, texto: XSS }).includes("='"), 'card com botao de editar tambem');
 
+/* ====================== RODADA DE CORRECAO 1 ====================== */
+
+/* (1) As chaves EFETIVAS que o poFluxoSalva manda ao banco. O fonte INTEIRO roda com um
+   `sb` duble (sem rede): qualquer auxiliar que enriqueca o patch (poFluxoCarimba...) entra
+   no caminho e aparece aqui. Lista de palavras no corpo nao enxerga isso. */
+async function salvaCom(card, v) {
+  const reg = { tabela: null, enviado: null, filtro: null };
+  const sb = { from: t => { reg.tabela = t; return { update: p => { reg.enviado = p; return { match: m => { reg.filtro = m; return { select: () => Promise.resolve({ data: [{}], error: null }) }; } }; } }; } };
+  const salva = new Function('sb', 'esc', src + '; return poFluxoSalva;')(sb, s => s);
+  await salva(card, v);
+  return reg;
+}
+const QUATRO = ['lembrete_ativo', 'lembrete_texto', 'opcoes', 'texto'];
+const regLixo = await salvaCom(cardP, lixo);
+assert.deepEqual(Object.keys(regLixo.enviado).sort(), QUATRO, 'o que VAI AO BANCO tem exatamente as quatro chaves, mesmo com lixo em v');
+assert.equal(regLixo.tabela, 'po_wa_cards');
+assert.deepEqual(regLixo.filtro, { id: 'a' }, 'e o filtro e o id do card');
+assert.deepEqual(Object.keys((await salvaCom(cardP, { texto: 'x' })).enviado), ['texto'], 'so o que a gaveta ofereceu');
+for (const ruim of [{ ...cardP, opcoes: op(4) }]) await assert.rejects(() => salvaCom(ruim, { texto: 'x' }), /no máximo 3/, '4 botoes nao chega ao banco');
+await assert.rejects(() => salvaCom({ tipo: 'texto' }, { texto: 'x' }), /identificação/, 'sem id nao chega ao banco');
+
+/* (2) Lixo no opcoes nao desalinha rotulo e opcao */
+const suja = ['lixo', { id: 'o1', rotulo: 'A', destino: 'dA' }, null, { id: 'o2', rotulo: 'B', destino: 'dB' }];
+const gSuja = F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', opcoes: suja });
+assert.deepEqual([...gSuja.matchAll(/data-campo="rotulo" value="([^"]*)"/g)].map(m => m[1]), ['A', 'B'], 'a gaveta desenha as duas validas');
+const ptSuja = F.poFluxoPatch({ opcoes: suja }, { rotulos: ['A2', 'B2'] }).opcoes;
+assert.equal(ptSuja.length, 4, 'a lista crua segue com 4 entradas');
+assert.equal(ptSuja[1].rotulo, 'A2', 'o1 recebe A2'); assert.equal(ptSuja[3].rotulo, 'B2', 'o2 recebe B2');
+assert.equal(ptSuja[0], 'lixo'); assert.equal(ptSuja[2], null);
+assert.deepEqual([ptSuja[1].id, ptSuja[1].destino, ptSuja[3].id, ptSuja[3].destino], ['o1', 'dA', 'o2', 'dB'], 'id e destino intactos');
+
+/* (3) o botao de editar entra na altura do no */
+const hDe = c => alt(F.poFluxoCanvas({ cards: [Object.assign({ id: 'a', titulo: 'T', texto: 'x'.repeat(130), x: 0, y: 0 }, c)] }));
+assert.equal(hDe({ tipo: 'texto' }) - hDe({ tipo: 'marca' }), 44, 'card com botao de editar ganha 44px sobre o mesmo card sem botao');
+
+/* (4) CSS da gaveta */
+const regrasCss = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(m => ({ sel: m[1].trim(), corpo: m[2] }));
+const rg = sel => regrasCss.filter(r => r.sel === sel);
+assert.ok(rg('.fl-gaveta').length === 1, 'existe a regra .fl-gaveta');
+assert.ok(!ESCONDE.test(rg('.fl-gaveta')[0].corpo), '.fl-gaveta nao se esconde sozinha (so pelo [hidden])');
+assert.ok(/position\s*:\s*fixed/i.test(rg('.fl-gaveta')[0].corpo) && /display\s*:\s*flex/i.test(rg('.fl-gaveta')[0].corpo), 'a gaveta e fixa e em flex');
+assert.ok(rg('.fl-gaveta[hidden]').length === 1 && /display\s*:\s*none/i.test(rg('.fl-gaveta[hidden]')[0].corpo), '.fl-gaveta[hidden] esconde');
+assert.ok(regrasCss.every(r => !/fl-gaveta/.test(r.sel) || r.sel === '.fl-gaveta[hidden]' || r.sel.startsWith('.fl-gaveta__') || r.sel === '.fl-gaveta' || !/display\s*:/i.test(r.corpo)),
+  'nenhuma outra regra da gaveta mexe em display (o [hidden] fica de pe)');
+const cor = sel => ((rg(sel)[0] || { corpo: '' }).corpo.match(/(?:^|;)\s*color\s*:\s*([^;]+)/i) || [])[1];
+assert.ok(cor('.fl-cont') && cor('.fl-cont--estouro') && cor('.fl-cont') !== cor('.fl-cont--estouro'), 'o aviso de estouro tem cor diferente do contador comum');
+assert.ok(/width\s*:\s*100%/.test((rg('.fl-campo')[0] || { corpo: '' }).corpo), 'o campo ocupa a largura da gaveta');
+
+/* (5) espelho PHP <-> JS dos limites */
+const php = readFileSync(new URL('../lib/wa-fluxo.php', import.meta.url), 'utf8');
+const lim = Object.fromEntries([...php.match(/const WA_FLUXO_LIMITE\s*=\s*\[([\s\S]*?)\];/)[1].matchAll(/'(\w+)'\s*=>\s*(\d+)/g)].map(m => [m[1], Number(m[2])]));
+assert.ok(Object.keys(lim).length >= 6, 'WA_FLUXO_LIMITE lido do PHP');
+for (const [t, n] of Object.entries(lim)) assert.equal(F.poFluxoLimite(t), n, 'limite de ' + t + ' igual ao do PHP');
+for (const t of F.poFluxoTipos ? ['marca', 'ir_para_fluxo'] : []) assert.ok(!(t in lim) && F.poFluxoLimite(t) === null, t + ' sem limite nos dois lados');
+const vmax = Object.fromEntries([...php.match(/const WA_FLUXO_VAR_MAX\s*=\s*\[([^\]]*)\]/)[1].matchAll(/'(\w+)'\s*=>\s*(\d+)/g)].map(m => [m[1], Number(m[2])]));
+assert.deepEqual(Object.keys(vmax).sort(), ['data', 'nome', 'roteiro'], 'as tres variaveis do PHP');
+for (const [k, n] of Object.entries(vmax)) assert.equal(F.poFluxoPiorCaso('{' + k + '}'), n, '{' + k + '} vale o mesmo no PHP e no JS');
+const limLemb = Number(php.match(/wa_fluxo_tam_pior_caso\(\$c\['lembrete_texto'\]\)\) > (\d+)/)[1]);
+assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', opcoes: op(1) }).includes('data-campo="lembrete_texto" data-limite="' + limLemb + '"'),
+  'o limite do lembrete na gaveta e o do PHP (' + limLemb + ')');
+const maxBot = Number(php.match(/\$c\['tipo'\] === 'botoes' && count\(\$c\['opcoes'\]\) > (\d+)/)[1]);
+assert.equal(F.poFluxoMaxOpcoes('botoes'), maxBot, 'o maximo de botoes e o do PHP');
+
+/* (6) o contador ao vivo, no ponto de chamada */
+assert.ok(/g\.querySelectorAll\('textarea\[data-limite\]'\)\.forEach\(function \(ta\) \{/.test(semComentario), 'o contador percorre todo textarea com limite');
+assert.ok(/ta\.addEventListener\('input'/.test(semComentario), 'cada textarea ouve a digitacao');
+assert.ok(/poFluxoContador\(ta\.value, Number\(ta\.getAttribute\('data-limite'\)\)\)/.test(semComentario), 'e recalcula o pior caso com o limite do PROPRIO campo');
+assert.ok(/classList\.toggle\('fl-cont--estouro', ct\.estoura\)/.test(semComentario) && /el\.textContent = ct\.texto/.test(semComentario), 'e atualiza texto e aviso');
+
+/* (7) variavel: so no pior caso e na dica. Fora disso, nenhum nome de variavel no fonte */
+const fora7 = semComentario.replace(pega('poFluxoPiorCaso'), '').split('\n').filter(l => !l.includes('class="fl-dica">Use {nome}')).join('\n');
+assert.ok(!/\{(nome|roteiro|data)\}/.test(fora7), 'nenhum {variavel} fora do pior caso e da dica');
+assert.ok(!/['"](nome|roteiro|data)['"]/.test(fora7), 'nenhuma lista propria de variaveis conhecidas');
+assert.ok(!/\b(nome|roteiro)\s*:\s*\d/.test(fora7), 'nenhuma tabela propria de tamanhos de variavel');
+
+/* (9) a leitura do DOM, no ponto de chamada: TODOS os rotulos, e so o que foi desenhado */
+const leGaveta = new Function(src + '; return poFluxoLeGaveta;')();
+const campo = (v, extra) => Object.assign({ value: v }, extra);
+const mk = (mapa, todos) => ({ querySelector: s => mapa[s] || null, querySelectorAll: s => todos[s] || [] });
+const lido = leGaveta(mk({ '[data-campo="texto"]': campo('T'), '[data-campo="lembrete_ativo"]': campo('', { checked: true }), '[data-campo="lembrete_texto"]': campo('L') },
+  { '[data-campo="rotulo"]': [campo('A'), campo('B'), campo('C')] }));
+assert.deepEqual(lido, { texto: 'T', lembrete_ativo: true, lembrete_texto: 'L', rotulos: ['A', 'B', 'C'] }, 'le os 3 rotulos e os demais campos');
+assert.deepEqual(leGaveta(mk({}, {})), {}, 'campo que nao foi desenhado nao entra');
+
 console.log('test-fluxo-painel OK');
