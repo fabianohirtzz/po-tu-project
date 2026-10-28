@@ -9,8 +9,8 @@
     "sha": "b7a74d030ddfa10b"
   },
   "app.js": {
-    "v": 19,
-    "sha": "1b4bea9d9c113066"
+    "v": 20,
+    "sha": "2eaad0fa7d050c19"
   },
   "clientes.js": {
     "v": 2,
@@ -31,10 +31,6 @@
   "revisao.js": {
     "v": 2,
     "sha": "80838db9a900b60e"
-  },
-  "textos.js": {
-    "v": 2,
-    "sha": "f2f31e600e9b1dfa"
   },
   "campanhas.js": {
     "v": 2,

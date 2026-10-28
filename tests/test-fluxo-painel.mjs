@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 
 /* Extrai as funcoes puras do fluxo.js por regex e roda com new Function, no
    padrao de tests/test-textos.mjs. Por isso NENHUMA constante de topo de
@@ -369,7 +369,25 @@ assert.ok(/\.fl-vista--canvas\{display:block/.test(dentro), 'e o canvas aparece'
 assert.ok(/\.fl-no\{position:absolute\}/.test(dentro), 'o no do canvas e absoluto');
 assert.ok(/\.fl-canvas\{position:relative\}/.test(dentro), 'e o canvas e o referencial dele');
 assert.ok(/\.fl-vista--canvas\{display:none\}/.test(fora), 'fora do @media o canvas esta escondido (celular)');
-const regrasFora = [...fora.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(m => ({ sel: m[1].trim(), corpo: m[2] }));
+/* H1 (Task 7): a regex plana `([^{}]+)\{([^}]*)\}` NAO casa bloco aninhado: uma regra que esconde algo
+   DENTRO de um @media passava verde. Este leitor conta chaves e desce nos at-rules, entao devolve
+   as regras de verdade (seletor + corpo), aninhadas ou nao. */
+function regrasTodas(t) {
+  const out = [];
+  let i = 0;
+  while (i < t.length) {
+    const a = t.indexOf('{', i);
+    if (a < 0) break;
+    const sel = t.slice(i, a).trim();
+    let prof = 1, j = a + 1;
+    while (j < t.length && prof > 0) { if (t[j] === '{') prof++; else if (t[j] === '}') prof--; j++; }
+    const corpo = t.slice(a + 1, prof === 0 ? j - 1 : j);
+    if (sel.startsWith('@') && corpo.includes('{')) out.push(...regrasTodas(corpo)); else out.push({ sel, corpo });
+    i = j;
+  }
+  return out;
+}
+const regrasFora = regrasTodas(fora);
 /* H2: CSS e case-insensitive (DISPLAY:NONE esconde igual) e esconder a lista tambem se faz com
    visibility:hidden ou pelo conteiner interno (.fl-lista). Fora do @media a lista tem que aparecer. */
 const ESCONDE = /display\s*:\s*none|visibility\s*:\s*hidden/i;
@@ -835,12 +853,13 @@ assert.ok(/closest\('\[data-bar\]'\)/.test(corpo('poFluxoClique')) && /closest\(
 const mkFluxo = extra => Object.assign({ id: 'f1', nome: 'Boas-vindas e triagem', ativo: false, versao_atual: 'v1', versao_numero: 3, publicado_igual: true,
   card_inicial: 'a', cards: [{ id: 'a', tipo: 'texto', titulo: 'Oi', texto: 'x', proximo: 'b' }, { id: 'b', tipo: 'marca', titulo: 'Nota' }] }, extra);
 function ambiente(tabela, fluxos, confirma = true) {
-  const pedidos = [], els = {};
+  const pedidos = [], ids = [], els = {};
   const novo = () => ({ innerHTML: '', hidden: true, onclick: null, classList: { toggle() {} }, querySelector: () => null, querySelectorAll: () => [], addEventListener() {} });
   const document = { querySelector: s => (els[s] = els[s] || novo()), querySelectorAll: () => [] };
   class FD { constructor() { this.m = {}; } append(k, v) { this.m[k] = v; } }
   const fetchD = async (url, o) => {
     pedidos.push(o.body.m.modo);
+    ids.push(o.body.m.modo + ':' + o.body.m.fluxo_id);
     if (tabela.__antes) tabela.__antes(o.body.m.modo);
     const r = tabela[o.body.m.modo] || (o.body.m.modo === 'ler' ? { status: 200, json: { ok: true, fluxos: JSON.parse(JSON.stringify(fluxos)) } } : null);
     if (!r) throw new Error('modo nao previsto no teste: ' + o.body.m.modo);
@@ -851,11 +870,11 @@ function ambiente(tabela, fluxos, confirma = true) {
   let pediuConfirm = 0;
   const msgs = [];
   const api = new Function('sb', 'fetch', 'FormData', 'document', 'confirm', ESC + src +
-    '; return {poFluxoPublicar, poFluxoConfere, poFluxoLiga, poFluxoGavetaSalva, poFluxoChama, poFluxoBarraAcao, poFluxoAbre, poFluxoRender, poFluxoClique,' +
-    ' fixa(l){PO_FLUXOS=l;PO_FLUXO_SEL=l[0].id}, fluxos(){return PO_FLUXOS}, conf(id){return poFluxoConf(id)}, res(){return PO_FLUXO_RES}, ocupado(){return PO_FLUXO_OCUPADO}};')(
+    '; return {poFluxoPublicar, poFluxoConfere, poFluxoLiga, poFluxoGavetaSalva, poFluxoChama, poFluxoBarraAcao, poFluxoAbre, poFluxoRender, poFluxoClique, poFluxoDesenhaBarra,' +
+    ' fixa(l,sel){PO_FLUXOS=l;PO_FLUXO_SEL=sel||l[0].id},fluxos(){return PO_FLUXOS}, conf(id){return poFluxoConf(id)}, res(){return PO_FLUXO_RES}, ocupado(){return PO_FLUXO_OCUPADO}};')(
     sbD, fetchD, FD, document, m => { pediuConfirm++; msgs.push(m); return confirma; });
   api.fixa(JSON.parse(JSON.stringify(fluxos)));
-  return Object.assign(api, { pedidos, els, msgs, confirmou: () => pediuConfirm });
+  return Object.assign(api, { pedidos, ids, els, msgs, confirmou: () => pediuConfirm });
 }
 const JSON_ = (status, json) => ({ status, json });
 
@@ -1034,9 +1053,22 @@ for (const via of ['despachante', 'clique'])
 
 /* (2) nenhuma classe nova da tela some por CSS */
 const CLASSES_NOVAS = /fl-barra|fl-res|fl-sistema|fl-ordem|fl-problema|fl-estado/;
-const escondeNovas = cssTexto => [...cssTexto.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(m => ({ sel: m[1].trim(), corpo: m[2] }))
-  .filter(r => CLASSES_NOVAS.test(r.sel) && ESCONDE.test(r.corpo));
+const escondeNovas = cssTexto => regrasTodas(cssTexto).filter(r => CLASSES_NOVAS.test(r.sel) && ESCONDE.test(r.corpo));
 assert.deepEqual(escondeNovas(css), [], 'nenhuma regra esconde a barra, o resultado, a moldura de sistema, a ordem ou o atalho dos problemas');
+/* H1 (Task 7): a regra escondida DENTRO de um @media (o bloco de 980px que ja existe e um novo de celular) */
+for (const ruim of [
+  '@media (max-width:600px){.fl-barra{display:none}}',
+  '@media (max-width:600px){.fl-vista--lista{display:block}.fl-barra__acoes button{DISPLAY:NONE}}',
+  '.x{color:red}@media (min-width:980px){.fl-no{position:absolute}.fl-res{visibility:hidden}}',
+  '@media (min-width:980px){@media (min-width:1200px){.fl-sistema{display:none}}}',
+]) assert.equal(escondeNovas(ruim).length, 1, 'a guarda de CSS enxerga DENTRO do @media: ' + ruim);
+{
+  const emMedia = '@media (max-width:600px){.fl-lista{display:none}}';
+  assert.equal(regrasFora_(emMedia), 1, 'a guarda da lista tambem enxerga dentro de um @media de celular');
+}
+function regrasFora_(t) {
+  return regrasTodas(t).filter(r => /fl-vista|fl-lista/i.test(r.sel) && !/^\.fl-vista--canvas$/.test(r.sel) && ESCONDE.test(r.corpo)).length;
+}
 for (const ruim of ['.fl-barra{display:none}', '.fl-barra__acoes button{display:none}', '.fl-res{display:none}', '.fl-sistema{DISPLAY:NONE}', '.fl-ordem{visibility:hidden}', '.fl-problema__abrir{display:none}', '.fl-resultado{display:none}', '.fl-estado__tag{display:none}'])
   assert.equal(escondeNovas(ruim).length, 1, 'a guarda de CSS pega: ' + ruim);
 for (const sel of ['.fl-barra', '.fl-res', '.fl-sistema', '.fl-ordem', '.fl-problema__abrir']) assert.ok(rg(sel).length >= 1, sel + ' tem regra propria');
@@ -1120,11 +1152,149 @@ assert.ok(F.poFluxoTextoLigar(null).includes('Ligar este fluxo?'), 'e o texto ba
 
 /* (c) conferir que falha mostra o motivo */
 assert.ok(F.poFluxoResultado('conferir', { http: 502, j: { ok: false, error: 'Banco fora X' } }, []).includes('Banco fora X'), 'conferir com erro mostra o motivo');
-assert.ok(F.poFluxoResultado('conferir', { http: 404, j: { ok: false } }, []).length > 20, 'e mesmo sem motivo mostra algo');
+/* H4 (Task 7): a moldura HTML sozinha passa de 20 caracteres; o que importa e o TEXTO de reserva */
+{
+  const reserva = F.poFluxoResultado('conferir', { http: 404, j: { ok: false } }, []);
+  assert.ok(reserva.includes('Não consegui conferir o fluxo agora.'), 'sem motivo, a mensagem de reserva aparece escrita');
+  assert.ok(reserva.includes('fl-sistema'), 'e vem na moldura de falha de sistema, nao na de "sem problemas"');
+  assert.ok(!reserva.includes('sem problemas'), 'e nunca diz que o fluxo esta sem problemas');
+}
 {
   const a = ambiente({ conferir: JSON_(502, { ok: false, error: 'Banco fora X' }) }, [mkFluxo()]);
   await a.poFluxoConfere();
   assert.ok(a.res().includes('Banco fora X') && a.els['#fl-resultado'].innerHTML.includes('Banco fora X'), 'na tela, a caixa de resultado diz o motivo');
 }
+
+/* ====================== TASK 7: H3 — publicado_igual nulo nao mente em NENHUMA direcao ====================== */
+for (const desconhecido of [null, undefined]) for (const ativo of [true, false]) {
+  const e = F.poFluxoEstado({ ...base6, ativo, publicado_igual: desconhecido });
+  const q = 'publicado_igual=' + desconhecido + ' ativo=' + ativo;
+  assert.ok(e.includes('Não consegui confirmar se há edição não publicada.'), 'nulo diz que nao conseguiu confirmar (' + q + ')');
+  assert.ok(!e.includes('Tem edição não publicada'), 'nulo NUNCA vira "tem edicao nao publicada" (' + q + ')');
+  assert.ok(!e.includes('sem edição pendente'), 'nulo NUNCA vira "sem edicao pendente" (' + q + ')');
+  assert.ok(!e.includes('O que está no ar é a versão anterior'), 'e nao afirma que o que esta no ar e a versao anterior (' + q + ')');
+  const b = F.poFluxoBarra({ ...base6, ativo, publicado_igual: desconhecido }, LIMPO, [{ ...base6, ativo, publicado_igual: desconhecido }]);
+  assert.ok(b.includes('Não consegui confirmar') && !b.includes('Tem edição não publicada') && !b.includes('sem edição pendente'), 'a barra inteira idem (' + q + ')');
+}
+// o confirm do Ligar tambem: nulo nao afirma edicao pendente
+assert.ok(!F.poFluxoTextoLigar({ publicado_igual: null, versao_numero: 7 }).includes('edições não publicadas'), 'confirm do Ligar: nulo nao afirma edicao pendente');
+assert.ok(!F.poFluxoTextoLigar({ publicado_igual: undefined, versao_numero: 7 }).includes('Atenção'), 'e ausente tambem nao');
+{
+  const a = ambiente({ ligar: JSON_(200, { ok: true, ativo: true }) }, [mkFluxo({ publicado_igual: null })]);
+  await a.poFluxoLiga('ligar');
+  assert.ok(a.msgs[0].includes('Ligar este fluxo?') && !a.msgs[0].includes('edições não publicadas'), 'o confirm REAL com estado desconhecido nao afirma edicao pendente');
+}
+
+/* ====================== TASK 7: H2 — o estado de conferencia e do fluxo ATUAL, em cada ponto de uso ====================== */
+{
+  const dois = () => [mkFluxo(), mkFluxo({ id: 'f2', nome: 'Lista de espera' })];
+  const novoA = (tabela) => { const a = ambiente(tabela, dois()); a.fixa(dois(), 'f2'); return a; };
+  const pubAceso = a => !/ disabled/.test(tagBotao(a.els['#fl-barra'].innerHTML, 'publicar'));
+  const gaveta = a => { a.els['#fl-gaveta'] = { innerHTML: '', hidden: true, classList: { toggle() {} }, querySelectorAll: () => [], addEventListener() {}, onclick: null,
+    querySelector: s => (s === '[data-campo="texto"]' ? { value: 'novo texto' } : null) }; };
+  // CONFERIR: marca o fluxo ATUAL (f2), nao o primeiro; e a barra redesenhada e a do f2
+  const a = novoA({ conferir: JSON_(200, { ok: true, problemas: [] }) });
+  await a.poFluxoConfere();
+  assert.deepEqual(a.ids, ['conferir:f2'], 'conferir pede o fluxo selecionado');
+  assert.equal(a.conf('f2').conferido, true, 'o conferido vai para o f2');
+  assert.equal(a.conf('f1').conferido, false, 'e o f1 (primeiro da lista) nao e tocado');
+  assert.equal(pubAceso(a), true, 'a barra redesenhada usa o conf do f2: Publicar aceso');
+  // DESENHA BARRA: f1 conferido, f2 atual e nunca conferido -> apagado
+  const b = novoA({});
+  Object.assign(b.conf('f1'), { conferido: true, problemas: [], editadoDesde: false });
+  b.poFluxoDesenhaBarra();
+  assert.equal(pubAceso(b), false, 'a barra do f2 nao herda a conferencia do f1');
+  Object.assign(b.conf('f2'), { conferido: true, problemas: [PB(1, 'a', 'x', true)], editadoDesde: false });
+  b.poFluxoDesenhaBarra();
+  assert.equal(pubAceso(b), false, 'e o bloqueio do f2 apaga o Publicar mesmo com o f1 limpo');
+  // PUBLICAR: so o f1 conferido, f2 atual -> nada sai
+  const c = novoA({ publicar: JSON_(200, { ok: true, versao: 4, problemas: [] }) });
+  Object.assign(c.conf('f1'), { conferido: true, problemas: [], editadoDesde: false });
+  await c.poFluxoPublicar();
+  assert.deepEqual(c.pedidos, [], 'conferencia do f1 nao deixa publicar o f2');
+  // PUBLICAR: f1 e f2 conferidos -> publica o f2 e zera so o conf do f2
+  const d = novoA({ publicar: JSON_(200, { ok: true, versao: 4, problemas: [] }) });
+  Object.assign(d.conf('f1'), { conferido: true, problemas: [], editadoDesde: false });
+  Object.assign(d.conf('f2'), { conferido: true, problemas: [], editadoDesde: false });
+  await d.poFluxoPublicar();
+  assert.equal(d.ids[0], 'publicar:f2', 'publicou o fluxo selecionado');
+  assert.equal(d.conf('f2').conferido, false, 'o conf do f2 volta a exigir conferencia');
+  assert.equal(d.conf('f1').conferido, true, 'e o do f1 (que nao foi publicado) fica como estava');
+  // SALVAR NA GAVETA: conta a edicao e libera o Publicar no f2, sem mexer no f1
+  const e = novoA({ conferir: JSON_(200, { ok: true, problemas: [] }) });
+  gaveta(e);
+  Object.assign(e.conf('f1'), { conferido: true, problemas: [], editadoDesde: false });
+  e.poFluxoAbre('a');
+  await e.poFluxoGavetaSalva();
+  assert.ok(e.ids.includes('conferir:f2') && !e.ids.includes('conferir:f1'), 'a conferencia pos-salvar e do f2');
+  assert.equal(e.conf('f2').edicoes, 1, 'a edicao e do f2');
+  assert.equal(e.conf('f2').conferido, true, 'a conferencia pos-salvar vale para o f2');
+  assert.equal(e.conf('f1').edicoes, 0, 'o f1 nao ganha edicao');
+  assert.equal(e.conf('f1').conferido, true, 'e o f1 nao perde a conferencia dele');
+  assert.equal(pubAceso(e), true, 'a barra do f2 acende');
+}
+
+/* ====================== TASK 7: a aba, o roteamento e a saida do textos.js ====================== */
+/* Migrado do antigo tests/test-textos.mjs tudo o que NAO era dos 7 textos: a ligacao do painel
+   (index.html + app.js) e a trava de scripts. */
+const painelHtml = readFileSync(new URL('../painel/index.html', import.meta.url), 'utf8');
+const appJs = readFileSync(new URL('../painel/app.js', import.meta.url), 'utf8');
+const lockJson = JSON.parse(readFileSync(new URL('../painel/assets-lock.json', import.meta.url), 'utf8'));
+
+// a aba existe na navegacao e a secao correspondente tem o conteiner da tela
+const navFluxo = painelHtml.match(/<button class="nav-item" data-view="fluxo">([\s\S]*?)<\/button>/);
+assert.ok(navFluxo, 'a aba data-view="fluxo" existe na navegacao');
+assert.ok(navFluxo[1].includes('Fluxo do robô') && !navFluxo[1].includes('Textos'), 'e chama "Fluxo do robô"');
+const secFluxo = painelHtml.match(/<section class="view" data-view="fluxo" id="view-fluxo">([\s\S]*?)<\/section>/);
+assert.ok(secFluxo, 'a secao #view-fluxo existe, com data-view="fluxo"');
+assert.ok(/<div id="fluxo-lista"><\/div>/.test(secFluxo[1]), 'com o container #fluxo-lista DENTRO dela (o que o poCarregaFluxo preenche)');
+assert.equal(conta(painelHtml, 'id="fluxo-lista"'), 1, 'e um so');
+assert.equal(conta(painelHtml, 'data-view="fluxo"'), 2, 'a aba e a secao, nenhuma outra com a mesma view');
+
+/* O canvas tem ~3060px de largura: o #fluxo-lista precisa ficar em contexto de BLOCO, ou ele estoura o
+   painel em vez de rolar dentro do .fl-vista--canvas. Nenhum ancestral pode ser grid/flex sem min-width:0. */
+const painelCss = readFileSync(new URL('../painel/painel.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+const todasRegras = regrasTodas(painelCss).concat(regrasTodas(css));
+const alvo = todasRegras.filter(r => /#fluxo-lista|#view-fluxo|\[data-view="fluxo"\]/.test(r.sel));
+assert.deepEqual(alvo.filter(r => /display\s*:\s*(grid|inline-grid|flex|inline-flex)/i.test(r.corpo)), [], '#fluxo-lista / #view-fluxo nao ganham grid nem flex');
+assert.ok(todasRegras.some(r => r.sel === '.view.on' && /display\s*:\s*block/.test(r.corpo)), 'a .view ligada e display:block (bloco), nao flex/grid');
+const principal = todasRegras.find(r => r.sel === '.main');
+assert.ok(principal && /display\s*:\s*flex/.test(principal.corpo) && /min-width\s*:\s*0/.test(principal.corpo), 'o pai (.main) e flex mas tem min-width:0, entao o filho rola em vez de estourar');
+assert.ok(!/<(?:div|section) [^>]*id="fluxo-lista"[^>]*(?:class|style)=/.test(painelHtml) && !/<section [^>]*id="view-fluxo"[^>]*style=/.test(painelHtml), 'e o HTML nao poe class/style no #fluxo-lista nem estilo inline na secao');
+assert.ok(/<link rel="stylesheet" href="fluxo\.css\?v=\d+">/.test(painelHtml), 'o fluxo.css e carregado');
+
+// a aba antiga SAIU, em tudo
+assert.ok(!/data-view="textos"/.test(painelHtml) && !/view-textos/.test(painelHtml) && !/txt-lista|txt-salvar/.test(painelHtml), 'a aba "Textos do robo" saiu do index.html');
+assert.ok(!/textos\.js/.test(painelHtml), 'e nenhuma tag carrega textos.js');
+assert.ok(!existsSync(new URL('../painel/textos.js', import.meta.url)), 'o painel/textos.js nao existe mais');
+assert.ok(!existsSync(new URL('./test-textos.mjs', import.meta.url)), 'e o teste dele tambem nao');
+assert.ok(!/textos/i.test(appJs.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')) , 'o app.js nao roteia nem liga mais nada de "textos"');
+assert.ok(!/poSalvaTextos|poCarregaTextos|txt-salvar/.test(appJs), 'nem chama as funcoes do textos.js');
+
+// o roteamento: a view fluxo carrega poCarregaFluxo (so se o arquivo tiver carregado) e ninguem mais
+const ramo = appJs.match(/else if\(v==='fluxo'\)\{([^\r\n]*)\}\r?\n/);
+assert.ok(ramo, 'o app.js tem o ramo v===\'fluxo\' na troca de abas');
+assert.ok(ramo[1].includes("$('#view-fluxo').classList.add('on')"), 'o ramo liga a #view-fluxo (e nenhuma outra)');
+assert.ok(/typeof poCarregaFluxo==='function'\)poCarregaFluxo\(\)/.test(ramo[1]), 'e chama poCarregaFluxo so se o arquivo carregou');
+assert.ok(ramo[1].includes("Fluxo do robô<span>.</span>"), 'com o titulo da aba');
+assert.equal((ramo[1].match(/#view-[a-z]+/g) || []).length, 1, 'o ramo nao liga outras views');
+assert.deepEqual(ramo[1].match(/po[A-Z]\w+(?=\()/g), ['poCarregaFluxo'], 'e nao chama nenhuma outra funcao po*');
+// o filtro de mes some nesta aba, como nas outras que nao sao de leads
+assert.ok(/v==='fluxo'\|\|/.test(appJs.match(/\$\('#month-box'\)\.style\.visibility=[^\n]*/)[0]), 'o seletor de mes some na aba do fluxo');
+
+/* A edicao do index.html e ADITIVA: os scripts que ja estavam ali tem que continuar todos. Um <script>
+   perdido num merge derruba uma aba inteira em producao sem erro visivel no HTML. (Migrado do
+   test-textos.mjs: sem textos.js, com fluxo.js; e inclui as abas que vieram depois.) */
+for (const s of ['config.js', 'video-encode.js', 'fone.js', 'app.js', 'clientes.js',
+                 'funil.js', 'conversa.js', 'importar-contatos.js', 'revisao.js',
+                 'campanhas.js', 'modelos.js', 'vitrine.js', 'fluxo.js']) {
+  assert.ok(new RegExp('src="' + s.replace('.', '\\.') + '(\\?v=\\d+)?"').test(painelHtml),
+    s + ' continua carregado no painel');
+}
+// o app.js vem ANTES dos arquivos de aba (eles usam $, sb, F definidos nele)
+assert.ok(painelHtml.indexOf('src="app.js') < painelHtml.indexOf('src="fluxo.js'), 'o fluxo.js carrega depois do app.js');
+// o cache-buster: textos.js saiu do lock junto com a tag; fluxo.js/css entraram
+assert.ok(!('textos.js' in lockJson), 'o assets-lock.json nao tem mais o textos.js');
+assert.ok('fluxo.js' in lockJson && 'fluxo.css' in lockJson, 'e tem o fluxo.js e o fluxo.css');
 
 console.log('test-fluxo-painel OK');
