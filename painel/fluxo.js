@@ -503,6 +503,25 @@ function poFluxoPorqueNao(estado) {
   return 'A conferência achou problemas que impedem de publicar.';
 }
 
+/* Quem decide o botao Ligar: fluxo DESLIGADO e ja PUBLICADO (o endpoint recusa o resto).
+   Edicao nao publicada NAO impede: publicar e ligar sao dois atos, e ligar a versao
+   publicada pode ser o que ela quer numa quinta de campanha. */
+function poFluxoPodeLigar(fluxo) {
+  const f = fluxo && typeof fluxo === 'object' ? fluxo : null;
+  if (!f) return false;
+  return !f.ativo && !(f.versao_atual == null || f.versao_atual === '');
+}
+
+// O que o confirm do Ligar diz. Com edicao pendente, avisa QUAL versao vai ao ar.
+function poFluxoTextoLigar(fluxo) {
+  const f = fluxo && typeof fluxo === 'object' ? fluxo : {};
+  let s = 'Ligar este fluxo? O robô passa a atender clientes de verdade com a versão publicada.';
+  if (f.publicado_igual === false) {
+    s += ' Atenção: você tem edições não publicadas. Vai ao ar a versão ' + (f.versao_numero != null ? f.versao_numero : 'publicada') + '.';
+  }
+  return s;
+}
+
 /* A barra: estado, ordem de ligar e os botoes. O disabled do Publicar sai de
    poFluxoPodePublicar(estado) e de NENHUMA outra condicao (travado por teste),
    senao a tela e a funcao divergem. Publicar e Ligar sao dois botoes, dois atos. */
@@ -511,10 +530,9 @@ function poFluxoBarra(fluxo, estado, fluxos) {
   if (!f) return '';
   const ordem = poFluxoOrdemLigar(fluxos);
   const porque = poFluxoPorqueNao(estado);
-  const publicado = !(f.versao_atual == null || f.versao_atual === '');
   const liga = f.ativo
     ? '<button type="button" class="btn-ghost" data-bar="desligar">Desligar</button>'
-    : '<button type="button" class="btn-primary" data-bar="ligar"' + (publicado ? '' : ' disabled') + '>Ligar</button>';
+    : '<button type="button" class="btn-primary" data-bar="ligar"' + (poFluxoPodeLigar(f) ? '' : ' disabled') + '>Ligar</button>';
   return '<div class="fl-barra__estado">' + poFluxoEstado(f) + '</div>' +
     (ordem ? '<p class="fl-ordem">' + esc(ordem) + '</p>' : '') +
     '<div class="fl-barra__acoes">' +
@@ -551,7 +569,8 @@ function poFluxoResultado(modo, resp, cards) {
         return '<div class="fl-res fl-res--sistema">' + poFluxoPainelProblemas(problemas, cards) + '</div>';
       }
       return '<div class="fl-res fl-res--erro"><p><strong>O fluxo não foi publicado.</strong> Corrija o que impede e publique de novo.</p>' +
-        poFluxoPainelProblemas(problemas, cards) + '</div>';
+        poFluxoPainelProblemas(problemas, cards) +
+        (poFluxoCardCulpado(problemas, cards) === '' ? '<p class="fl-dica">Nada para abrir aqui: este problema se resolve em outro fluxo ou na estrutura do desenho.</p>' : '') + '</div>';
     }
     return sistema(j.error || 'Não consegui publicar o fluxo agora.');
   }
@@ -739,7 +758,7 @@ async function poFluxoLiga(modo) {
   if (['ligar', 'desligar'].indexOf(modo) < 0) throw new Error('Modo inválido.');
   const f = poFluxoAtual();
   if (!f || PO_FLUXO_OCUPADO) return;
-  if (modo === 'ligar' && !confirm('Ligar este fluxo? O robô passa a atender clientes de verdade com a versão publicada.')) return;
+  if (modo === 'ligar' && !confirm(poFluxoTextoLigar(f))) return;
   PO_FLUXO_OCUPADO = true;
   const resp = await poFluxoChama(modo, { fluxo_id: f.id });
   poFluxoResultadoHtml(poFluxoResultado(modo, resp, f.cards));
@@ -785,7 +804,7 @@ function poFluxoClique(ev) {
   if (!t) return;
   // os botoes da barra (conferir, publicar, ligar) e o atalho "Abrir este card" dos problemas
   const bar = t.closest('[data-bar]');
-  if (bar) { poFluxoBarraAcao(bar.getAttribute('data-bar')); return; }
+  if (bar) return poFluxoBarraAcao(bar.getAttribute('data-bar'));
   const abrir = t.closest('[data-abrir]');
   if (abrir) { poFluxoAbre(abrir.getAttribute('data-abrir')); return; }
   const alvo = ev.target.closest('[data-card]');
@@ -882,6 +901,7 @@ async function poFluxoGavetaSalva() {
   conf.edicoes += 1;
   conf.editadoDesde = true;
   conf.conferido = false;
+  const edicoes = conf.edicoes;
   try { await poFluxoRecarrega(); } catch (e) { const g2 = poFluxoAtual(); if (g2) g2.publicado_igual = null; }
   poFluxoRender();
   poFluxoAbre(id);
@@ -889,6 +909,13 @@ async function poFluxoGavetaSalva() {
   try {
     // quem julga (variavel desconhecida, limite, botoes) e o endpoint, nunca esta tela
     const j = await poFluxoPost('conferir', { fluxo_id: f.id });
+    // a conferencia pos-salvar vale como a do botao Conferir: libera (ou nao) o Publicar
+    if (Array.isArray(j.problemas)) {
+      conf.conferido = true;
+      conf.problemas = j.problemas;
+      conf.editadoDesde = conf.edicoes !== edicoes;
+      poFluxoDesenhaBarra();
+    }
     if (PO_FLUXO_CARD !== String(id)) return;
     poFluxoStatus('Salvo. ' + poFluxoProblemas(j.problemas, id));
   } catch (e) {

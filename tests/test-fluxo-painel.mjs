@@ -21,7 +21,7 @@ const PURAS_NOMES = ['poFluxoTipos', 'poFluxoTipo', 'poFluxoOpcoes', 'poFluxoPre
                      'poFluxoOpcoesComRotulos', 'poFluxoPatch', 'poFluxoQuem', 'poFluxoBloqueio', 'poFluxoProblemas',
                      'poFluxoEditavel', 'poFluxoGaveta',
                      'poFluxoPodePublicar', 'poFluxoOrdemLigar', 'poFluxoSemRepetido', 'poFluxoPainelProblemas',
-                     'poFluxoEstado', 'poFluxoPorqueNao', 'poFluxoBarra', 'poFluxoResultado', 'poFluxoCardCulpado'];
+                     'poFluxoEstado', 'poFluxoPorqueNao', 'poFluxoBarra', 'poFluxoResultado', 'poFluxoCardCulpado', 'poFluxoPodeLigar', 'poFluxoTextoLigar'];
 const F = new Function(ESC + PURAS_NOMES.map(pega).join('\n') +
   '; return {' + PURAS_NOMES.join(',') + '};')();
 
@@ -849,12 +849,13 @@ function ambiente(tabela, fluxos, confirma = true) {
   const sbD = { auth: { getSession: async () => ({ data: { session: { access_token: 't' } } }) },
     from: () => ({ update: () => ({ match: () => ({ select: () => Promise.resolve({ data: [{}], error: null }) }) }) }) };
   let pediuConfirm = 0;
+  const msgs = [];
   const api = new Function('sb', 'fetch', 'FormData', 'document', 'confirm', ESC + src +
-    '; return {poFluxoPublicar, poFluxoConfere, poFluxoLiga, poFluxoGavetaSalva, poFluxoChama, poFluxoBarraAcao, poFluxoAbre, poFluxoRender,' +
+    '; return {poFluxoPublicar, poFluxoConfere, poFluxoLiga, poFluxoGavetaSalva, poFluxoChama, poFluxoBarraAcao, poFluxoAbre, poFluxoRender, poFluxoClique,' +
     ' fixa(l){PO_FLUXOS=l;PO_FLUXO_SEL=l[0].id}, fluxos(){return PO_FLUXOS}, conf(id){return poFluxoConf(id)}, res(){return PO_FLUXO_RES}, ocupado(){return PO_FLUXO_OCUPADO}};')(
-    sbD, fetchD, FD, document, () => { pediuConfirm++; return confirma; });
+    sbD, fetchD, FD, document, m => { pediuConfirm++; msgs.push(m); return confirma; });
   api.fixa(JSON.parse(JSON.stringify(fluxos)));
-  return Object.assign(api, { pedidos, els, confirmou: () => pediuConfirm });
+  return Object.assign(api, { pedidos, els, msgs, confirmou: () => pediuConfirm });
 }
 const JSON_ = (status, json) => ({ status, json });
 
@@ -989,10 +990,10 @@ const JSON_ = (status, json) => ({ status, json });
   assert.ok(a.pedidos.includes('ler'), 'depois de salvar a tela RELE o servidor');
   assert.ok(a.pedidos.includes('conferir'), 'e confere pelo endpoint');
   assert.equal(a.fluxos()[0].publicado_igual, true, 'publicado_igual e o que o ler devolveu, nao o que a memoria supoe');
-  assert.equal(a.conf('f1').editadoDesde, true, 'a edicao marca editadoDesde');
   assert.equal(a.conf('f1').edicoes, 1, 'e conta a edicao');
-  assert.equal(a.conf('f1').conferido, false, 'e tira a conferencia');
-  assert.equal(F.poFluxoPodePublicar(a.conf('f1')), false, 'entao o Publicar desabilita');
+  assert.equal(a.conf('f1').conferido, true, 'a conferencia automatica de depois do salvar VALE como conferencia');
+  assert.equal(a.conf('f1').editadoDesde, false, 'e, limpa e sem salvar no meio, nao fica velha');
+  assert.equal(F.poFluxoPodePublicar(a.conf('f1')), true, 'entao o Publicar acende');
   // se o ler falhar, o estado fica DESCONHECIDO (nunca "igual" por palpite)
   const b = ambiente({ conferir: JSON_(200, { ok: true, problemas: [] }), ler: { status: 502, json: { ok: false, error: 'banco' } } }, [mkFluxo({ publicado_igual: true })]);
   b.els['#fl-gaveta'] = { innerHTML: '', hidden: true, classList: { toggle() {} }, querySelectorAll: () => [], addEventListener() {}, onclick: null,
@@ -1000,6 +1001,130 @@ const JSON_ = (status, json) => ({ status, json });
   b.poFluxoAbre('a');
   await b.poFluxoGavetaSalva();
   assert.equal(b.fluxos()[0].publicado_igual, null, 'ler falhou: publicado_igual fica desconhecido');
+}
+
+/* ====================== RODADA DE CORRECAO 1 ====================== */
+const cardsDois = [{ id: 'a', tipo: 'texto', titulo: 'Primeiro', texto: 'x', proximo: 'c' }, { id: 'c', tipo: 'texto', titulo: 'Segundo', texto: 'y' }, { id: 'm', tipo: 'marca', titulo: 'Nota' }];
+
+/* (1) a fiacao: cada acao da barra chega ao modo CERTO do endpoint, pelo despachante e pelo clique */
+const evBarra = acao => ({ target: { closest: s => (s === '[data-bar]' ? { getAttribute: () => acao } : null) } });
+const evAbrir = id => ({ target: { closest: s => (s === '[data-abrir]' ? { getAttribute: () => id } : null) } });
+const TAB = { conferir: JSON_(200, { ok: true, problemas: [] }), publicar: JSON_(400, { ok: false, problemas: [PB(2, 'a', 'x', true)] }),
+  ligar: JSON_(200, { ok: true, ativo: true }), desligar: JSON_(200, { ok: true, ativo: false }) };
+for (const via of ['despachante', 'clique'])
+  for (const [acao, esperado] of [['conferir', ['conferir']], ['publicar', ['publicar']], ['ligar', ['ligar']], ['desligar', ['desligar']], ['xyz', []]]) {
+    const a = ambiente(TAB, [mkFluxo({ cards: cardsDois })]);
+    Object.assign(a.conf('f1'), { conferido: true, problemas: [], editadoDesde: false });
+    const volta = via === 'despachante' ? a.poFluxoBarraAcao(acao) : a.poFluxoClique(evBarra(acao));
+    if (esperado.length) assert.ok(volta && typeof volta.then === 'function', via + ': devolve a promessa da acao (quem chama pode esperar): ' + acao);
+    await volta;
+    assert.deepEqual(a.pedidos, esperado, via + ': a acao "' + acao + '" chama exatamente ' + JSON.stringify(esperado));
+    assert.equal(a.confirmou(), acao === 'ligar' ? 1 : 0, via + ': so o Ligar pede confirmacao (' + acao + ')');
+  }
+{
+  const a = ambiente(TAB, [mkFluxo({ cards: cardsDois })]);
+  a.poFluxoClique(evAbrir('c'));
+  assert.ok(a.els['#fl-gaveta'].innerHTML.includes('Segundo') && !a.els['#fl-gaveta'].innerHTML.includes('Primeiro'), 'o atalho abre o card que ele aponta, nao o primeiro');
+  a.poFluxoClique(evAbrir('a'));
+  assert.ok(a.els['#fl-gaveta'].innerHTML.includes('Primeiro'), 'e o outro tambem');
+  const b = ambiente(TAB, [mkFluxo({ cards: cardsDois })]);
+  b.poFluxoClique({ target: { closest: () => null } });
+  assert.deepEqual(b.pedidos, [], 'clique fora de tudo nao faz nada');
+}
+
+/* (2) nenhuma classe nova da tela some por CSS */
+const CLASSES_NOVAS = /fl-barra|fl-res|fl-sistema|fl-ordem|fl-problema|fl-estado/;
+const escondeNovas = cssTexto => [...cssTexto.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(m => ({ sel: m[1].trim(), corpo: m[2] }))
+  .filter(r => CLASSES_NOVAS.test(r.sel) && ESCONDE.test(r.corpo));
+assert.deepEqual(escondeNovas(css), [], 'nenhuma regra esconde a barra, o resultado, a moldura de sistema, a ordem ou o atalho dos problemas');
+for (const ruim of ['.fl-barra{display:none}', '.fl-barra__acoes button{display:none}', '.fl-res{display:none}', '.fl-sistema{DISPLAY:NONE}', '.fl-ordem{visibility:hidden}', '.fl-problema__abrir{display:none}', '.fl-resultado{display:none}', '.fl-estado__tag{display:none}'])
+  assert.equal(escondeNovas(ruim).length, 1, 'a guarda de CSS pega: ' + ruim);
+for (const sel of ['.fl-barra', '.fl-res', '.fl-sistema', '.fl-ordem', '.fl-problema__abrir']) assert.ok(rg(sel).length >= 1, sel + ' tem regra propria');
+
+/* (3) o disabled do Ligar vem de poFluxoPodeLigar, com a mesma matriz do Publicar */
+for (const versao_atual of [null, undefined, '', 'v1'])
+  for (const ativo of [true, false, undefined])
+    for (const publicado_igual of [true, false, null]) {
+      const f = { id: 'f', nome: 'N', versao_atual, ativo, publicado_igual, versao_numero: 3 };
+      const esperado = !ativo && !!versao_atual;
+      assert.equal(F.poFluxoPodeLigar(f), esperado, 'PodeLigar: ' + JSON.stringify(f));
+      if (!ativo) assert.equal(/ disabled/.test(tagBotao(F.poFluxoBarra(f, LIMPO, [f]), 'ligar')), !esperado, 'o botao Ligar segue a funcao: ' + JSON.stringify(f));
+    }
+assert.equal(F.poFluxoPodeLigar(null), false);
+assert.equal(F.poFluxoPodeLigar({ ativo: false, versao_atual: 'v', publicado_igual: false }), true, 'edicao nao publicada NAO impede ligar (e dois atos)');
+{
+  const espera = { id: 'e', nome: 'Lista de espera', ativo: false, versao_atual: 'v1', versao_numero: 1, publicado_igual: true };
+  const b = F.poFluxoBarra(espera, {}, [espera]);
+  assert.ok(b.includes('fl-ordem') && !/ disabled/.test(tagBotao(b, 'ligar')), 'o Ligar da propria Lista de espera esta aceso mesmo com a frase da ordem na tela');
+}
+
+/* (4) conferencia automatica do salvar: edicao durante ela, e bloqueio */
+for (const [cenario, esperaPode] of [['bloqueio', false], ['aviso', true], ['edicao no meio', false]]) {
+  const ref = {};
+  const tabela = {
+    bloqueio: { conferir: JSON_(200, { ok: true, problemas: [PB(6, 'a', 'estoura', true)] }) },
+    aviso: { conferir: JSON_(200, { ok: true, problemas: [PB(16, null, 'sem fim', false)] }) },
+    'edicao no meio': { conferir: JSON_(200, { ok: true, problemas: [] }), __antes: m => { if (m === 'conferir') ref.a.conf('f1').edicoes += 1; } },
+  }[cenario];
+  const a4 = ref.a = ambiente(tabela, [mkFluxo()]);
+  a4.els['#fl-gaveta'] = { innerHTML: '', hidden: true, classList: { toggle() {} }, querySelectorAll: () => [], addEventListener() {}, onclick: null,
+    querySelector: s => (s === '[data-campo="texto"]' ? { value: 'novo texto' } : null) };
+  a4.poFluxoAbre('a');
+  await a4.poFluxoGavetaSalva();
+  assert.equal(F.poFluxoPodePublicar(a4.conf('f1')), esperaPode, 'salvar + conferencia (' + cenario + ')');
+  assert.equal(/ disabled/.test(tagBotao(a4.els['#fl-barra'].innerHTML, 'publicar')), !esperaPode, 'e a barra concorda (' + cenario + ')');
+}
+
+/* (5) publicar com sucesso e o ler seguinte falhando: nunca "tem edicao nao publicada" */
+{
+  const a = ambiente({ publicar: JSON_(200, { ok: true, versao: 4, problemas: [] }), ler: { status: 502, json: { ok: false, error: 'banco' } } }, [mkFluxo({ publicado_igual: false })]);
+  Object.assign(a.conf('f1'), { conferido: true, problemas: [], editadoDesde: false });
+  await a.poFluxoPublicar();
+  assert.equal(a.fluxos()[0].publicado_igual, null, 'ler falhou depois de publicar: desconhecido, nao o false de antes');
+  assert.ok(!F.poFluxoEstado(a.fluxos()[0]).includes('Tem edição não publicada'), 'e a tela nao nega a publicacao que acabou de acontecer');
+}
+
+/* (6) o estado de conferencia e POR FLUXO */
+{
+  const a = ambiente({}, [mkFluxo(), mkFluxo({ id: 'f2', nome: 'Lista de espera' })]);
+  Object.assign(a.conf('f1'), { conferido: true, problemas: [], editadoDesde: false });
+  assert.equal(F.poFluxoPodePublicar(a.conf('f2')), false, 'conferir um fluxo nao acende o Publicar do outro');
+  assert.notEqual(a.conf('f1'), a.conf('f2'), 'cada fluxo tem o seu objeto');
+  assert.equal(a.conf('f1'), a.conf('f1'), 'e o mesmo fluxo devolve o mesmo objeto');
+  const sel = { onchange: null, value: 'f2' };
+  a.els['#fluxo-lista'] = { innerHTML: '', onclick: null, querySelector: s => (s === '#fl-seletor' ? sel : null), querySelectorAll: () => [] };
+  a.poFluxoRender();
+  assert.ok(!/ disabled/.test(tagBotao(a.els['#fluxo-lista'].innerHTML, 'publicar')), 'f1 conferido: Publicar aceso');
+  sel.onchange();
+  assert.ok(/ disabled/.test(tagBotao(a.els['#fluxo-lista'].innerHTML, 'publicar')), 'trocar para f2, nunca conferido: Publicar apagado');
+}
+
+/* (a) recusa sem card para abrir diz que o conserto e em outro lugar */
+const semAbrir = F.poFluxoResultado('publicar', { http: 400, j: { ok: false, problemas: [PB(11, 'm', 'salta para um fluxo desligado', true)] } }, cardsP);
+assert.ok(semAbrir.includes('Nada para abrir aqui') && !semAbrir.includes('data-abrir'), 'bloqueio num card que a gaveta nao edita: diz que nao ha o que abrir');
+assert.ok(!F.poFluxoResultado('publicar', { http: 400, j: { ok: false, problemas: [PB(6, 'a', 'estoura', true)] } }, cardsP).includes('Nada para abrir aqui'), 'com card abrivel a frase nao aparece');
+assert.ok(F.poFluxoResultado('publicar', { http: 400, j: { ok: false, problemas: [PB(7, null, 'porta repetida', true)] } }, cardsP).includes('Nada para abrir aqui'), 'problema do fluxo (card nulo) tambem');
+
+/* (b) o confirm do Ligar diz qual versao vai ao ar */
+assert.ok(F.poFluxoTextoLigar({ publicado_igual: false, versao_numero: 7 }).includes('edições não publicadas') && F.poFluxoTextoLigar({ publicado_igual: false, versao_numero: 7 }).includes('versão 7'), 'texto com edicao pendente cita a versao');
+assert.ok(!F.poFluxoTextoLigar({ publicado_igual: true, versao_numero: 7 }).includes('Atenção'), 'sem edicao pendente nao ha atencao');
+assert.ok(F.poFluxoTextoLigar(null).includes('Ligar este fluxo?'), 'e o texto base sempre vem');
+{
+  const a = ambiente({ ligar: JSON_(200, { ok: true, ativo: true }) }, [mkFluxo({ publicado_igual: false, versao_numero: 3 })]);
+  await a.poFluxoLiga('ligar');
+  assert.ok(a.msgs[0].includes('edições não publicadas') && a.msgs[0].includes('versão 3'), 'o confirm REAL mostra a versao que vai ao ar');
+  const b = ambiente({ ligar: JSON_(200, { ok: true, ativo: true }) }, [mkFluxo()]);
+  await b.poFluxoLiga('ligar');
+  assert.ok(!b.msgs[0].includes('Atenção'), 'e sem edicao pendente, nao');
+}
+
+/* (c) conferir que falha mostra o motivo */
+assert.ok(F.poFluxoResultado('conferir', { http: 502, j: { ok: false, error: 'Banco fora X' } }, []).includes('Banco fora X'), 'conferir com erro mostra o motivo');
+assert.ok(F.poFluxoResultado('conferir', { http: 404, j: { ok: false } }, []).length > 20, 'e mesmo sem motivo mostra algo');
+{
+  const a = ambiente({ conferir: JSON_(502, { ok: false, error: 'Banco fora X' }) }, [mkFluxo()]);
+  await a.poFluxoConfere();
+  assert.ok(a.res().includes('Banco fora X') && a.els['#fl-resultado'].innerHTML.includes('Banco fora X'), 'na tela, a caixa de resultado diz o motivo');
 }
 
 console.log('test-fluxo-painel OK');
