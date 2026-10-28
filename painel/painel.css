@@ -185,6 +185,11 @@ tbody tr:last-child td{border-bottom:none}
 .btn-danger:hover{background:var(--st-perdido);color:#fff}
 .save-flash{font-size:.7rem;color:var(--st-venda);font-weight:600;align-self:center;opacity:0;transition:.3s}
 .save-flash.on{opacity:1}
+.dr-check{display:flex;gap:10px;align-items:flex-start;margin:-4px 0 14px;padding:10px 12px;border-radius:10px;background:var(--surface3);border:1px solid var(--border);cursor:pointer}
+.dr-check[hidden]{display:none}
+.dr-check input{margin-top:3px;accent-color:var(--azul)}
+.dr-check span{font-size:.78rem;color:var(--muted);line-height:1.45}
+.dr-check b{display:block;font-size:.85rem;color:var(--text);font-weight:600}
 .dr-hint{font-size:.72rem;color:var(--faint);line-height:1.5;margin:-6px 0 0}
 
 /* ===== OBSERVAÇÕES EM LINHA TEMPORAL ===== */
@@ -265,6 +270,15 @@ tbody tr:last-child td{border-bottom:none}
 .rcard{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column}
 .rcard__img{aspect-ratio:16/10;background-size:cover;background-position:center;background-color:#dfe4ea;position:relative}
 .rcard__off{position:absolute;top:8px;left:8px;background:rgba(20,26,34,.8);color:#fff;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:5px}
+/* status da viagem: mesmas cores do site (style.css / roteiro.css) */
+.rcard__img .st-tag{position:absolute;top:8px;right:8px;font-size:.6rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:5px}
+.st-tag--em_breve{background:#FFC72C;color:#2C2B2B}
+.st-tag--ultimas_vagas{background:#F07C1A;color:#2C2B2B}
+.st-tag--em_viagem{background:#1E8E3E;color:#fff}
+.st-tag--esgotado{background:#D7263D;color:#fff}
+/* importar dentro da gaveta do roteiro */
+.imp-in{border:1px dashed var(--border2);border-radius:10px;padding:14px 16px;margin-bottom:26px;background:var(--surface2,transparent)}
+.imp-in .rep-add{border-style:solid}
 .rcard__b{padding:14px 15px;display:flex;flex-direction:column;gap:4px;flex:1}
 .rcard__t{font-family:var(--font-display);font-weight:600;font-size:1rem;line-height:1.15}
 .rcard__s{font-size:.72rem;color:var(--muted);font-family:var(--font-mono)}
@@ -541,3 +555,23 @@ tbody tr:last-child td{border-bottom:none}
 .mdl-probs{margin:10px 0 0;padding-left:18px}
 .mdl-probs li{font-size:.78rem;font-weight:600;color:var(--st-perdido);margin-bottom:4px}
 #mdl-conferencia:empty{display:none}
+/* Prova social (painel/vitrine.js) */
+.vit-h2{margin-top:44px}
+.vit-form{display:flex;flex-direction:column;gap:10px;max-width:760px;margin:6px 0 22px;padding:16px;border:1px dashed var(--border2);border-radius:10px}
+.vit-form--linha{flex-direction:row;align-items:center}
+.vit-form--linha input{flex:1}
+.vit-form input,.vit-form textarea,.vit-av input,.vit-av textarea{width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:9px 11px;font:inherit;font-size:.86rem;outline:none}
+.vit-form input:focus,.vit-form textarea:focus,.vit-av input:focus,.vit-av textarea:focus{border-color:var(--azul);box-shadow:0 0 0 3px rgba(31,168,221,.14)}
+.vit-form .btn-add{align-self:flex-start}
+.vit-av__top{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.vit-lista{display:grid;gap:12px;max-width:760px}
+.vit-av{display:flex;flex-direction:column;gap:10px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:10px}
+.vit-av.off,.vit-ig.off{opacity:.55}
+.vit-acoes{display:flex;flex-wrap:wrap;gap:6px}
+.vit-acoes .btn-soft{padding:7px 11px;font-size:.74rem}
+.vit-acoes .btn-soft:disabled{opacity:.4;cursor:default}
+.vit-ig-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;max-width:980px}
+.vit-ig{position:relative;display:flex;flex-direction:column;gap:8px}
+.vit-ig__img{display:block;aspect-ratio:4/5;border-radius:8px;background-size:cover;background-position:center;background-color:#dfe4ea;border:1px solid var(--border)}
+.vit-ig__st{position:absolute;top:8px;left:8px;background:rgba(20,26,34,.8);color:#fff;font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:5px}
+@media(max-width:640px){.vit-av__top{grid-template-columns:1fr}.vit-form--linha{flex-direction:column;align-items:stretch}}

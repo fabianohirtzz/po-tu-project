@@ -25,6 +25,7 @@ function poCampResumoTexto(r) {
   const d = r || {};
   const p = [];
   p.push((Number(d.total) || 0) + ' pessoas recebem');
+  if (d.perdeu_data)  p.push(d.perdeu_data + ' delas perderam uma data e recebem a oferta');
   if (d.duplicados)   p.push(d.duplicados + ' repetidas, contadas uma vez');
   if (d.saiu)         p.push(d.saiu + ' pediram SAIR e ficam de fora');
   if (d.nao_revisado) p.push(d.nao_revisado + ' ainda faltam revisar');

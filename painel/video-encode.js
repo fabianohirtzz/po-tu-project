@@ -135,6 +135,10 @@
     return new Blob([output.target.buffer], { type: 'video/mp4' });
   }
 
+  /* Lista fechada, a mesma do upload-video.php. 'feed' = reels da secao
+     Instagram (aba Prova social); qualquer outro valor vira 'insta'. */
+  const tipoValido = (t) => (t === 'capa' || t === 'feed') ? t : 'insta';
+
   /** Envia em fatias de 5 MB. Resolve com a URL pública do vídeo. */
   async function upload(blob, slug, token, onProgress, tipo) {
     const uid = Array.from(crypto.getRandomValues(new Uint8Array(8)))
@@ -150,7 +154,7 @@
       fd.append('slug', slug);
       // O tipo separa os dois vídeos do roteiro no servidor. Sem ele, subir um
       // apagaria o outro: a limpeza dos antigos varre por <slug>-<tipo>-*.mp4.
-      fd.append('tipo', tipo === 'capa' ? 'capa' : 'insta');
+      fd.append('tipo', tipoValido(tipo));
       fd.append('uid', uid);
       fd.append('offset', String(offset));
       fd.append('last', last ? '1' : '0');
@@ -173,7 +177,7 @@
     const fd = new FormData();
     fd.append('sb_token', token);
     fd.append('slug', slug);
-    fd.append('tipo', tipo === 'capa' ? 'capa' : 'insta');
+    fd.append('tipo', tipoValido(tipo));
     fd.append('action', 'delete');
     await fetch('../upload-video.php', { method: 'POST', body: fd });
   }

@@ -123,7 +123,9 @@ function mapRow(r){
     waId:r.wa_id||'',
     /* Triagem dos contatos importados (spec 8.1). origemImport vazio = lead do
        formulario do site, que nunca passa pela fila de revisao. */
-    origemImport:r.origem_import||'',revisado:r.revisado===true,cliente:r.cliente===true};
+    origemImport:r.origem_import||'',revisado:r.revisado===true,cliente:r.cliente===true,
+    // perdeu por data (robo ou caixa da gaveta): entra na transmissao
+    perdeuData:r.qualif_data===false};
 }
 function buildMonths(){
   const set=[...new Set(LEADS.map(l=>monthKey(l.data)).filter(Boolean))].sort().reverse();
@@ -153,7 +155,7 @@ $('#nav-toggle').onclick=()=>{$('#side-nav').classList.contains('on')?fechaSide(
 $$('.nav-item').forEach(b=>b.onclick=()=>{
   $$('.nav-item').forEach(x=>x.classList.remove('active'));b.classList.add('active');
   const v=b.dataset.view;$$('.view').forEach(x=>x.classList.remove('on'));
-  $('#month-box').style.visibility=(v==='roteiros'||v==='importar'||v==='revisao'||v==='textos'||v==='campanhas'||v==='modelos')?'hidden':'visible';
+  $('#month-box').style.visibility=(v==='roteiros'||v==='importar'||v==='revisao'||v==='textos'||v==='campanhas'||v==='modelos'||v==='avaliacoes'||v==='instagram')?'hidden':'visible';
   if(v==='leads'){$('#view-leads').classList.add('on');$('#top-title').innerHTML='Leads<span>.</span>';renderLeads();}
   else if(v==='reports'){$('#view-reports').classList.add('on');$('#top-title').innerHTML='Relatórios<span>.</span>';renderReports();}
   else if(v==='clientes'){$('#view-clientes').classList.add('on');$('#top-title').innerHTML='Clientes<span>.</span>';if(typeof poRenderClientes==='function')poRenderClientes();}
@@ -173,6 +175,10 @@ $$('.nav-item').forEach(b=>b.onclick=()=>{
      status velho na tela faria escolher para a campanha um modelo que a Meta
      ja recusou - e recusa no envio e terminal. */
   else if(v==='modelos'){$('#view-modelos').classList.add('on');$('#top-title').innerHTML='Modelos<span>.</span>';if(typeof poRenderModelos==='function')poRenderModelos();}
+  /* Avaliacoes do Google e videos do Instagram do site (painel/vitrine.js);
+     duas abas desde 23/10/2026, mesmo carregador para as duas. */
+  else if(v==='avaliacoes'){$('#view-avaliacoes').classList.add('on');$('#top-title').innerHTML='Avaliações<span>.</span>';if(typeof poCarregaVitrine==='function')poCarregaVitrine();}
+  else if(v==='instagram'){$('#view-instagram').classList.add('on');$('#top-title').innerHTML='Instagram<span>.</span>';if(typeof poCarregaVitrine==='function')poCarregaVitrine();}
   else{$('#view-roteiros').classList.add('on');$('#top-title').innerHTML='Roteiros<span>.</span>';renderRoteiros();}
   fechaSide();
 });
@@ -302,6 +308,7 @@ function openDrawer(id){
   $('#dr-camp').textContent=l.camp;$('#dr-land').textContent=l.land;$('#dr-desc').textContent=l.msg;
   $('#e-status').value=l.status;$('#e-orig').value=l.origem;
   $('#e-orc').value=l.orc||'';$('#e-ven').value=l.ven||'';
+  $('#e-pdata').checked=l.perdeuData;poPdataVisivel();
   $('#n-txt').value='';renderNotes(l);
   // A conversa carrega junto com a gaveta. So l.waId, sem fallback pro
   // telefone: o enviar.php nao normaliza o telefone do site pro formato
@@ -385,16 +392,26 @@ function poPatchGaveta(campos,lead,agora){
   const venMudou=ven!==(Number(lead.ven)||0);
   const status=(ven>0&&venMudou)?'venda':campos.status;
   const vendaAt=status==='venda'?(lead.vendaAt||agora):null;
-  return {status,origem_manual:campos.origem,orcamento:Number(campos.orc)||0,venda:ven,venda_at:vendaAt};
+  const p={status,origem_manual:campos.origem,orcamento:Number(campos.orc)||0,venda:ven,venda_at:vendaAt};
+  /* "Perdeu so pela data": qualif_data=false, a mesma coluna que o robo grava.
+     So mexe em lead Perdido: fora dele o robo grava true no qualificado. */
+  if(status==='perdido'){
+    if(campos.pdata)p.qualif_data=false;
+    else if(lead.perdeuData)p.qualif_data=null;
+  }
+  return p;
 }
+function poPdataVisivel(){$('#e-pdata-wrap').hidden=$('#e-status').value!=='perdido';}
+$('#e-status').addEventListener('change',poPdataVisivel);
 $('#dr-save').onclick=async()=>{
   const l=LEADS.find(x=>x.id===openId);if(!l)return;
   const btn=$('#dr-save');btn.disabled=true;btn.textContent='Salvando…';
-  const patch=poPatchGaveta({ven:$('#e-ven').value,orc:$('#e-orc').value,status:$('#e-status').value,origem:$('#e-orig').value},l,new Date().toISOString());
+  const patch=poPatchGaveta({ven:$('#e-ven').value,orc:$('#e-orc').value,status:$('#e-status').value,origem:$('#e-orig').value,pdata:$('#e-pdata').checked},l,new Date().toISOString());
   const {error}=await sb.from('po_leads').update(patch).eq('id',l.id);
   btn.disabled=false;btn.textContent='Salvar';
   if(error){toast('Erro ao salvar: '+error.message,true);return;}
   l.status=patch.status;l.origem=patch.origem_manual;l.orc=patch.orcamento;l.ven=patch.venda;l.vendaAt=patch.venda_at;
+  if('qualif_data' in patch)l.perdeuData=patch.qualif_data===false;
   $('#e-status').value=l.status;$('#dr-ciclo').textContent=fmtCiclo(cicloDias(l));
   const f=$('#save-flash');f.classList.add('on');setTimeout(()=>f.classList.remove('on'),1600);
   renderLeads();toast('Lead atualizado.');
@@ -532,22 +549,45 @@ function renderTimeline(rows){
 }
 
 /* ============================================================ ROTEIROS — grid */
+/* Status da viagem: vira tag colorida na capa (home, /roteiros, hero, aqui).
+   Mesma lista de PO_STATUS_VIAGEM (lib/po-view.php) e do check do banco. */
+const STATUS_VIAGEM=Object.assign(Object.create(null),{em_breve:'Em breve',ultimas_vagas:'Últimas vagas',esgotado:'Vagas esgotadas',em_viagem:'Em viagem'});
 function pubHref(slug){return '../roteiros/'+encodeURIComponent(slug);}
 $('#rot-refresh').onclick=async()=>{await reloadRoteiros();toast('Lista de roteiros atualizada. O site já reflete os ativos.');};
-$('#rdr-view').onclick=()=>{if(!editRot||!editRot.id){toast('Salve o roteiro primeiro para visualizar.',true);return;}window.open(pubHref(editRot.slug),'_blank');};
+/* "Ver" abre a PRÉ-VISUALIZAÇÃO: POST com o token do login e o id. A página
+   pública (/roteiros/<slug>) só serve roteiro ativo, então um oculto dava 404,
+   e é justamente o oculto que se quer conferir antes de publicar. Por id porque
+   edições ocultas podem repetir o slug. */
+/* Depois de salvar/excluir: o site serve /roteiros e /roteiros/<slug> com cache
+   de 10 min (lib/po-data.php). Sem limpar, o status novo demorava a aparecer.
+   Falhar aqui não desfaz o salvamento: o cache expira sozinho. */
+async function limpaCacheSite(){
+  try{const {data:{session}}=await sb.auth.getSession();if(!session)return;
+    const fd=new FormData();fd.append('sb_token',session.access_token);
+    await fetch('../limpa-cache.php',{method:'POST',body:fd});
+  }catch(e){console.warn('limpa-cache falhou (o cache expira em 10 min):',e);}
+}
+async function rotVer(r){
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session||!session.access_token){toast('Sessão expirada. Entre de novo para visualizar.',true);return;}
+  const f=document.createElement('form');f.method='POST';f.target='_blank';f.action=pubHref(r.slug);f.style.display='none';
+  [['preview_id',r.id],['sb_token',session.access_token]].forEach(([n,v])=>{const i=document.createElement('input');i.type='hidden';i.name=n;i.value=v;f.appendChild(i);});
+  document.body.appendChild(f);f.submit();f.remove();
+}
+$('#rdr-view').onclick=()=>{if(!editRot||!editRot.id){toast('Salve o roteiro primeiro para visualizar.',true);return;}rotVer(editRot);};
 function renderRoteiros(){
   const g=$('#rot-grid');
-  if(!ROTEIROS.length){g.innerHTML=`<div class="empty" style="grid-column:1/-1">Nenhum roteiro. Clique em “Novo roteiro” ou importe um arquivo.</div>`;return;}
+  if(!ROTEIROS.length){g.innerHTML=`<div class="empty" style="grid-column:1/-1">Nenhum roteiro. Clique em “Novo roteiro”: dentro dele dá para importar um arquivo.</div>`;return;}
   g.innerHTML=ROTEIROS.map(r=>`<div class="rcard" data-id="${r.id}">
-    <div class="rcard__img" style="background-image:url('${esc(r.capa_url||'')}')">${r.ativo?'':'<span class="rcard__off">Oculto</span>'}</div>
+    <div class="rcard__img" style="background-image:url('${esc(r.capa_url||'')}')">${r.ativo?'':'<span class="rcard__off">Oculto</span>'}${STATUS_VIAGEM[r.status_viagem]?`<span class="st-tag st-tag--${r.status_viagem}">${STATUS_VIAGEM[r.status_viagem]}</span>`:''}</div>
     <div class="rcard__b">
       <div class="rcard__t">${esc(r.titulo||'(sem título)')}</div>
       <div class="rcard__s">${esc(r.data_label||r.periodo||'—')} · ${esc(r.local_label||'')}</div>
       <div class="rcard__foot"><button class="ver" data-id="${r.id}">Ver ↗</button><button class="edit" data-id="${r.id}">Editar</button><button class="del" data-id="${r.id}">Excluir</button></div>
     </div></div>`).join('');
-  $$('#rot-grid .ver').forEach(b=>b.onclick=e=>{e.stopPropagation();const r=ROTEIROS.find(x=>String(x.id)===b.dataset.id);window.open(pubHref(r.slug),'_blank');});
+  $$('#rot-grid .ver').forEach(b=>b.onclick=e=>{e.stopPropagation();const r=ROTEIROS.find(x=>String(x.id)===b.dataset.id);rotVer(r);});
   $$('#rot-grid .edit').forEach(b=>b.onclick=e=>{e.stopPropagation();openRot(ROTEIROS.find(x=>String(x.id)===b.dataset.id));});
-  $$('#rot-grid .del').forEach(b=>b.onclick=async e=>{e.stopPropagation();const r=ROTEIROS.find(x=>String(x.id)===b.dataset.id);if(!confirm('Excluir o roteiro “'+(r.titulo||'')+'”?'))return;const {error}=await sb.from('po_roteiros').delete().eq('id',r.id);if(error){toast('Erro ao excluir: '+error.message,true);return;}ROTEIROS=ROTEIROS.filter(x=>x.id!==r.id);renderRoteiros();toast('Roteiro excluído.');});
+  $$('#rot-grid .del').forEach(b=>b.onclick=async e=>{e.stopPropagation();const r=ROTEIROS.find(x=>String(x.id)===b.dataset.id);if(!confirm('Excluir o roteiro “'+(r.titulo||'')+'”?'))return;const {error}=await sb.from('po_roteiros').delete().eq('id',r.id);if(error){toast('Erro ao excluir: '+error.message,true);return;}ROTEIROS=ROTEIROS.filter(x=>x.id!==r.id);limpaCacheSite();renderRoteiros();toast('Roteiro excluído.');});
 }
 $('#rot-new').onclick=()=>openRot(null);
 
@@ -571,6 +611,10 @@ function roteiroForm(r){
   const vals=(r.valores&&r.valores.length?r.valores:[{}]).map(repItemVal).join('');
   const gal=(r.galeria||[]).map(u=>`<div class="gal-thumb" style="background-image:url('${esc(u)}')" data-url="${esc(u)}"><button type="button">✕</button></div>`).join('');
   return `
+  <div class="imp-in">
+    <button type="button" class="rep-add" id="r-imp-btn">Importar de um arquivo (Word, PDF ou PPT)</button>
+    <p class="vid-hint">A IA lê o arquivo e preenche só os campos que ainda estão vazios. O que você já escreveu fica como está.</p>
+  </div>
   <div class="dr-section-l">Identificação</div>
   <div class="field"><label>Título</label><input id="r-titulo" value="${esc(r.titulo||'')}"></div>
   <div class="field"><label>Slug (URL), vira o endereço da página, ex: /roteiros/chile-atacama</label><input id="r-slug" value="${esc(r.slug||'')}" placeholder="gerado do título se vazio"><small class="hint">Use o destino, sem data nem tema da edição. Repetir o slug de uma edição anterior é o certo: a página herda o histórico no Google.</small></div>
@@ -584,6 +628,7 @@ function roteiroForm(r){
   <div class="field"><label>Badge (ex: 8 dias)</label><input id="r-badge" value="${esc(r.badge||'')}"></div>
   <div class="field"><label>Período (texto) — usado no card e no hero</label><input id="r-periodo" value="${esc(r.periodo||'')}"></div>
   <div class="field"><label>Ativo no site</label><select id="r-ativo"><option value="1" ${r.ativo!==false?'selected':''}>Sim, publicado</option><option value="0" ${r.ativo===false?'selected':''}>Não (oculto)</option></select></div>
+  <div class="field"><label>Status da viagem, aparece como tag na foto do roteiro</label><select id="r-status"><option value="">Sem tag</option>${Object.keys(STATUS_VIAGEM).map(k=>`<option value="${k}" ${r.status_viagem===k?'selected':''}>${STATUS_VIAGEM[k]}</option>`).join('')}</select></div>
 
   <div class="dr-section-l">Capa</div>
   <div class="field">
@@ -672,6 +717,7 @@ function wireRoteiroForm(){
   $('#r-dias-add').onclick=()=>$('#r-dias-rep').insertAdjacentHTML('beforeend',repItemDia());
   $('#r-val-add').onclick=()=>$('#r-val-rep').insertAdjacentHTML('beforeend',repItemVal());
   repReorder($('#r-dias-rep')); // arrastar cards de dia p/ corrigir a ordem
+  $('#r-imp-btn').onclick=()=>$('#imp-file').click();
   // capa upload
   $('#r-capa-btn').onclick=()=>$('#r-capa-file').click();
   $('#r-capa-file').onchange=async e=>{const f=e.target.files[0];if(!f)return;$('#r-capa-up').textContent='Enviando…';const url=await uploadImg(f,curSlug());$('#r-capa-up').textContent='';if(!url)return;$('#r-capa').value=url;$('#r-capa-wrap').innerHTML=`<div class="gal-thumb" style="background-image:url('${url}')" data-capa><button type="button">✕</button></div>`;};
@@ -817,7 +863,7 @@ function openRot(r){
 }
 function closeRot(){$('#rdrawer').classList.remove('on');if(!$('#drawer').classList.contains('on'))$('#scrim').classList.remove('on');editRot=null;}
 $('#rdr-close').onclick=closeRot;$('#rdr-cancel').onclick=closeRot;
-$('#rdr-del').onclick=async()=>{if(!editRot)return;if(!confirm('Excluir este roteiro?'))return;const{error}=await sb.from('po_roteiros').delete().eq('id',editRot.id);if(error){toast('Erro: '+error.message,true);return;}ROTEIROS=ROTEIROS.filter(x=>x.id!==editRot.id);closeRot();renderRoteiros();toast('Roteiro excluído.');};
+$('#rdr-del').onclick=async()=>{if(!editRot)return;if(!confirm('Excluir este roteiro?'))return;const{error}=await sb.from('po_roteiros').delete().eq('id',editRot.id);if(error){toast('Erro: '+error.message,true);return;}ROTEIROS=ROTEIROS.filter(x=>x.id!==editRot.id);limpaCacheSite();closeRot();renderRoteiros();toast('Roteiro excluído.');};
 function collectRoteiro(){
   const lines=id=>($('#'+id).value||'').split('\n').map(s=>s.trim()).filter(Boolean);
   const dias=[...$('#r-dias-rep').children].map(it=>({n:Number(it.querySelector('.rd-n').value)||null,data:it.querySelector('.rd-data').value.trim(),dia_semana:it.querySelector('.rd-sem').value.trim(),cidades:it.querySelector('.rd-cid').value.trim(),descricao:it.querySelector('.rd-desc').value.trim(),refeicoes:it.querySelector('.rd-ref').value.trim()})).filter(d=>d.cidades||d.descricao);
@@ -832,10 +878,18 @@ function collectRoteiro(){
     ordem:Number($('#r-ordem').value)||0,badge:$('#r-badge').value.trim(),periodo:$('#r-periodo').value.trim(),
     video_capa_url:$('#r-vcapa').value.trim()||null,video_insta_url:$('#r-vid').value.trim()||null,
     pdf_url:$('#r-pdf').value.trim()||null,
-    ativo:$('#r-ativo').value==='1',capa_url:$('#r-capa').value.trim()||null,
+    ativo:$('#r-ativo').value==='1',status_viagem:$('#r-status').value||null,capa_url:$('#r-capa').value.trim()||null,
     roteiro_dias:dias,hoteis:lines('r-hoteis'),inclui:lines('r-inclui'),nao_inclui:lines('r-naoinclui'),
     valores:valores,galeria:galeria
   };
+}
+/* 23505 so vem do indice parcial po_roteiros_slug_ativo_uniq: dois roteiros
+   VISIVEIS no mesmo endereco. Edicao oculta pode repetir o slug a vontade. */
+function rotSaveErro(error,data,lista,editId){
+  if(!error||error.code!=='23505')return 'Erro ao salvar: '+(error&&error.message);
+  const outro=(lista||[]).find(r=>r.slug===data.slug&&r.ativo&&r.id!==editId);
+  const quem=outro?`"${outro.titulo}" já está visível`:'Já existe um roteiro visível';
+  return `${quem} no endereço /roteiros/${data.slug}. Oculte o outro antes, ou salve este como oculto, ou mude o slug.`;
 }
 $('#rdr-save').onclick=async()=>{
   const data=collectRoteiro();
@@ -846,47 +900,72 @@ $('#rdr-save').onclick=async()=>{
   if(editRot&&editRot.id){({error}=await sb.from('po_roteiros').update(data).eq('id',editRot.id));}
   else{({error}=await sb.from('po_roteiros').insert(data));}
   btn.disabled=false;btn.textContent='Salvar roteiro';
-  if(error){toast('Erro ao salvar: '+error.message,true);return;}
+  if(error){toast(rotSaveErro(error,data,ROTEIROS,editRot&&editRot.id),true);return;}
   const f=$('#rsave-flash');f.classList.add('on');setTimeout(()=>f.classList.remove('on'),1600);
+  limpaCacheSite();
   await reloadRoteiros();closeRot();toast('Roteiro salvo.');
 };
 async function reloadRoteiros(){const{data}=await sb.from('po_roteiros').select('*').order('ordem').order('created_at');ROTEIROS=data||[];renderRoteiros();}
 
 /* ============================================================ IMPORTADOR */
-$('#imp-btn').onclick=()=>$('#imp-file').click();
+/* O botão mora dentro da gaveta (r-imp-btn): a cliente pode começar a escrever
+   e importar depois, e a IA só completa o que está vazio (rotPreenche). */
 $('#imp-file').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  if(!$('#rdrawer').classList.contains('on'))return;
   const ext=(f.name.split('.').pop()||'').toLowerCase();
+  // galeria já com fotos não é trocada, então nem sobe as do arquivo (ficariam órfãs no storage)
+  const comImgs=!estadoForm().temGaleria;
   showImp(true,'Lendo arquivo…');
   try{
     let parsed;
-    if(ext==='docx')parsed=await importDocx(f);
-    else if(ext==='pptx')parsed=await importPptx(f);
-    else if(ext==='pdf')parsed=await importPdf(f);
+    if(ext==='docx')parsed=await importDocx(f,comImgs);
+    else if(ext==='pptx')parsed=await importPptx(f,comImgs);
+    else if(ext==='pdf')parsed=await importPdf(f,comImgs);
     else{toast('Formato não suportado.',true);showImp(false);return;}
     showImp(false);
-    openRot(null);
-    prefill(parsed);
-    toast('Arquivo lido. Revise e salve.');
+    const n=prefill(parsed);
+    toast(n?`Arquivo lido: ${n} campo(s) preenchido(s). Revise e salve.`:'Arquivo lido, mas todos os campos já estavam preenchidos. Nada foi trocado.');
   }catch(err){console.error(err);showImp(false);toast('Falha ao ler o arquivo: '+err.message,true);}
 };
 function showImp(on,msg){$('#imp-status').classList.toggle('on',on);if(msg)$('#imp-msg').textContent=msg;}
+const PREENCHE_IDS=['r-titulo','r-slug','r-subtitulo','r-periodo','r-dias','r-noites','r-badge','r-desc','r-inclui','r-naoinclui','r-hoteis'];
+function estadoForm(){
+  const a={};PREENCHE_IDS.forEach(id=>{a[id]=($('#'+id)||{}).value||'';});
+  a.temDias=[...$('#r-dias-rep').children].some(it=>it.querySelector('.rd-cid').value.trim()||it.querySelector('.rd-desc').value.trim());
+  a.temValores=[...$('#r-val-rep').children].some(it=>it.querySelector('.rv-valor').value.trim());
+  a.temGaleria=!!$('#r-gal-wrap').querySelector('.gal-thumb');
+  return a;
+}
+/* Puro: dado o que a gaveta tem (atual) e o que a IA leu (p), devolve SÓ o que
+   pode ser escrito. Campo com texto é da cliente e não entra. Dia a dia,
+   valores e galeria são um bloco cada: só entram se o bloco estiver vazio.
+   null nos blocos = não mexer. */
+function rotPreenche(atual,p){
+  const campos={},vazio=id=>!String(atual[id]||'').trim();
+  const put=(id,v)=>{if(vazio(id)&&v!=null&&String(v).trim()!=='')campos[id]=String(v);};
+  const lst=a=>(a||[]).map(x=>typeof x==='string'?x:(x&&x.cidade?x.cidade+': '+(x.hotel||''):JSON.stringify(x))).join('\n');
+  put('r-titulo',p.titulo);
+  // slug sai do título que vai ficar na gaveta: o dela, se ela já escreveu
+  put('r-slug',slugify(vazio('r-titulo')?(p.titulo||''):atual['r-titulo']));
+  put('r-subtitulo',p.subtitulo);put('r-periodo',p.periodo);
+  put('r-dias',p.dias);put('r-noites',p.noites);
+  if(p.dias)put('r-badge',p.dias+' dias');
+  put('r-desc',p.descricao_curta);
+  put('r-inclui',lst(p.inclui));put('r-naoinclui',lst(p.nao_inclui));put('r-hoteis',lst(p.hoteis));
+  const tem=a=>Array.isArray(a)&&a.length>0;
+  return {campos,
+    dias:!atual.temDias&&tem(p.roteiro_dias)?[...p.roteiro_dias].sort((a,b)=>(a.n||0)-(b.n||0)):null,
+    valores:!atual.temValores&&tem(p.valores)?p.valores:null,
+    galeria:!atual.temGaleria&&tem(p.galeria)?p.galeria:null};
+}
 function prefill(p){
-  const set=(id,v)=>{const el=$('#'+id);if(el&&v!=null&&v!=='')el.value=v;};
-  set('r-titulo',p.titulo);set('r-slug',slugify(p.titulo||''));set('r-periodo',p.periodo);
-  set('r-subtitulo',p.subtitulo);
-  set('r-dias',p.dias);set('r-noites',p.noites);
-  if(p.dias)set('r-badge',p.dias+' dias');
-  set('r-desc',p.descricao_curta);
-  if(p.inclui&&p.inclui.length)$('#r-inclui').value=p.inclui.join('\n');
-  if(p.nao_inclui&&p.nao_inclui.length)$('#r-naoinclui').value=p.nao_inclui.join('\n');
-  if(p.hoteis&&p.hoteis.length)$('#r-hoteis').value=arrToLines(p.hoteis);
-  if(p.roteiro_dias&&p.roteiro_dias.length){
-    const dias=[...p.roteiro_dias].sort((a,b)=>(a.n||0)-(b.n||0));
-    $('#r-dias-rep').innerHTML=dias.map(repItemDia).join('');
-  }
-  if(p.valores&&p.valores.length)$('#r-val-rep').innerHTML=p.valores.map(repItemVal).join('');
-  if(p.galeria&&p.galeria.length)$('#r-gal-wrap').innerHTML=p.galeria.map(u=>`<div class="gal-thumb" style="background-image:url('${u}')" data-url="${u}"><button type="button">✕</button></div>`).join('');
+  const r=rotPreenche(estadoForm(),p);
+  Object.keys(r.campos).forEach(id=>{$('#'+id).value=r.campos[id];});
+  if(r.dias)$('#r-dias-rep').innerHTML=r.dias.map(repItemDia).join('');
+  if(r.valores)$('#r-val-rep').innerHTML=r.valores.map(repItemVal).join('');
+  if(r.galeria)$('#r-gal-wrap').innerHTML=r.galeria.map(u=>`<div class="gal-thumb" style="background-image:url('${esc(u)}')" data-url="${esc(u)}"><button type="button">✕</button></div>`).join('');
   // Capa é SEMPRE manual — imagens importadas ficam só na galeria (não viram capa).
+  return Object.keys(r.campos).length+(r.dias?1:0)+(r.valores?1:0)+(r.galeria?1:0);
 }
 /* ---- parser comum (parágrafos → estrutura) ---- */
 const RX_WEEKDAY=/(segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)(\s*[-–]?\s*feira)?/i;
@@ -967,7 +1046,7 @@ async function callImporter(formData){
   if(!res.ok||!j||!j.ok)throw new Error(j&&j.error?j.error:('HTTP '+res.status));
   return j.data;
 }
-async function importDocx(file){
+async function importDocx(file,comImgs=true){
   const zip=await JSZip.loadAsync(file);
   const xml=await zip.file('word/document.xml').async('string');
   const paras=xml.split(/<\/w:p>/).map(p=>{const t=(p.match(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)||[]).map(x=>x.replace(/<[^>]+>/g,'')).join('');return decodeEnt(t);});
@@ -975,6 +1054,7 @@ async function importDocx(file){
   try{const fd=new FormData();fd.append('text',paras.filter(Boolean).join('\n'));parsed=await callImporter(fd);}
   catch(err){console.warn('Importador IA falhou, usando parser local:',err);toast('IA indisponível, extração básica: '+err.message,true);parsed=parseParas(paras);const vals=parseTablesXml(xml);if(vals.length)parsed.valores=vals;}
   // imagens (galeria) — sempre no navegador, do próprio zip
+  if(!comImgs)return parsed;
   showImp(true,'Enviando imagens…');
   const slug=slugify(parsed.titulo||'import');
   const media=Object.keys(zip.files).filter(n=>/^word\/media\//i.test(n)&&/\.(jpe?g|png|webp)$/i.test(n));
@@ -982,7 +1062,7 @@ async function importDocx(file){
   for(const n of media){const blob=await zip.file(n).async('blob');const f=new File([blob],n.split('/').pop(),{type:blob.type||'image/jpeg'});const url=await uploadImg(f,slug);if(url)parsed.galeria.push(url);}
   return parsed;
 }
-async function importPptx(file){
+async function importPptx(file,comImgs=true){
   const zip=await JSZip.loadAsync(file);
   const slideNames=Object.keys(zip.files).filter(n=>/^ppt\/slides\/slide\d+\.xml$/i.test(n)).sort();
   const paras=[];
@@ -990,6 +1070,7 @@ async function importPptx(file){
   let parsed;
   try{const fd=new FormData();fd.append('text',paras.join('\n'));parsed=await callImporter(fd);}
   catch(err){console.warn('Importador IA falhou, usando parser local:',err);toast('IA indisponível, extração básica: '+err.message,true);parsed=parseParas(paras);}
+  if(!comImgs)return parsed;
   showImp(true,'Enviando imagens…');
   const slug=slugify(parsed.titulo||'import');
   const media=Object.keys(zip.files).filter(n=>/^ppt\/media\//i.test(n)&&/\.(jpe?g|png|webp)$/i.test(n));
@@ -997,7 +1078,7 @@ async function importPptx(file){
   for(const n of media){const blob=await zip.file(n).async('blob');const f=new File([blob],n.split('/').pop(),{type:blob.type||'image/jpeg'});const url=await uploadImg(f,slug);if(url)parsed.galeria.push(url);}
   return parsed;
 }
-async function importPdf(file){
+async function importPdf(file,comImgs=true){
   await loadPdfJs();
   const buf=await file.arrayBuffer();
   const pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
@@ -1013,6 +1094,7 @@ async function importPdf(file){
   try{const fd=new FormData();fd.append('pdf',file,file.name);parsed=await callImporter(fd);}
   catch(err){console.warn('Importador IA falhou, usando parser local:',err);toast('IA indisponível, extração básica: '+err.message,true);parsed=parseParas(paras);}
   // imagens embutidas → galeria (nunca capa)
+  if(!comImgs)return parsed;
   showImp(true,'Extraindo imagens…');
   const slug=slugify(parsed.titulo||'import');
   parsed.galeria=await extractPdfImages(pdf,slug);
