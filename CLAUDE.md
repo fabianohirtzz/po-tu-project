@@ -1250,6 +1250,46 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     passar a apontar para a WABA real, e **os modelos têm que ser recriados lá**
     (modelo não se transfere entre contas) e esperar nova aprovação da Meta. Essa
     espera é o que separa a conexão do primeiro disparo: começar cedo.
+- **FLUXO DE CONVERSA, PLANO A (o motor): FEITO, MERGEADO, NADA ATIVO (27/10/2026).**
+  10 tarefas em TDD na branch `worktree-fluxo-motor` (26 commits, merge fast-forward em
+  `main`); a suite foi de 47 para **56** arquivos. Novos: `lib/wa-fluxo.php`, as migrations
+  `2026-10-27-fluxo-conversa.sql` e `2026-10-27-fluxo-semeado.sql`, e 9 arquivos de teste.
+  Spec: `docs/superpowers/specs/2026-10-27-fluxo-conversa-painel-design.md` · plano:
+  `docs/superpowers/plans/2026-10-27-fluxo-motor.md` · **pendencias e a heranca obrigatoria
+  do Plano B: `docs/superpowers/reviews/2026-10-27-fluxo-motor-pendencias.md`** (ler antes
+  de comecar o painel).
+  - O robo deixou de ter maquina de estados escrita a mao: ele **interpreta um grafo de
+    cards**, para a cliente montar o atendimento sem codigo. A ramificacao e por **botao
+    interativo**, para a resposta voltar como identificador e nao como frase, e **todo card
+    que espera resposta tem caminho para quem digita** (o publico tem 60+ e digita).
+  - **NADA FOI PUBLICADO.** As duas migrations **nao rodaram** (o Supabase e compartilhado
+    com NOX/hd360), nada subiu por FTP, nenhum cron, nenhum webhook inscrito. Os dois
+    fluxos semeados nascem **`ativo = false`**.
+  - **Regras permanentes deste subsistema:**
+    - **O motor so le `po_wa_fluxo_versoes.grafo`**, que e retrato imutavel. As tabelas de
+      edicao sao rascunho, e `po_wa_conversas.fluxo_versao_id` **prende a conversa a versao
+      em que ela entrou**: editar o fluxo nunca muda a conversa de quem ja esta no meio.
+    - **Publicar e Ligar sao atos separados.** `wa_fluxo_publica` **nunca escreve `ativo`**
+      (ha trava de fonte). Publicar fluxo novo nao o poe no ar.
+    - **As nove leis do motor continuam no motor.** O `wa-fluxo.php` so roteia, e **nunca
+      requer o `wa-motor.php`** (a seta e uma so: db/send/po-data <- fluxo <- motor <- timeout).
+    - **A paciencia caiu para ~23h, nao ~48h:** lembrete em 20h e despedida em ~23h, tudo
+      **dentro da janela de 24h** da Meta. Fora dela so sai template aprovado, e este plano
+      nao manda template: a despedida que a cliente escrever nunca sairia.
+    - **Rotulo de botao recusa acima de 20 caracteres, nao trunca** (contado em
+      `mb_strlen`), porque truncar manda ao cliente um rotulo mutilado.
+    - **Deploy, nesta ordem:** `wa-fluxo.php` **antes** de `wa-motor.php` (o motor faz
+      `require_once` dele; no FTP arquivo a arquivo a janela invertida da fatal error). A
+      conversao de estado da migration e de **rodada unica**. E ao ligar, **"Lista de
+      espera" antes de "Boas-vindas e triagem"**, porque a triagem salta para a espera e a
+      regra 11 bloqueia saltar para fluxo desligado.
+    - **Trava de fonte le arquivo normalizando o fim de linha.** Com `core.autocrlf=true`
+      aqui, regex ancorado em `
+` casa no worktree (LF) e falha no checkout principal
+      (CRLF). Custou um vermelho que dez revisoes nao viram, porque o worktree so teve LF.
+  - **Falta o Plano B:** a aba do painel (`painel/fluxo.js`, `fluxo.php`, `fluxo.css`, o
+    simulador e o filtro de transmissao). Sem ela a cliente nao tem como montar nem ligar
+    fluxo: hoje so existe o que as migrations semearam.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro
