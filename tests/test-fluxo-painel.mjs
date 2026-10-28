@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
    da funcao nova em PURAS_NOMES (e so isso: o resto sai dali). */
 const src = readFileSync(new URL('../painel/fluxo.js', import.meta.url), 'utf8');
 function pega(nome) {
-  const m = src.match(new RegExp('function ' + nome + '\\([\\s\\S]*?\\n\\}'));
+  const m = src.match(new RegExp('(?:async )?function ' + nome + '\\([\\s\\S]*?\\n\\}'));
   assert.ok(m, nome + ' encontrada no fluxo.js');
   return m[0];
 }
@@ -111,21 +111,53 @@ assert.ok(/value="f2" selected/.test(dois), 'o escolhido vem marcado');
 assert.equal(conta(dois, 'selected'), 1, 'so um marcado');
 assert.equal(F.poFluxoSeletor([], null), '', 'sem fluxos, sem seletor');
 
-/* ---------- ponto de chamada: a entrada fala com o endpoint e desenha pela funcao pura ---------- */
-assert.ok(/fluxo\.php/.test(src), 'poCarregaFluxo chama fluxo.php');
-assert.ok(/append\('modo',\s*'ler'\)|poFluxoPost\('ler'/.test(src), 'em modo=ler');
-assert.ok(/sb_token/.test(src), 'e manda o token do login');
+/* m1: card sem titulo / opcao sem rotulo saem MARCADOS, nao como <h3> vazio */
+assert.ok(F.poFluxoCard({ id: 'a', tipo: 'texto' }).includes('(sem título)'), 'card sem titulo sai marcado');
+assert.ok(F.poFluxoCard({ id: 'a', tipo: 'botoes', titulo: 'T', opcoes: [{ id: 'o' }] }).includes('(sem nome)'),
+  'opcao sem rotulo sai marcada');
+/* m2: saida sem destino sai marcada (a opcao 3 de `tres` tem destino null) */
+assert.ok(tres.includes('sem destino'), 'saida sem destino aparece marcada');
+/* m4: card que nao e objeto nao vira card vazio */
+assert.ok(F.poFluxoLista({ cards: [null] }).includes('fl-vazio'), 'so card nulo: lista vazia');
+assert.equal(conta(F.poFluxoLista({ cards: [null, { id: 'a', tipo: 'fim', titulo: 'F' }] }), 'class="fl-card '), 1,
+  'card nulo no meio e ignorado');
+/* m5: lista dinamica: o proximo vem DEPOIS DA ESCOLHA, nao sozinho */
+const din = F.poFluxoCard({ id: 'a', tipo: 'lista', titulo: 'Qual roteiro?', config: { fonte: 'roteiros' }, opcoes: [], proximo: 'b' },
+  { b: { id: 'b', tipo: 'pdf', titulo: 'Manda o PDF' } });
+assert.ok(din.includes('Depois de escolher') && !din.includes('>Depois<'), 'lista dinamica: "Depois de escolher"');
+assert.ok(F.poFluxoCard({ id: 'a', tipo: 'lista', titulo: 'x', config: '{"fonte":"roteiros"}', proximo: 'b' }, {}).includes('Depois de escolher'),
+  'config que veio como texto JSON tambem vale');
+assert.ok(F.poFluxoCard({ id: 'a', tipo: 'texto', titulo: 'x', proximo: 'b' }, {}).includes('>Depois<'),
+  'card comum segue com "Depois"');
+assert.ok(F.poFluxoCard({ id: 'a', tipo: 'lista', titulo: 'x', config: null, proximo: 'b' }, {}).includes('>Depois<'),
+  'lista sem fonte dinamica segue com "Depois"');
+
+/* ---------- ponto de chamada ---------- */
+const semComentario = src.replace(/^\/\*[\s\S]*?\*\/[ \t]*/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^[ \t]*\/\/.*$/gm, '');
+// I1: ancorado no fetch, nao em comentario
+assert.ok(/fetch\(\s*'\.\.\/fluxo\.php'/.test(semComentario), 'o fetch vai para ../fluxo.php');
+assert.ok(/append\('modo',\s*modo\)/.test(semComentario) && /poFluxoPost\('ler'\)/.test(semComentario), 'em modo=ler');
+assert.ok(/append\('sb_token'/.test(semComentario), 'e manda o token do login');
+// contrato da resposta: a chave e `fluxos`, e erro nunca vira "nenhum"
+assert.ok(/Array\.isArray\(j\.fluxos\)\s*\?\s*j\.fluxos\s*:\s*\[\]/.test(semComentario), 'le a chave `fluxos` da resposta');
+assert.ok(/if \(!j\.ok\) throw new Error\(j\.error/.test(semComentario), 'ok:false vira erro com o motivo do servidor');
+assert.ok(/catch \(e\) \{[^}]*fl-aviso">' \+ esc\(e\.message\)/.test(semComentario), 'o motivo aparece na tela, escapado');
 assert.ok(/poFluxoLista\(/.test(src.replace(pega('poFluxoLista'), '')), 'a tela desenha pela poFluxoLista');
 assert.ok(/poFluxoSeletor\(/.test(src.replace(pega('poFluxoSeletor'), '')), 'e escolhe o fluxo pelo poFluxoSeletor');
 
 /* INERTE AO CARREGAR. O painel baixa o fluxo.js antes de existir a aba que o
-   usa (a Task 7 liga o app.js): ele so pode DEFINIR coisas. Nada de
-   DOMContentLoaded, listener, timer nem chamada solta no topo do arquivo. */
-assert.ok(!/DOMContentLoaded|addEventListener|setTimeout|setInterval|onload/.test(src), 'sem gatilho de load');
-const topo = src.split('\n').filter(l => /^\S/.test(l) && !/^(\/\*|\*|\}|\/\/|=+)/.test(l));
-topo.forEach(l => assert.ok(/^(function |async function |let |const )/.test(l),
-  'linha de topo so define: ' + l));
-assert.ok(!topo.some(l => /^(let|const) \w+\s*=\s*[^;]*\(/.test(l) && !/Object\.create|\[\]|null/.test(l)),
-  'nenhuma constante de topo chama algo');
+   usa (a Task 7 liga o app.js): ele so pode DEFINIR coisas. A regra e sobre
+   STATEMENT DE TOPO, nao sobre o texto: dentro de funcao pode ter
+   addEventListener e setTimeout (a gaveta da Task 5 vai precisar). Allowlist
+   de formas, nao denylist, e sobre o fonte sem comentarios. */
+const PERMITIDA = [/^(?:async )?function \w+\(/, /^(?:let|const) \w+ = (?:\[\]|null|\{\}|''|0|false|true);$/, /^\}$/];
+semComentario.split('\n').filter(l => /^\S/.test(l)).forEach(l =>
+  assert.ok(PERMITIDA.some(r => r.test(l)), 'linha de topo fora das formas permitidas (carregar nao pode executar nada): ' + l));
+
+/* m7: o esc() da casa NAO escapa a aspa simples. Todo atributo emitido usa
+   aspas DUPLAS; um atributo com aspa simples deixaria o texto da cliente fechar o atributo. */
+assert.ok(!/=\\'/.test(semComentario), 'nenhum atributo com aspa simples');
+assert.ok(/aspas DUPLAS/.test(src), 'o aviso sobre o esc() esta no fonte');
 
 console.log('test-fluxo-painel OK');

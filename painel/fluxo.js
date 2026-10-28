@@ -15,6 +15,11 @@
    As funcoes puras sao extraidas do fonte pelos testes (new Function), entao
    NENHUMA constante de topo de arquivo pode ser dependencia delas: a lista de
    tipos mora DENTRO de poFluxoTipos(), como o catalogo em textos.js.
+
+   ATENCAO: o esc() da casa (app.js) NAO escapa a aspa simples. Todo atributo
+   HTML emitido aqui usa aspas DUPLAS, sempre. Com aspa simples o texto da
+   cliente fecharia o atributo (a mesma classe de bug do po_css_url() no PHP).
+   Vale em dobro para style="..." e atributos de svg.
 ============================================================ */
 
 /* Espelho de WA_CARD_TIPOS (lib/wa-fluxo.php), NA MESMA ORDEM. O
@@ -87,7 +92,11 @@ function poFluxoCard(card, porId) {
   const opcoes = poFluxoOpcoes(c.opcoes);
   const saidas = [];
   opcoes.forEach(function (o) { saidas.push(saida(esc(o.rotulo || '(sem nome)'), o.destino)); });
-  if (c.proximo) saidas.push(saida('Depois', c.proximo));
+  // Lista dinamica (fonte = roteiros): o proximo so vale DEPOIS de a pessoa escolher.
+  let cfg = c.config;
+  if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg); } catch (e) { cfg = null; } }
+  const dinamica = c.tipo === 'lista' && !!cfg && typeof cfg === 'object' && cfg.fonte === 'roteiros';
+  if (c.proximo) saidas.push(saida(dinamica ? 'Depois de escolher' : 'Depois', c.proximo));
   if (c.fallback) saidas.push(saida('Não entendeu', c.fallback));
   if (c.sem_resposta) saidas.push(saida('Sem resposta', c.sem_resposta));
 
