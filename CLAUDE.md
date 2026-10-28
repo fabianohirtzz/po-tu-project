@@ -1377,6 +1377,40 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     - **Arquivo novo em `painel/` que ninguem carrega deixa a suite vermelha na hora:**
       criar e fiar (`<script>`/`<link>` + entrada no `assets-lock.json`) sao a **mesma**
       tarefa, nunca duas.
+  - **ZOOM DO CANVAS (28/10/2026): NO AR** (`fluxo.js?v=11`, `fluxo.css?v=5`). O grafo
+    semeado mede **3060x2160** e a area util do painel fica em torno de 1400x650: ele
+    **nunca coube**, e so dava para rolar nas duas direcoes procurando card. Agora a tela
+    **abre no tamanho que cabe** (30% num monitor de 1440, 25% em 1024) e tem `-`, `+`,
+    **"Caber na tela"**, **"100%"** e **Ctrl + roda do mouse**.
+    - **O `.fl-palco` existe por um motivo exato:** `transform` **nao muda o espaco que o
+      elemento ocupa no layout**. Sem um palco com o tamanho JA escalado, o navegador
+      reserva sempre a area CRUA e sobra um vazio de duas telas a direita a 30%.
+    - **Quem rola e a `.fl-rolagem`, nao a `.fl-vista--canvas`**: a barra do zoom fica
+      fora dela, senao rolaria junto com o grafo e sairia da tela.
+    - **O ajuste arredonda para BAIXO e tem piso proprio (0,08)**, mais baixo que o da
+      escada manual (0,25): com o piso da escada um grafo alto nao caberia e o botao
+      "Caber na tela" **mentiria**. Nunca amplia sozinho.
+    - **A trava "o fluxo.js nao le largura de tela" ficou mais PRECISA, nao mais frouxa:**
+      segue proibindo ler a TELA em qualquer lugar, e permite `clientWidth/clientHeight`
+      **so dentro de `poFluxoZoomAplica`**, onde isso e a conta do zoom e nao decisao de
+      layout. A regra D5 (quem escolhe lista x canvas e o CSS) continua intacta.
+    - **ORDEM NA CASCATA DO CSS, e foi defeito de verdade:** o padrao
+      `.fl-zoom{display:none}` ficou **depois** do `@media`. Mesma especificidade, vence a
+      **ultima declarada**, entao a barra ficava invisivel em qualquer largura — **com os
+      dois testes verdes**, porque conferiam presenca dentro/fora e nunca ordem. So
+      apareceu **abrindo a tela**. O teste agora exige que o padrao venha ANTES do
+      `@media`, para `.fl-zoom` e `.fl-vista--canvas`.
+    - **Como foi visto sem login e sem dado de cliente:** uma pagina no scratchpad que
+      carrega `fluxo.css`/`fluxo.js` e desenha o grafo extraido da propria migration
+      semeada, servida por `python -m http.server` (o Playwright bloqueia `file:`).
+      **Cuidado: ela usa COPIAS dos arquivos** — alterar o original e recarregar nao muda
+      nada ate recopiar; foi o que escondeu a correcao da cascata por uma rodada.
+    - Medido no navegador com o grafo real: ao abrir **nao rola em nenhuma direcao**, os
+      20 cards aparecem, o clique no card **ainda abre a gaveta a 30%**, Ctrl+roda da zoom
+      e barra o zoom do navegador, roda sem Ctrl segue rolando, e abaixo de 980px a barra
+      some junto com o canvas. Mutacao: 9/10 e depois **8/8** em defeitos dentro de
+      `poFluxoZoomAplica`, que ganhou **teste de comportamento com DOM em duble** — trava
+      de fonte se contorna movendo a palavra de lugar.
   - **Falta o Plano C:** o simulador e o filtro de transmissao por fluxo. As tres
     pre-condicoes estao no documento de pendencias.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
