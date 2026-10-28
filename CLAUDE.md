@@ -1278,9 +1278,8 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     cards**, para a cliente montar o atendimento sem codigo. A ramificacao e por **botao
     interativo**, para a resposta voltar como identificador e nao como frase, e **todo card
     que espera resposta tem caminho para quem digita** (o publico tem 60+ e digita).
-  - **NADA FOI PUBLICADO.** As duas migrations **nao rodaram** (o Supabase e compartilhado
-    com NOX/hd360), nada subiu por FTP, nenhum cron, nenhum webhook inscrito. Os dois
-    fluxos semeados nascem **`ativo = false`**.
+  - **PUBLICADO EM 28/10/2026** (ver o bloco de deploy no item do Plano B). Os dois fluxos
+    semeados estao no banco **`ativo = false`**, e o webhook segue **nao inscrito**.
   - **Regras permanentes deste subsistema:**
     - **O motor so le `po_wa_fluxo_versoes.grafo`**, que e retrato imutavel. As tabelas de
       edicao sao rascunho, e `po_wa_conversas.fluxo_versao_id` **prende a conversa a versao
@@ -1322,9 +1321,49 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
   - **A aba "Textos do robo" SAIU** (`painel/textos.js` e `tests/test-textos.mjs` apagados):
     os 7 textos soltos viraram cards do grafo. Nao ha mais dois lugares escrevendo a mesma
     mensagem.
-  - **NADA FOI PUBLICADO.** As migrations do Plano A seguem **sem rodar**, nada por FTP,
-    nenhum cron, webhook nao inscrito. `tests/test-wa-schema.php` esta **vermelho de
-    proposito** por isso, e fica verde quando as migrations rodarem.
+  - **DEPLOY DO PLANO A + PLANO B (28/10/2026): FEITO, E O ROBO SEGUE SEM ATENDER
+    NINGUEM.** Decisao do cliente: publicar agora, **webhook fora** ate o fluxo estar
+    ajustado ("eu te aviso quando chegar este momento"). A suite ficou **100% verde**
+    (72 arquivos) assim que as migrations rodaram.
+    - **Migrations rodadas no projeto `hd-360` (`euzmbswywwhmicjlszqw`)**, que e o
+      compartilhado. Aplicadas em 6 pedacos, porque o portao recusa `drop`/`update` no
+      mesmo bloco do DDL. O DDL e aditivo e toca **so tabelas `po_*`**: nada de NOX/hd360.
+    - **Os dois `update` de conversao de estado NAO foram rodados**, de proposito:
+      `po_wa_conversas` estava **vazia** (medido antes), entao eles seriam no-op e a
+      rodada unica fica intacta para quem precisar dela.
+    - **O grafo foi transcrito a mao e conferido por hash, nao por leitura.** As 440
+      linhas de JSON nao entram no MCP a partir do arquivo, entao a fidelidade foi
+      provada depois: um hash canonico por card, calculado **em Python a partir do
+      arquivo** e **em SQL a partir do que foi gravado**, com a mesma forma canonica.
+      Bateram: triagem `2269de117f6ebb2164df972c9efe9749` (20 cards) e espera
+      `81c84b314d399423eb5acb9d9211b998` (2 cards), mais os campos de topo um a um.
+      **Os cards do rascunho sao DERIVADOS do grafo por SQL**, entao conferir o grafo
+      antes de derivar e o que impede o erro de se multiplicar.
+    - **9 arquivos por FTP**, na ordem que as dependencias exigem: `lib/wa-fluxo.php`
+      primeiro, depois `wa-motor`/`wa-timeout`/`wa-send`, o `fluxo.php`, os
+      `painel/fluxo.{js,css}` e o `painel/app.js`, e o `painel/index.html` **por ultimo**.
+      `painel/textos.js` foi **apagado** do servidor (ficou orfao com a aba).
+      **`painel/assets-lock.json` nao vai para o servidor**: e a trava do cache-buster,
+      usada so por `tests/test-cache-buster.mjs`.
+    - **A conferencia comparou os 40 arquivos de `lib/` e `painel/` por hash contra o
+      servidor, nao a lista do que eu lembrava de ter subido** (a regra que custou o bug
+      de 13/09). Antes: 5 DIFERE + 4 AUSENTE. Depois: **todos iguais**. O comparador
+      reporta hash bruto **e** normalizado, porque com `core.autocrlf=true` um arquivo
+      identico aparece como diferente so pelo fim de linha.
+    - **Medido no ar:** `painel/` 200 · `fluxo.js?v=10`, `fluxo.css?v=4`, `app.js?v=20`
+      200 · `textos.js` **404** · `lib/wa-fluxo.php` 200 com **corpo vazio** ·
+      `fluxo.php` **405 no GET** (so aceita POST) e **401 em todo POST** sem login
+      valido, inclusive com modo inventado (a autenticacao vem **antes** da lista de
+      modos) · webhook **403** sem token e com token chutado · cron **403** sem chave ·
+      campanha **401** · e o site publico inteiro de pe (`/`, `/roteiros`,
+      `/roteiros/turquia`, `/link`, `/contato`, `/perguntas-frequentes`, `/sitemap.xml`).
+    - **SAO DUAS TRAVAS INDEPENDENTES, e as duas estao postas:** o app **nao esta
+      inscrito** no webhook da WABA (a Meta nao entrega mensagem nenhuma) e os dois
+      fluxos estao **`ativo = false`** (sem porta de entrada, o motor nao atende nem se
+      uma mensagem chegasse). **Nenhum cron foi cadastrado no cPanel** — sem webhook ele
+      rodaria de hora em hora sem ter o que varrer.
+    - **Ainda no servidor, fora do escopo deste deploy:** `conectar-numero.php`, que o
+      proprio CLAUDE.md manda apagar depois da convivencia (feita em 26/10).
   - **Regras permanentes deste subsistema:**
     - **O canvas nao pode ter altura fixa.** Medido na migration semeada: com 150px o card
       de boas-vindas perdia 4 das 5 saidas e 16 dos 20 cards tinham corte. Como o canvas
