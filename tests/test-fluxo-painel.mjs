@@ -187,7 +187,7 @@ const posDe = html => [...html.matchAll(/class="fl-no" style="left:(-?\d+)px;top
 const pa = posDe(cv);
 assert.equal(pa[1][0] - pa[0][0], 360, 'a distancia em x entre os cards e a gravada (400 - 40)');
 assert.equal(pa[1][1], pa[0][1], 'e o y igual continua igual');
-assert.equal(pa[2][1] - pa[0][1], 200, 'e a distancia em y tambem (260 - 60)');
+assert.ok(pa[2][1] - pa[0][1] >= 200, 'e a distancia em y nunca diminui (260 - 60)');
 assert.equal(conta(cv, 'fl-card--inicial'), 1, 'o inicial e marcado tambem no canvas');
 assert.ok(!/NaN|undefined|Infinity/.test(cv), 'nenhum NaN/undefined no canvas');
 // um fluxo sem nenhuma saida: nenhum segmento
@@ -230,10 +230,45 @@ const SEMENTE = [[0,200],[320,0],[320,200],[320,400],[640,0],[960,0],[1280,0],[1
 const sem20 = posDe(F.poFluxoCanvas({ cards: SEMENTE.map((p, i) => ({ id: 'c' + i, tipo: 'fim', titulo: 'C' + i, x: p[0], y: p[1] })) }));
 assert.equal(sem20.length, 20, 'os 20 cards estao no canvas');
 assert.equal(new Set(sem20.map(p => p.join(','))).size, 20, 'e em 20 posicoes distintas');
-// nenhum no encosta em outro na mesma coluna: a distancia vertical minima cobre a altura estimada do que esta em cima
 const alturas = [...F.poFluxoCanvas({ cards: SEMENTE.map((p, i) => ({ id: 'c' + i, tipo: 'fim', titulo: 'C' + i, x: p[0], y: p[1] })) })
   .matchAll(/width:260px;height:(\d+)px/g)].map(m => Number(m[1]));
 assert.ok(alturas.length === 20 && alturas.every(n => n >= 150), 'cada no tem altura estimada');
+
+/* A SEMENTE DE VERDADE (a migration le o mesmo arquivo que vai ao banco): os 20 cards do
+   fluxo de boas-vindas, com titulo, texto, opcoes e saidas reais, nas posicoes reais. A
+   semente espaca 200px e o card estimado mede de 150 a ~470, entao sem o empurrao 8 dos
+   12 pares da mesma coluna se cobriam. Folga >= 24px (respiro) em TODA coluna, e a mesma folga minima. */
+const mig = readFileSync(new URL('../supabase/migrations/2026-10-27-fluxo-semeado.sql', import.meta.url), 'utf8');
+const grafo = JSON.parse(mig.split('$grafo$')[1]);
+const posSem = Object.fromEntries([...mig.matchAll(/\('(c1000000-[0-9a-f-]+)', \d+, (-?\d+), (-?\d+)\)/g)].map(m => [m[1], [Number(m[2]), Number(m[3])]]));
+const cardsSem = Object.values(grafo.cards).map(c => Object.assign({}, c, { x: posSem[c.id][0], y: posSem[c.id][1] }));
+assert.equal(cardsSem.length, 20, 'a semente tem 20 cards');
+const htmlSem = F.poFluxoCanvas({ card_inicial: grafo.inicial, cards: cardsSem });
+const nosSem = [...htmlSem.matchAll(/class="fl-no" style="left:(-?\d+)px;top:(-?\d+)px;width:260px;height:(\d+)px/g)]
+  .map(m => ({ x: Number(m[1]), y: Number(m[2]), h: Number(m[3]) }));
+assert.equal(nosSem.length, 20, 'os 20 nos da semente saem');
+assert.equal(new Set(nosSem.map(n => n.x + ',' + n.y)).size, 20, 'em 20 posicoes distintas');
+const porColuna = {};
+nosSem.forEach(n => (porColuna[n.x] = porColuna[n.x] || []).push(n));
+let menorFolga = Infinity;
+Object.values(porColuna).forEach(col => {
+  col.sort((m, n) => m.y - n.y);
+  for (let j = 1; j < col.length; j++) menorFolga = Math.min(menorFolga, col[j].y - (col[j - 1].y + col[j - 1].h));
+});
+assert.ok(menorFolga >= 24, 'nenhum no cobre ou encosta no o de baixo na mesma coluna da semente (menor folga: ' + menorFolga + ')');
+const altSvg = Number(htmlSem.match(/<svg[^>]*height="(\d+)"/)[1]);
+assert.ok(nosSem.every(n => n.y + n.h <= altSvg), 'e o svg e alto o bastante para o no mais baixo (' + altSvg + ')');
+// as setas da semente continuam saindo do meio do no DESLOCADO
+const noPorId = {};
+[...htmlSem.matchAll(/class="fl-no" style="left:(-?\d+)px;top:(-?\d+)px;width:260px;height:(\d+)px"><article[^>]*data-card="([^"]+)"/g)]
+  .forEach(m => { noPorId[m[4]] = { x: Number(m[1]), y: Number(m[2]), h: Number(m[3]) }; });
+const setasSem = [...htmlSem.matchAll(/data-de="([^"]+)" data-para="([^"]+)" d="M(\d+) (\d+) C\d+ \d+ \d+ (\d+) (\d+) (\d+)"/g)];
+assert.ok(setasSem.length >= 20, 'a semente tem as setas');
+setasSem.forEach(m => {
+  const de = noPorId[m[1]], para = noPorId[m[2]];
+  assert.equal(Number(m[4]), de.y + Math.round(de.h / 2), 'seta ' + m[1].slice(-2) + '->' + m[2].slice(-2) + ' sai do meio do no de origem ja deslocado');
+  assert.equal(Number(m[7]), para.y + Math.round(para.h / 2), 'e chega no meio do no de destino ja deslocado');
+});
 
 // XY-13: so um dos dois (x bom, y ausente) cai na grade; nunca "top:nullpx"
 for (const c of [{ x: 100 }, { y: 100 }, { x: 100, y: null }, { x: null, y: 100 }]) {
@@ -328,7 +363,10 @@ assert.ok(/\.fl-vista--canvas\{display:block/.test(dentro), 'e o canvas aparece'
 assert.ok(/\.fl-no\{position:absolute\}/.test(dentro), 'o no do canvas e absoluto');
 assert.ok(/\.fl-canvas\{position:relative\}/.test(dentro), 'e o canvas e o referencial dele');
 assert.ok(/\.fl-vista--canvas\{display:none\}/.test(fora), 'fora do @media o canvas esta escondido (celular)');
-assert.ok(!/\.fl-vista--lista\{[^}]*display:none/.test(fora), 'e a lista NUNCA e escondida fora do @media (celular)');
+const regrasFora = [...fora.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(m => ({ sel: m[1].trim(), corpo: m[2] }));
+const escondeNoCelular = regrasFora.filter(r => /fl-vista/.test(r.sel) && !/^\.fl-vista--canvas$/.test(r.sel) && /display\s*:\s*none/.test(r.corpo));
+assert.deepEqual(escondeNoCelular, [], 'fora do @media (celular) nenhuma regra com seletor de .fl-vista (composto ou nao) esconde a lista');
+assert.ok(regrasFora.some(r => r.sel === '.fl-vista--canvas' && /display\s*:\s*none/.test(r.corpo)), 'e o canvas segue escondido ali');
 assert.ok(!/transition/.test(css) || !/prefers-reduced-motion/.test(css), 'sem regra de reduced-motion para animacao que nao existe');
 assert.ok(/poFluxoCanvas\(/.test(src.replace(pega('poFluxoCanvas'), '')), 'a tela desenha pela poFluxoCanvas');
 assert.ok(!/\.fl-no[^{]*\{[^}]*overflow/.test(css), 'o card do canvas nao corta o conteudo (as saidas so existem dentro dele)');

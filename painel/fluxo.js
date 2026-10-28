@@ -150,7 +150,7 @@ function poFluxoCanvas(fluxo) {
   const f = fluxo && typeof fluxo === 'object' ? fluxo : {};
   const cards = Array.isArray(f.cards) ? f.cards.filter(function (c) { return c && typeof c === 'object'; }) : [];
   if (!cards.length) return '<p class="fl-vazio">Este fluxo ainda não tem cards.</p>';
-  const L = 260, FOLGA = 60, POR_LINHA = 3, MARGEM = 120, DX_MAX = 100, LINHA_GRADE = 320;
+  const L = 260, FOLGA = 60, POR_LINHA = 3, MARGEM = 120, DX_MAX = 100, LINHA_GRADE = 320, FOLGA_V = 40;
   const num = function (v) {
     if (typeof v === 'string' && v.trim() !== '') v = Number(v);
     return typeof v === 'number' && isFinite(v) ? Math.round(v) : null;
@@ -182,8 +182,6 @@ function poFluxoCanvas(fluxo) {
     minX = minX === null ? p.x : Math.min(minX, p.x);
     minY = minY === null ? p.y : Math.min(minY, p.y);
   });
-  const pos = Object.create(null);
-  let largura = 0, altura = 0;
   const lugar = cards.map(function (c, i) {
     let x, y;
     if (cru[i].x === null || cru[i].y === null) {
@@ -193,11 +191,26 @@ function poFluxoCanvas(fluxo) {
       x = cru[i].x - minX + MARGEM;
       y = cru[i].y - minY + MARGEM;
     }
-    const h = alturaDe(c);
-    if (c.id != null) pos[c.id] = { x: x, y: y, h: h };
-    largura = Math.max(largura, x + L + MARGEM);
-    altura = Math.max(altura, y + h + MARGEM);
-    return { x: x, y: y, h: h };
+    return { x: x, y: y, h: alturaDe(c), i: i };
+  });
+  /* A semente espaca 200px e o card mede de 150 a ~470: sem isto um cobriria o
+     de baixo. Por coluna (mesmo left), de cima para baixo, cada card desce o
+     quanto precisar para ficar FOLGA_V abaixo do anterior. Empurrar (e nao
+     reespacar a semente) vale tambem quando a cliente edita um texto e o card
+     cresce. Largura, altura do svg e ancoras das setas saem DAQUI. */
+  const colunas = Object.create(null);
+  lugar.forEach(function (p) { (colunas[p.x] = colunas[p.x] || []).push(p); });
+  Object.keys(colunas).forEach(function (k) {
+    const col = colunas[k].sort(function (m, n) { return m.y - n.y || m.i - n.i; });
+    for (let j = 1; j < col.length; j++) col[j].y = Math.max(col[j].y, col[j - 1].y + col[j - 1].h + FOLGA_V);
+  });
+  const pos = Object.create(null);
+  let largura = 0, altura = 0;
+  lugar.forEach(function (p) {
+    const c = cards[p.i];
+    if (c.id != null) pos[c.id] = p;
+    largura = Math.max(largura, p.x + L + MARGEM);
+    altura = Math.max(altura, p.y + p.h + MARGEM);
   });
   // 2) os nos, ja com o mapa completo
   const nos = cards.map(function (c, i) {
