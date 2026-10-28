@@ -240,11 +240,144 @@ function poFluxoCanvas(fluxo) {
     });
   });
 
-  return '<div class="fl-canvas" style="width:' + largura + 'px;height:' + altura + 'px">' +
+  /* O palco carrega o tamanho JA escalado e o canvas publica o tamanho CRU em
+     data-: e desse par que o zoom vive (ver poFluxoZoomAplica). O data- tem
+     que dizer o MESMO que o style, senao o ajuste calcula por um tamanho e o
+     navegador desenha outro. */
+  return '<div class="fl-palco" style="width:' + largura + 'px;height:' + altura + 'px">' +
+    '<div class="fl-canvas" data-largura="' + largura + '" data-altura="' + altura +
+    '" style="width:' + largura + 'px;height:' + altura + 'px">' +
     '<svg class="fl-setas" width="' + largura + '" height="' + altura + '" viewBox="0 0 ' + largura + ' ' + altura + '" aria-hidden="true">' +
     '<defs><marker id="fl-ponta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">' +
     '<path d="M0 0 L10 5 L0 10 z" class="fl-ponta"/></marker></defs>' + setas.join('') + '</svg>' +
-    nos.join('') + '</div>';
+    nos.join('') + '</div></div>';
+}
+
+/* ============================================================
+   ZOOM DO CANVAS.
+
+   O grafo semeado mede cerca de 3000x1400 e a area util do painel no desktop
+   fica em torno de 1100x630: ele NUNCA cabe. Sem zoom, a unica forma de achar
+   um card era rolar nas duas direcoes, e nao havia como ver a forma do fluxo.
+
+   A escala vive num `transform: scale()` sobre o `.fl-canvas`, e o `.fl-palco`
+   em volta recebe o tamanho JA ESCALADO. O palco e o que faz a rolagem bater
+   com o que se ve: `transform` nao muda o espaco que o elemento ocupa no
+   layout, entao sem ele o navegador reservaria sempre a area CRUA, e a 35%
+   sobraria um vazio de duas telas a direita do fluxo.
+
+   `transform` tambem nao desalinha as setas: elas sao um <svg> DENTRO do
+   `.fl-canvas`, logo escalam junto, com as mesmas coordenadas. E o clique no
+   card segue funcionando porque o navegador converte as coordenadas.
+============================================================ */
+
+// Os degraus do zoom manual. Dentro da funcao, nao em constante de topo: o
+// teste extrai cada funcao pura e a roda isolada.
+function poFluxoZoomEscada() {
+  return [0.25, 0.35, 0.5, 0.67, 0.8, 1, 1.25, 1.5];
+}
+
+function poFluxoZoomNum(v) {
+  if (typeof v === 'string' && v.trim() !== '') v = Number(v);
+  return typeof v === 'number' && isFinite(v) && v > 0 ? v : 0;
+}
+
+// Um degrau acima (dir > 0) ou abaixo. Valor fora da escada -- que e o que o
+// ajuste a tela produz, como 0.36 -- pousa no degrau vizinho.
+function poFluxoZoomPasso(atual, dir) {
+  const esc = poFluxoZoomEscada();
+  const piso = esc[0], teto = esc[esc.length - 1];
+  let z = poFluxoZoomNum(atual) || 1;
+  z = Math.min(teto, Math.max(piso, z));
+  if (dir > 0) {
+    for (let i = 0; i < esc.length; i++) if (esc[i] > z + 1e-9) return esc[i];
+    return teto;
+  }
+  for (let i = esc.length - 1; i >= 0; i--) if (esc[i] < z - 1e-9) return esc[i];
+  return piso;
+}
+
+/* A escala que faz o grafo caber inteiro na area visivel.
+
+   Arredonda para BAIXO em duas casas: arredondar para cima devolveria uma
+   escala em que o ultimo card fica alguns pixels fora, e o botao "caber na
+   tela" precisa caber de verdade.
+
+   O piso aqui (0.08) e MENOR que o da escada manual, de proposito: com o piso
+   da escada, um grafo alto nao caberia e o botao mentiria. Sem medida de tela
+   -- o container ainda nao pintou, ou esta escondido no celular -- devolve 1,
+   nunca 0, que esconderia o fluxo inteiro.
+   Nunca AMPLIA: ler o texto a 150% sem ter pedido seria pior que o problema. */
+function poFluxoZoomAjuste(largura, altura, dispW, dispH) {
+  const lg = poFluxoZoomNum(largura), al = poFluxoZoomNum(altura);
+  const dw = poFluxoZoomNum(dispW), dh = poFluxoZoomNum(dispH);
+  if (!lg || !al || !dw || !dh) return 1;
+  const z = Math.min(dw / lg, dh / al);
+  if (!isFinite(z) || z <= 0) return 1;
+  if (z >= 1) return 1;
+  return Math.max(0.08, Math.floor(z * 100) / 100);
+}
+
+// O tamanho do palco: o do grafo vezes a escala (ver o cabecalho).
+function poFluxoZoomPalco(largura, altura, z) {
+  const lg = poFluxoZoomNum(largura), al = poFluxoZoomNum(altura);
+  const v = poFluxoZoomNum(z) || 1;
+  return { w: Math.round(lg * v), h: Math.round(al * v) };
+}
+
+function poFluxoZoomBarra(z) {
+  const esc = poFluxoZoomEscada();
+  const piso = esc[0], teto = esc[esc.length - 1];
+  const v = poFluxoZoomNum(z) || 1;
+  const off = function (b) { return b ? ' disabled' : ''; };
+  return '<div class="fl-zoom" role="group" aria-label="Tamanho do fluxo na tela">' +
+    '<button type="button" class="fl-zoom__b" data-zoom="menos" title="Diminuir"' +
+      off(v <= piso + 1e-9) + ' aria-label="Diminuir">&minus;</button>' +
+    '<span class="fl-zoom__n" aria-live="polite">' + Math.round(v * 100) + '%</span>' +
+    '<button type="button" class="fl-zoom__b" data-zoom="mais" title="Aumentar"' +
+      off(v >= teto - 1e-9) + ' aria-label="Aumentar">+</button>' +
+    '<button type="button" class="fl-zoom__b fl-zoom__b--txt" data-zoom="ajustar">Caber na tela</button>' +
+    '<button type="button" class="fl-zoom__b fl-zoom__b--txt" data-zoom="natural">100%</button>' +
+    '<span class="fl-zoom__dica">Ctrl + roda do mouse</span>' +
+    '</div>';
+}
+
+/* Aplica a escala no DOM. `z` nulo significa "calcule o que cabe", que e o
+   estado em que a tela nasce: abrir num fluxo que nao cabe e justamente o
+   problema. Mede a area de rolagem AGORA, porque ela depende da janela. */
+function poFluxoZoomAplica(z) {
+  const rol = document.querySelector('.fl-rolagem');
+  const canv = rol ? rol.querySelector('.fl-canvas') : null;
+  const palco = rol ? rol.querySelector('.fl-palco') : null;
+  if (!canv || !palco) return;
+  const lg = Number(canv.getAttribute('data-largura')) || 0;
+  const al = Number(canv.getAttribute('data-altura')) || 0;
+  const v = (z === null || z === undefined)
+    ? poFluxoZoomAjuste(lg, al, rol.clientWidth, rol.clientHeight)
+    : (poFluxoZoomNum(z) || 1);
+  PO_FLUXO_ZOOM = v;
+  canv.style.transform = 'scale(' + v + ')';
+  const p = poFluxoZoomPalco(lg, al, v);
+  palco.style.width = p.w + 'px';
+  palco.style.height = p.h + 'px';
+  const barra = rol.parentNode ? rol.parentNode.querySelector('.fl-zoom') : null;
+  if (barra) barra.outerHTML = poFluxoZoomBarra(v);
+}
+
+function poFluxoZoomAcao(acao) {
+  if (acao === 'ajustar') return poFluxoZoomAplica(null);
+  if (acao === 'natural') return poFluxoZoomAplica(1);
+  if (acao === 'mais') return poFluxoZoomAplica(poFluxoZoomPasso(PO_FLUXO_ZOOM, 1));
+  if (acao === 'menos') return poFluxoZoomAplica(poFluxoZoomPasso(PO_FLUXO_ZOOM, -1));
+}
+
+/* Ctrl + roda do mouse, que e o gesto que todo mundo tenta primeiro num
+   canvas. SEM Ctrl a roda segue rolando a area, que e o comportamento que a
+   pessoa espera; por isso o preventDefault mora dentro do if. */
+function poFluxoZoomRoda(ev) {
+  if (!ev || !ev.ctrlKey) return;
+  ev.preventDefault();
+  poFluxoZoomAplica(poFluxoZoomPasso(PO_FLUXO_ZOOM, ev.deltaY < 0 ? 1 : -1));
 }
 
 /* ============================================================
@@ -647,6 +780,7 @@ let PO_FLUXO_CARD = null;
 let PO_FLUXO_CONF = {};
 let PO_FLUXO_RES = '';
 let PO_FLUXO_OCUPADO = false;
+let PO_FLUXO_ZOOM = null;
 
 /* O token vem de sb.auth.getSession() na hora, como nos outros endpoints.
    Devolve {http, j, erro} e NUNCA lanca por causa da resposta: o 400 do publicar
@@ -786,12 +920,20 @@ function poFluxoRender() {
     '<section id="fl-barra" class="fl-barra">' + poFluxoBarra(f, poFluxoConf(f.id), PO_FLUXOS) + '</section>' +
     '<div id="fl-resultado" class="fl-resultado" role="status">' + PO_FLUXO_RES + '</div>' +
     '<div class="fl-vista fl-vista--lista">' + poFluxoLista(f) + '</div>' +
-    '<div class="fl-vista fl-vista--canvas">' + poFluxoCanvas(f) + '</div>' +
+    '<div class="fl-vista fl-vista--canvas">' + poFluxoZoomBarra(PO_FLUXO_ZOOM) +
+      '<div class="fl-rolagem">' + poFluxoCanvas(f) + '</div></div>' +
     '<aside id="fl-gaveta" class="fl-gaveta" hidden></aside>';
   PO_FLUXO_CARD = null;
   const s = box.querySelector('#fl-seletor');
   if (s) s.onchange = function () { PO_FLUXO_SEL = s.value; PO_FLUXO_RES = ''; poFluxoRender(); };
   box.onclick = poFluxoClique;
+  /* A escala e aplicada DEPOIS do innerHTML, porque ela mede a area de
+     rolagem, que so existe pintada. PO_FLUXO_ZOOM nulo = primeira pintura
+     deste fluxo: calcula o que cabe. Trocar de fluxo no seletor repinta e
+     reajusta, que e o que se quer ao abrir outro grafo. */
+  poFluxoZoomAplica(PO_FLUXO_ZOOM);
+  const rol = box.querySelector('.fl-rolagem');
+  if (rol) rol.addEventListener('wheel', poFluxoZoomRoda, { passive: false });
 }
 
 /* O data-card sai DUAS vezes no DOM (na lista e no canvas, que chamam a mesma
@@ -805,6 +947,8 @@ function poFluxoClique(ev) {
   // os botoes da barra (conferir, publicar, ligar) e o atalho "Abrir este card" dos problemas
   const bar = t.closest('[data-bar]');
   if (bar) return poFluxoBarraAcao(bar.getAttribute('data-bar'));
+  const zm = t.closest('[data-zoom]');
+  if (zm) { poFluxoZoomAcao(zm.getAttribute('data-zoom')); return; }
   const abrir = t.closest('[data-abrir]');
   if (abrir) { poFluxoAbre(abrir.getAttribute('data-abrir')); return; }
   const alvo = ev.target.closest('[data-card]');

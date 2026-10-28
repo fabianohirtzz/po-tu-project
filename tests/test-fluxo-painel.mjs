@@ -32,7 +32,8 @@ const PURAS_NOMES = ['poFluxoTipos', 'poFluxoTipo', 'poFluxoOpcoes', 'poFluxoPre
                      'poFluxoOpcoesComRotulos', 'poFluxoPatch', 'poFluxoQuem', 'poFluxoBloqueio', 'poFluxoProblemas',
                      'poFluxoEditavel', 'poFluxoGaveta',
                      'poFluxoPodePublicar', 'poFluxoOrdemLigar', 'poFluxoSemRepetido', 'poFluxoPainelProblemas',
-                     'poFluxoEstado', 'poFluxoPorqueNao', 'poFluxoBarra', 'poFluxoResultado', 'poFluxoCardCulpado', 'poFluxoPodeLigar', 'poFluxoTextoLigar'];
+                     'poFluxoEstado', 'poFluxoPorqueNao', 'poFluxoBarra', 'poFluxoResultado', 'poFluxoCardCulpado', 'poFluxoPodeLigar', 'poFluxoTextoLigar',
+                     'poFluxoZoomNum', 'poFluxoZoomEscada', 'poFluxoZoomPasso', 'poFluxoZoomAjuste', 'poFluxoZoomPalco', 'poFluxoZoomBarra'];
 const F = new Function(ESC + PURAS_NOMES.map(pega).join('\n') +
   '; return {' + PURAS_NOMES.join(',') + '};')();
 
@@ -364,7 +365,15 @@ const cssBruto = le('../painel/fluxo.css');
 const css = cssBruto.replace(/\/\*[\s\S]*?\*\//g, '');   // regra virada em comentario nao conta
 const render = pega('poFluxoRender');
 assert.ok(render.includes('class="fl-vista fl-vista--lista">\' + poFluxoLista(f)'), 'o render embrulha a lista em .fl-vista--lista');
-assert.ok(render.includes('class="fl-vista fl-vista--canvas">\' + poFluxoCanvas(f)'), 'e o canvas em .fl-vista--canvas');
+/* O canvas segue dentro de .fl-vista--canvas, agora com a barra do zoom e a
+   area de rolagem no meio. A ORDEM importa: a barra fica FORA da .fl-rolagem,
+   senao ela sairia da tela junto com o grafo ao rolar. */
+assert.ok(render.includes('class="fl-vista fl-vista--canvas">\' + poFluxoZoomBarra('),
+  'a vista do canvas abre com a barra do zoom');
+assert.ok(render.includes('class="fl-rolagem">\' + poFluxoCanvas(f)'),
+  'e o canvas vai dentro da area que rola');
+assert.ok(render.indexOf('poFluxoZoomBarra(') < render.indexOf('fl-rolagem'),
+  'a barra do zoom vem antes da area de rolagem, para nao rolar com o grafo');
 // bloco do @media por contagem de chaves, para a regra valer DENTRO dele
 const iMq = css.indexOf('@media (min-width:980px){');
 assert.ok(iMq >= 0, 'existe o @media (min-width:980px)');
@@ -378,7 +387,30 @@ const dentro = css.slice(iMq, fim), fora = css.slice(0, iMq) + css.slice(fim);
 assert.ok(/\.fl-vista--lista\{display:none\}/.test(dentro), 'a partir de 980px a lista some');
 assert.ok(/\.fl-vista--canvas\{display:block/.test(dentro), 'e o canvas aparece');
 assert.ok(/\.fl-no\{position:absolute\}/.test(dentro), 'o no do canvas e absoluto');
-assert.ok(/\.fl-canvas\{position:relative\}/.test(dentro), 'e o canvas e o referencial dele');
+assert.ok(/\.fl-canvas\{position:relative[;}]/.test(dentro), 'e o canvas e o referencial dele');
+/* ZOOM. O referencial do transform tem que ser o CANTO: com a origem no centro
+   (o padrao do navegador), reduzir a escala deslocaria o fluxo para dentro e
+   aumentar o jogaria para fora da area visivel, nos dois casos sem que
+   ninguem tenha rolado nada. */
+assert.ok(/\.fl-canvas\{[^}]*transform-origin:0 0/.test(dentro),
+  'o canvas escala a partir do canto, nao do centro');
+assert.ok(/\.fl-rolagem\{[^}]*overflow:auto/.test(dentro), 'quem rola e a .fl-rolagem');
+assert.ok(!/\.fl-vista--canvas\{[^}]*overflow:auto/.test(dentro),
+  'e NAO a vista: senao a barra do zoom rolaria junto com o grafo e sairia da tela');
+assert.ok(/\.fl-palco\{position:relative\}/.test(dentro), 'o palco existe no canvas');
+/* A barra do zoom e do canvas: no celular ela nao aparece. A ORDEM e o que
+   decide, e foi um defeito de verdade: com o padrao declarado DEPOIS do
+   @media, as duas regras tem a mesma especificidade e vence a ultima, entao a
+   barra ficava display:none em qualquer largura -- com estes dois testes
+   verdes, porque conferiam presenca e nunca ordem. So apareceu abrindo a
+   tela. O mesmo vale para a propria vista do canvas. */
+assert.ok(/\.fl-zoom\{display:none\}/.test(fora), 'no celular a barra do zoom esta escondida');
+assert.ok(/\.fl-zoom\{display:flex/.test(dentro), 'e aparece junto com o canvas');
+for (const sel of ['.fl-zoom', '.fl-vista--canvas']) {
+  const iPadrao = css.indexOf(sel + '{display:none}');
+  assert.ok(iPadrao >= 0 && iPadrao < iMq,
+    'o padrao de ' + sel + ' vem ANTES do @media, senao vence a cascata e o canvas nunca aparece');
+}
 assert.ok(/\.fl-vista--canvas\{display:none\}/.test(fora), 'fora do @media o canvas esta escondido (celular)');
 /* H1 (Task 7): a regex plana `([^{}]+)\{([^}]*)\}` NAO casa bloco aninhado: uma regra que esconde algo
    DENTRO de um @media passava verde. Este leitor conta chaves e desce nos at-rules, entao devolve
@@ -408,10 +440,21 @@ assert.ok(regrasFora.some(r => r.sel === '.fl-vista--canvas' && /display\s*:\s*n
 assert.ok(!/transition/.test(css) || !/prefers-reduced-motion/.test(css), 'sem regra de reduced-motion para animacao que nao existe');
 assert.ok(/poFluxoCanvas\(/.test(src.replace(pega('poFluxoCanvas'), '')), 'a tela desenha pela poFluxoCanvas');
 assert.ok(!/\.fl-no[^{]*\{[^}]*overflow/.test(css), 'o card do canvas nao corta o conteudo (as saidas so existem dentro dele)');
-// nada de ler largura de tela no JS (denylist ampla; comentario de fim de linha nao conta)
+/* Nada de ler a TELA no JS: quem escolhe lista x canvas e o CSS (D5), e um JS
+   que lesse largura de janela duplicaria essa decisao e erraria no celular.
+   O ZOOM e outra coisa: para achar a escala que faz o grafo caber ele precisa
+   MEDIR A PROPRIA AREA DE ROLAGEM, que o CSS ja dimensionou. Por isso
+   clientWidth/clientHeight valem DENTRO de poFluxoZoomAplica, e so nela.
+   (Comentario de fim de linha nao conta.) */
 const semTudo = semComentario.split('\n').map(l => l.replace(/\s\/\/\s.*$/, '')).join('\n');
-assert.ok(!/innerWidth|innerHeight|outerWidth|matchMedia|clientWidth|offsetWidth|scrollWidth|screen\.|getBoundingClientRect|ResizeObserver|visualViewport/.test(semTudo),
-  'o fluxo.js nao le largura de tela');
+assert.ok(!/innerWidth|innerHeight|outerWidth|matchMedia|offsetWidth|scrollWidth|screen\.|getBoundingClientRect|ResizeObserver|visualViewport/.test(semTudo),
+  'o fluxo.js nao le a tela nem o tamanho da janela');
+const mAplica = semTudo.match(/function poFluxoZoomAplica\([\s\S]*?\n\}/);
+assert.ok(mAplica, 'poFluxoZoomAplica existe no fonte');
+assert.ok(/clientWidth/.test(mAplica[0]) && /clientHeight/.test(mAplica[0]),
+  'poFluxoZoomAplica mede a area de rolagem (sem isso o "caber na tela" chutaria)');
+assert.ok(!/clientWidth|clientHeight/.test(semTudo.replace(mAplica[0], '')),
+  'e NINGUEM MAIS mede: medida de elemento fora do zoom volta a ser decisao de layout no JS');
 
 /* H2: a propria guarda pega os jeitos de esconder a lista (provada contra CSS plantado) */
 for (const ruim of ['.fl-vista--lista{DISPLAY:NONE}', '.fl-vista--lista{visibility:hidden}', '.fl-lista{display:none}', '.fl-lista{Display : None}']) {
@@ -1352,4 +1395,273 @@ assert.ok(/\.btn\{/.test(le('../painel/painel.css')), 'a classe base btn existe 
   await b.poFluxoGavetaSalva();
   assert.ok(b.res().includes('Outro problema novo') && !b.res().includes('Problema velho'), 'a lista e a da conferencia nova');
 }
+
+/* ============================================================
+   ZOOM DO CANVAS. O grafo semeado mede ~3000x1400: na area util do painel
+   (~1100x630) ele NUNCA cabe, e a unica saida era rolar em duas direcoes
+   procurando o card. Dai o ajuste a tela.
+
+   A escala vive em `transform: scale()` no .fl-canvas, e o PALCO em volta
+   recebe o tamanho JA escalado -- sem ele o navegador reserva a barra de
+   rolagem do tamanho CRU, e sobraria area vazia a direita a 35%, com o
+   fluxo inteiro apertado num canto.
+============================================================ */
+
+/* O tagBotao da suite casa data-bar; a barra do zoom usa data-zoom, e um
+   seletor errado devolveria string vazia, em que /disabled/ nunca casa: o
+   teste do botao desligado passaria verde sem olhar nada. */
+const tagZoom = (html, acao) =>
+  (html.match(new RegExp('<button[^>]*data-zoom="' + acao + '"[^>]*>')) || [''])[0];
+assert.ok(tagZoom('<button data-zoom="mais" disabled>', 'mais').includes('disabled'),
+  'o proprio tagZoom acha o botao e o disabled');
+assert.equal(tagZoom('<button data-bar="mais">', 'mais'), '', 'e nao confunde data-bar com data-zoom');
+
+// --- a escada de escalas: so valores da escada, e sempre dentro das bordas
+{
+  const esc = F.poFluxoZoomEscada();
+  assert.ok(Array.isArray(esc) && esc.length >= 5, 'a escada e uma lista com varios degraus');
+  assert.ok(esc.every((v, i) => i === 0 || v > esc[i - 1]), 'a escada sobe, sem repetir');
+  assert.ok(esc.includes(1), 'o tamanho natural (1) e um degrau, senao nao se volta a ele');
+  assert.ok(esc[0] >= .2 && esc[0] <= .4, 'o degrau mais baixo cabe um grafo grande sem virar risco: ' + esc[0]);
+  assert.ok(esc[esc.length - 1] > 1, 'da para ampliar acima do natural');
+}
+
+// --- passo: anda um degrau e para nas bordas
+{
+  const esc = F.poFluxoZoomEscada();
+  const piso = esc[0], teto = esc[esc.length - 1];
+  assert.equal(F.poFluxoZoomPasso(1, 1), esc[esc.indexOf(1) + 1], 'de 1 para cima vai ao degrau seguinte');
+  assert.equal(F.poFluxoZoomPasso(1, -1), esc[esc.indexOf(1) - 1], 'de 1 para baixo vai ao degrau anterior');
+  assert.equal(F.poFluxoZoomPasso(teto, 1), teto, 'no teto, subir nao passa do teto');
+  assert.equal(F.poFluxoZoomPasso(piso, -1), piso, 'no piso, descer nao passa do piso');
+  // valor FORA da escada (o ajuste a tela produz um numero qualquer, como .36)
+  assert.ok(F.poFluxoZoomPasso(.36, 1) > .36, 'de um valor fora da escada, subir aumenta');
+  assert.ok(F.poFluxoZoomPasso(.36, -1) < .36, 'e descer diminui');
+  assert.ok(esc.includes(F.poFluxoZoomPasso(.36, 1)), 'e o resultado pousa na escada');
+  assert.ok(esc.includes(F.poFluxoZoomPasso(.36, -1)), 'nas duas direcoes');
+  // lixo nunca sai da faixa
+  [null, undefined, NaN, 'abc', 0, -3, 99].forEach(v => {
+    const r = F.poFluxoZoomPasso(v, 1);
+    assert.ok(r >= piso && r <= teto, 'lixo (' + String(v) + ') nao escapa da faixa: ' + r);
+  });
+}
+
+// --- ajuste a tela: o numero que faz o grafo caber
+{
+  // cabe folgado: NAO amplia (ler o texto a 150% sem pedir seria pior)
+  assert.equal(F.poFluxoZoomAjuste(500, 300, 1100, 630), 1, 'grafo que cabe fica no tamanho natural');
+  // a largura e o gargalo
+  const z1 = F.poFluxoZoomAjuste(3000, 500, 1100, 630);
+  assert.ok(z1 < 1 && 3000 * z1 <= 1100, 'limitado pela largura, o grafo passa a caber: ' + z1);
+  // a altura e o gargalo
+  const z2 = F.poFluxoZoomAjuste(800, 2800, 1100, 630);
+  assert.ok(z2 < 1 && 2800 * z2 <= 630, 'limitado pela altura, o grafo passa a caber: ' + z2);
+  // o MENOR dos dois manda: cabe nas duas direcoes ao mesmo tempo
+  const z3 = F.poFluxoZoomAjuste(3000, 2800, 1100, 630);
+  assert.ok(3000 * z3 <= 1100 && 2800 * z3 <= 630, 'cabe nas duas direcoes: ' + z3);
+  assert.ok(z3 <= z1 && z3 <= z2, 'e e o menor dos dois limites');
+  /* O ajuste tem piso PROPRIO, mais baixo que o da escada manual. Com o piso
+     da escada (25%) um grafo alto nao caberia, e o botao "caber na tela"
+     mentiria -- que e exatamente a reclamacao que este zoom existe para
+     resolver. Num grafo absurdo cabe o quanto der e segue rolando. */
+  const z4 = F.poFluxoZoomAjuste(90000, 90000, 1100, 630);
+  assert.ok(z4 > 0 && z4 < F.poFluxoZoomEscada()[0], 'num grafo absurdo o ajuste desce abaixo da escada: ' + z4);
+  assert.ok(z4 >= .05, 'mas nao vira po: ' + z4);
+  // e no caso REAL (o grafo semeado, ~3000x1400) ele cabe de verdade
+  const zr = F.poFluxoZoomAjuste(3000, 1400, 1100, 630);
+  assert.ok(3000 * zr <= 1100 && 1400 * zr <= 630, 'o grafo semeado cabe na area util: ' + zr);
+  assert.ok(zr >= .2, 'e numa escala em que ainda se ve a forma do fluxo: ' + zr);
+  // medida indisponivel (o container ainda nao foi medido) = tamanho natural
+  [[0, 630], [1100, 0], [NaN, 630], [null, null]].forEach(p => {
+    assert.equal(F.poFluxoZoomAjuste(3000, 2800, p[0], p[1]), 1,
+      'sem medida de tela (' + String(p[0]) + 'x' + String(p[1]) + ') fica em 1, nunca 0');
+  });
+  // grafo sem medida tambem nao divide por zero
+  assert.equal(F.poFluxoZoomAjuste(0, 0, 1100, 630), 1, 'grafo sem medida fica em 1');
+}
+
+// --- o palco: tamanho JA escalado, para a rolagem bater com o que se ve
+{
+  const p = F.poFluxoZoomPalco(3000, 1400, .5);
+  assert.equal(p.w, 1500, 'largura do palco = largura do grafo x escala');
+  assert.equal(p.h, 700, 'altura do palco = altura do grafo x escala');
+  const n = F.poFluxoZoomPalco(3000, 1400, 1);
+  assert.deepEqual([n.w, n.h], [3000, 1400], 'em 1 o palco e o proprio grafo');
+  const z = F.poFluxoZoomPalco(0, 0, .5);
+  assert.ok(z.w >= 0 && z.h >= 0 && isFinite(z.w) && isFinite(z.h), 'nunca devolve NaN');
+}
+
+// --- a barra de controle
+{
+  const esc = F.poFluxoZoomEscada();
+  const b = F.poFluxoZoomBarra(1);
+  ['menos', 'mais', 'ajustar', 'natural'].forEach(a =>
+    assert.ok(b.includes('data-zoom="' + a + '"'), 'a barra tem o controle ' + a));
+  assert.ok(/100\s*%/.test(b), 'a barra diz a escala em porcentagem: ' + b);
+  assert.ok(F.poFluxoZoomBarra(.35).includes('35'), 'e acompanha a escala: ' + F.poFluxoZoomBarra(.35));
+  // arredonda, nao imprime 36.666666%
+  assert.ok(!/\d\.\d/.test(F.poFluxoZoomBarra(1 / 3)), 'a porcentagem e inteira: ' + F.poFluxoZoomBarra(1 / 3));
+  // nas bordas o botao que nao faz nada aparece desligado
+  assert.ok(/ disabled/.test(tagZoom(F.poFluxoZoomBarra(esc[esc.length - 1]), 'mais')), 'no teto, o + fica desligado');
+  assert.ok(!/ disabled/.test(tagZoom(F.poFluxoZoomBarra(esc[esc.length - 1]), 'menos')), 'e o - segue aceso');
+  assert.ok(/ disabled/.test(tagZoom(F.poFluxoZoomBarra(esc[0]), 'menos')), 'no piso, o - fica desligado');
+  assert.ok(!/ disabled/.test(tagZoom(F.poFluxoZoomBarra(esc[0]), 'mais')), 'e o + segue aceso');
+  // escala fora da escada (vinda do ajuste) nao desliga os dois
+  const fora = F.poFluxoZoomBarra(.36);
+  assert.ok(!/ disabled/.test(tagZoom(fora, 'mais')) && !/ disabled/.test(tagZoom(fora, 'menos')),
+    'num valor intermediario os dois seguem acesos');
+  assert.ok(!b.includes('<script'), 'nada de script na barra');
+}
+
+// --- o canvas entrega as medidas que o zoom precisa, e o palco em volta
+{
+  const f = { card_inicial: 'a', cards: [
+    { id: 'a', tipo: 'texto', titulo: 'A', x: 0, y: 0, proximo: 'b' },
+    { id: 'b', tipo: 'fim', titulo: 'B', x: 900, y: 400 }] };
+  const h = F.poFluxoCanvas(f);
+  assert.ok(h.includes('class="fl-palco"'), 'o canvas vem dentro de um palco');
+  const m = h.match(/data-largura="(\d+)"[^>]*data-altura="(\d+)"/);
+  assert.ok(m, 'o canvas publica largura e altura em data-: ' + h.slice(0, 300));
+  const larg = Number(m[1]), alt = Number(m[2]);
+  assert.ok(larg > 900 && alt > 400, 'e as medidas cobrem o card mais distante: ' + larg + 'x' + alt);
+  // as medidas do data- sao as MESMAS do style, senao o ajuste calcula por um
+  // tamanho e o navegador desenha outro
+  assert.ok(h.includes('width:' + larg + 'px;height:' + alt + 'px'),
+    'o data- e o style dizem o mesmo tamanho');
+  assert.ok(h.indexOf('class="fl-palco"') < h.indexOf('class="fl-canvas"'), 'o palco envolve o canvas');
+  // fluxo vazio nao inventa palco
+  assert.ok(!F.poFluxoCanvas({ cards: [] }).includes('fl-palco'), 'fluxo sem card nao desenha palco');
+}
+
+// --- PONTO DE CHAMADA: a fiacao, nao so as funcoes puras
+{
+  // o clique trata data-zoom (sem isto os botoes sao enfeite)
+  assert.ok(/closest\(\s*'\[data-zoom\]'\s*\)/.test(semComentario), 'poFluxoClique acha o controle por [data-zoom]');
+  assert.ok(/poFluxoZoomAcao\(/.test(semComentario.replace(pega('poFluxoZoomAcao'), '')),
+    'e chama poFluxoZoomAcao');
+  // a acao cobre os quatro controles
+  const acao = pega('poFluxoZoomAcao');
+  ['menos', 'mais', 'ajustar', 'natural'].forEach(a =>
+    assert.ok(acao.includes("'" + a + "'"), 'poFluxoZoomAcao trata ' + a));
+  // o render desenha a barra e aplica a escala
+  const render = pega('poFluxoRender');
+  assert.ok(/poFluxoZoomAplica\(/.test(render), 'o render aplica a escala (senao abre sempre em 1)');
+  // a escala mora numa variavel de topo, inicializada como "ainda nao escolhida"
+  assert.ok(/^let PO_FLUXO_ZOOM = null;$/m.test(semComentario),
+    'PO_FLUXO_ZOOM nasce null = ajustar a tela na primeira pintura');
+  // a roda do mouse com Ctrl, que e o gesto que todo mundo tenta primeiro
+  assert.ok(/wheel/.test(semComentario), 'a roda do mouse esta ligada');
+  assert.ok(/ctrlKey/.test(semComentario), 'e so com Ctrl, para a rolagem normal seguir rolando');
+}
+
+
+/* ---- poFluxoZoomAplica COM O DOM EM DUBLE ----
+
+   Ate aqui o zoom tinha trava de FONTE ("o render chama poFluxoZoomAplica"),
+   e trava de fonte se contorna movendo a palavra de lugar. Este bloco executa
+   a funcao e olha o que chegou ao DOM, comparando com as funcoes puras: assim
+   um calculo certo aplicado no elemento errado -- ou no estilo errado -- cai.  */
+{
+  const palcoFalso = (lg, al, dispW, dispH) => {
+    const canvas = {
+      style: {},
+      getAttribute: k => (k === 'data-largura' ? String(lg) : k === 'data-altura' ? String(al) : null),
+    };
+    const palco = { style: {} };
+    const zoomEl = { outerHTML: '<div class="fl-zoom">ANTIGA</div>' };
+    const pai = { querySelector: s => (s === '.fl-zoom' ? zoomEl : null) };
+    const rol = {
+      clientWidth: dispW, clientHeight: dispH, parentNode: pai,
+      querySelector: s => (s === '.fl-canvas' ? canvas : s === '.fl-palco' ? palco : null),
+      addEventListener() {},
+    };
+    const document = {
+      querySelector: s => (s === '.fl-rolagem' ? rol : null),
+      querySelectorAll: () => [],
+    };
+    const api = new Function('document', ESC + src +
+      '; return {poFluxoZoomAplica, poFluxoZoomAcao, poFluxoZoomRoda,' +
+      ' z(){return PO_FLUXO_ZOOM}, pousa(v){PO_FLUXO_ZOOM=v}};')(document);
+    return Object.assign(api, { canvas, palco, zoomEl });
+  };
+  const escalaDe = el => Number((String(el.style.transform).match(/scale\(([\d.]+)\)/) || [0, 0])[1]);
+
+  // 1) primeira pintura (escala nula): calcula o que cabe e aplica
+  {
+    const a = palcoFalso(3000, 1400, 1100, 630);
+    a.poFluxoZoomAplica(null);
+    const esperado = F.poFluxoZoomAjuste(3000, 1400, 1100, 630);
+    assert.equal(escalaDe(a.canvas), esperado, 'aplica a escala que o ajuste calculou');
+    assert.equal(a.z(), esperado, 'e guarda a escala em PO_FLUXO_ZOOM');
+    const p = F.poFluxoZoomPalco(3000, 1400, esperado);
+    assert.equal(a.palco.style.width, p.w + 'px', 'o palco recebe a largura escalada');
+    assert.equal(a.palco.style.height, p.h + 'px', 'e a altura escalada');
+    // o grafo cabe de verdade na area medida
+    assert.ok(3000 * esperado <= 1100 && 1400 * esperado <= 630, 'e o resultado cabe na area');
+    // a barra foi repintada com a escala nova
+    assert.ok(!a.zoomEl.outerHTML.includes('ANTIGA'), 'a barra do zoom e repintada');
+    assert.ok(a.zoomEl.outerHTML.includes(String(Math.round(esperado * 100)) + '%'),
+      'e mostra a escala aplicada: ' + a.zoomEl.outerHTML);
+  }
+
+  // 2) escala explicita: nao recalcula
+  {
+    const a = palcoFalso(3000, 1400, 1100, 630);
+    a.poFluxoZoomAplica(1);
+    assert.equal(escalaDe(a.canvas), 1, '100% aplica 1, ainda que nao caiba');
+    assert.equal(a.palco.style.width, '3000px', 'e o palco volta ao tamanho cru');
+  }
+
+  // 3) os quatro controles mexem na escala pelo caminho certo
+  {
+    const a = palcoFalso(3000, 1400, 1100, 630);
+    a.poFluxoZoomAplica(1);
+    a.poFluxoZoomAcao('menos');
+    assert.equal(a.z(), F.poFluxoZoomPasso(1, -1), 'menos desce um degrau');
+    a.poFluxoZoomAcao('mais');
+    assert.equal(a.z(), 1, 'e mais volta');
+    a.poFluxoZoomAcao('ajustar');
+    assert.equal(a.z(), F.poFluxoZoomAjuste(3000, 1400, 1100, 630), 'ajustar mede e cabe');
+    a.poFluxoZoomAcao('natural');
+    assert.equal(a.z(), 1, 'natural volta a 100%');
+    const antes = a.z();
+    a.poFluxoZoomAcao('inventado');
+    assert.equal(a.z(), antes, 'acao desconhecida nao mexe em nada');
+  }
+
+  // 4) a roda do mouse: so com Ctrl, e com preventDefault so nesse caso
+  {
+    const a = palcoFalso(3000, 1400, 1100, 630);
+    a.poFluxoZoomAplica(1);
+    let barrou = 0;
+    a.poFluxoZoomRoda({ ctrlKey: false, deltaY: -1, preventDefault: () => barrou++ });
+    assert.equal(a.z(), 1, 'roda SEM Ctrl nao da zoom');
+    assert.equal(barrou, 0, 'e nao barra a rolagem normal da pagina');
+    a.poFluxoZoomRoda({ ctrlKey: true, deltaY: -1, preventDefault: () => barrou++ });
+    assert.equal(a.z(), F.poFluxoZoomPasso(1, 1), 'roda para cima com Ctrl aumenta');
+    assert.equal(barrou, 1, 'e barra o zoom do navegador');
+    a.poFluxoZoomRoda({ ctrlKey: true, deltaY: 1, preventDefault: () => barrou++ });
+    assert.ok(a.z() < F.poFluxoZoomPasso(1, 1), 'para baixo diminui');
+    a.poFluxoZoomRoda(null);
+    assert.ok(isFinite(a.z()), 'evento nulo nao explode');
+  }
+
+  // 5) area sem medida (a vista do canvas esta escondida no celular) = 100%, nunca 0
+  {
+    const a = palcoFalso(3000, 1400, 0, 0);
+    a.poFluxoZoomAplica(null);
+    assert.equal(a.z(), 1, 'sem area medida fica em 100%, senao o fluxo sumiria');
+    assert.equal(escalaDe(a.canvas), 1, 'e o canvas nao recebe scale(0)');
+  }
+
+  // 6) sem canvas na tela (a vista e a lista) nao lanca
+  {
+    const vazio = { querySelector: () => null, querySelectorAll: () => [] };
+    const api = new Function('document', ESC + src +
+      '; return {poFluxoZoomAplica, z(){return PO_FLUXO_ZOOM}};')(vazio);
+    api.poFluxoZoomAplica(null);
+    assert.equal(api.z(), null, 'sem canvas a escala segue indefinida, e nada quebra');
+  }
+}
+
 console.log('test-fluxo-painel OK');

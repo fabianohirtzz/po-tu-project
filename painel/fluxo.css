@@ -28,12 +28,22 @@
 /* ---------- lista (padrao, celular) ---------- */
 .fl-lista{display:flex;flex-direction:column;gap:12px;max-width:640px}
 .fl-vista--canvas{display:none}
+/* A barra do zoom pertence ao canvas: no celular, onde a vista e a lista, ela
+   nao existe. O display:flex dela mora no @media abaixo -- e tem que ser
+   ABAIXO: duas regras de mesma especificidade, vence a ultima declarada. */
+.fl-zoom{display:none}
 
 /* ---------- canvas (desktop) ---------- */
 @media (min-width:980px){
   .fl-vista--lista{display:none}
-  .fl-vista--canvas{display:block;overflow:auto;max-height:78vh;background:var(--surface3);border:1px solid var(--border);border-radius:12px}
-  .fl-canvas{position:relative}
+  /* QUEM ROLA E A .fl-rolagem, nao a vista: a barra do zoom fica fora dela,
+     parada no topo, senao sairia da tela junto com o grafo. */
+  .fl-vista--canvas{display:block;background:var(--surface3);border:1px solid var(--border);border-radius:12px}
+  .fl-rolagem{overflow:auto;max-height:74vh;border-radius:0 0 12px 12px}
+  /* O palco segura o tamanho JA escalado; o transform do canvas nao ocupa
+     espaco no layout, e sem o palco a rolagem nao bateria com o que se ve. */
+  .fl-palco{position:relative}
+  .fl-canvas{position:relative;transform-origin:0 0}
   .fl-setas{position:absolute;left:0;top:0;pointer-events:none}
   .fl-seta{fill:none;stroke:var(--azul);stroke-width:2;opacity:.75}
   .fl-ponta{fill:var(--azul)}
@@ -41,6 +51,15 @@
   /* o no tem a altura ESTIMADA pelo JS e o card o preenche; nada e cortado,
      porque as setas nao tem rotulo e as saidas so existem dentro do card */
   .fl-no .fl-card{height:100%}
+
+  /* ---------- a barra do zoom ---------- */
+  .fl-zoom{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--surface2);border-radius:12px 12px 0 0;flex-wrap:wrap}
+  .fl-zoom__b{min-width:30px;padding:4px 10px;border:1px solid var(--border2);border-radius:7px;background:var(--surface);color:var(--text);font:inherit;font-size:.85rem;line-height:1.4;cursor:pointer}
+  .fl-zoom__b:hover:not(:disabled){border-color:var(--azul);color:var(--azul)}
+  .fl-zoom__b:disabled{opacity:.4;cursor:not-allowed}
+  .fl-zoom__b--txt{font-size:.8rem}
+  .fl-zoom__n{min-width:48px;text-align:center;font-family:var(--font-mono,monospace);font-size:.82rem;color:var(--ink)}
+  .fl-zoom__dica{margin-left:auto;font-size:.75rem;color:var(--muted)}
 }
 
 /* ---------- a gaveta de edicao do card ---------- */
@@ -88,3 +107,4 @@
 .fl-res__tit{font-family:var(--font-display);font-size:.85rem;margin:10px 0 4px;color:var(--ink)}
 .fl-problema__abrir{margin-left:6px;padding:2px 8px;border:1px solid var(--border2);border-radius:6px;background:var(--surface);color:var(--azul);font:inherit;font-size:.78rem;cursor:pointer}
 .fl-problemas--fluxo{margin-top:2px}
+
