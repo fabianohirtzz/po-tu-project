@@ -65,3 +65,26 @@
 .fl-problemas{margin:6px 0 0;padding-left:18px}
 .fl-problema--bloqueia{color:var(--st-perdido)}
 .fl-ok{color:var(--st-venda);margin:6px 0 0}
+
+/* ---------- publicar, ligar e a lista de problemas ---------- */
+.fl-barra{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin:0 0 14px;max-width:760px}
+.fl-barra__estado{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline;font-size:.9rem;color:var(--text)}
+.fl-estado__nome{font-family:var(--font-display);color:var(--ink)}
+.fl-estado__tag{font-size:.7rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:99px}
+.fl-estado__tag--on{background:rgba(22,163,74,.12);color:var(--st-venda)}
+.fl-estado__tag--off{background:var(--surface3);color:var(--muted)}
+.fl-ordem{margin:10px 0 0;padding:10px 12px;border-left:4px solid var(--st-aberto);background:var(--surface2);font-size:.85rem;color:var(--text)}
+.fl-barra__acoes{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.fl-barra__acoes button:disabled{opacity:.45;cursor:not-allowed}
+.fl-resultado{max-width:760px;margin:0 0 14px}
+.fl-res{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--azul);border-radius:10px;padding:12px 16px;font-size:.9rem;color:var(--text)}
+.fl-res p{margin:0 0 6px}
+.fl-res--ok{border-left-color:var(--st-venda)}
+.fl-res--erro{border-left-color:var(--st-perdido)}
+.fl-res--sistema,.fl-sistema{border-left-color:var(--st-aberto)}
+.fl-sistema{background:var(--surface2);border:1px solid var(--border);border-left:4px solid var(--st-aberto);border-radius:10px;padding:12px 16px;font-size:.9rem}
+.fl-sistema p{margin:0 0 6px}
+.fl-sistema__det{color:var(--muted);font-size:.8rem}
+.fl-res__tit{font-family:var(--font-display);font-size:.85rem;margin:10px 0 4px;color:var(--ink)}
+.fl-problema__abrir{margin-left:6px;padding:2px 8px;border:1px solid var(--border2);border-radius:6px;background:var(--surface);color:var(--azul);font:inherit;font-size:.78rem;cursor:pointer}
+.fl-problemas--fluxo{margin-top:2px}

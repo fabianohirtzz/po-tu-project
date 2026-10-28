@@ -301,7 +301,7 @@ function poFluxoContador(texto, limite) {
   return {
     n: n, limite: limite, estoura: estoura,
     texto: n + ' de ' + limite + ' caracteres, contando o maior nome e roteiro possíveis' +
-      (estoura ? '. Encurte: o WhatsApp recusa a mensagem inteira e o cliente não recebe nada.' : '.'),
+      (estoura ? '. Encurte: o WhatsApp recusa a mensagem inteira e o cliente não recebe nada, e o fluxo não pode ser publicado assim.' : '.'),
   };
 }
 
@@ -370,16 +370,35 @@ async function poFluxoSalva(card, v) {
   return patch;
 }
 
-// Os problemas que o ENDPOINT achou (modo=conferir), so os deste card. Nada e julgado aqui.
-function poFluxoProblemas(problemas, id) {
+// Tira o aviso da regra 15 quando a MESMA lista ja traz o problema da regra 3 do mesmo
+// card: card orfao dispara os dois (um bloqueia, o outro avisa) e duas linhas para o
+// mesmo problema confundem. Nada e julgado aqui: so se lista o que o endpoint devolveu.
+function poFluxoSemRepetido(problemas) {
   const l = Array.isArray(problemas) ? problemas.filter(function (p) { return p && typeof p === 'object'; }) : [];
-  const meus = l.filter(function (p) { return id != null && String(p.card) === String(id); });
-  const outros = l.length - meus.length;
+  const orfaos = Object.create(null);
+  l.forEach(function (p) { if (Number(p.regra) === 3 && p.card != null && p.card !== '') orfaos[String(p.card)] = true; });
+  return l.filter(function (p) {
+    return !(Number(p.regra) === 15 && p.card != null && p.card !== '' && orfaos[String(p.card)] === true);
+  });
+}
+
+/* Os problemas que o ENDPOINT achou (modo=conferir), no recorte de UM card (a gaveta).
+   Tres lugares: os deste card, os do FLUXO como um todo (card nulo: porta repetida,
+   salto para fluxo desligado) e os de outros cards. O de nivel de fluxo nao e "aviso
+   em outro card": a cliente iria procurar um card que nao existe. */
+function poFluxoProblemas(problemas, id) {
+  const l = poFluxoSemRepetido(problemas);
+  const doFluxo = l.filter(function (p) { return p.card == null || p.card === ''; });
+  const meus = l.filter(function (p) { return id != null && p.card != null && p.card !== '' && String(p.card) === String(id); });
+  const outros = l.length - meus.length - doFluxo.length;
+  const item = function (p) {
+    return '<li class="fl-problema' + (p.bloqueia ? ' fl-problema--bloqueia' : '') + '">' + esc(p.texto) + '</li>';
+  };
   let h = '';
-  if (meus.length) {
-    h += '<ul class="fl-problemas">' + meus.map(function (p) {
-      return '<li class="fl-problema' + (p.bloqueia ? ' fl-problema--bloqueia' : '') + '">' + esc(p.texto) + '</li>';
-    }).join('') + '</ul>';
+  if (meus.length) h += '<ul class="fl-problemas">' + meus.map(item).join('') + '</ul>';
+  if (doFluxo.length) {
+    h += '<p class="fl-dica">Do fluxo como um todo (não é de um card só):</p>' +
+      '<ul class="fl-problemas fl-problemas--fluxo">' + doFluxo.map(item).join('') + '</ul>';
   }
   if (outros > 0) h += '<p class="fl-aviso">E mais ' + outros + (outros === 1 ? ' aviso em outro card' : ' avisos em outros cards') + ' deste fluxo.</p>';
   if (!l.length) h = '<p class="fl-ok">O fluxo foi conferido e está sem problemas.</p>';
@@ -389,6 +408,161 @@ function poFluxoProblemas(problemas, id) {
 // Pode editar na gaveta? So card com texto.
 function poFluxoEditavel(card) {
   return !!card && typeof card === 'object' && poFluxoTemTexto(card.tipo);
+}
+
+/* A lista COMPLETA do fluxo, para a tela de publicar: bloqueios primeiro, avisos
+   depois, cada problema de card com o atalho para abrir a gaveta dele (so se a
+   gaveta edita aquele card: atalho morto e pior que nenhum). Regra 0 NAO e defeito
+   do fluxo: e o que o endpoint devolve quando o banco esta fora ou o fluxo nao
+   existe, e vira moldura de sistema. */
+function poFluxoPainelProblemas(problemas, cards) {
+  const l = poFluxoSemRepetido(problemas);
+  if (!l.length) return '<p class="fl-ok">O fluxo foi conferido e está sem problemas.</p>';
+  const infra = l.filter(function (p) { return Number(p.regra) === 0; });
+  if (infra.length) {
+    return '<div class="fl-sistema"><p><strong>Isto não é um defeito do seu fluxo.</strong> O sistema não conseguiu terminar agora. ' +
+      'Seu desenho não foi mexido. Tente de novo em instantes.</p>' +
+      infra.map(function (p) { return '<p class="fl-sistema__det">' + esc(p.texto) + '</p>'; }).join('') + '</div>';
+  }
+  const lista = Array.isArray(cards) ? cards : [];
+  const editavel = function (id) {
+    return lista.some(function (c) { return c && typeof c === 'object' && c.id != null && String(c.id) === String(id) && poFluxoEditavel(c); });
+  };
+  const item = function (p) {
+    const abre = p.card != null && p.card !== '' && editavel(p.card);
+    return '<li class="fl-problema' + (p.bloqueia ? ' fl-problema--bloqueia' : '') + '">' + esc(p.texto) +
+      (abre ? ' <button type="button" class="fl-problema__abrir" data-abrir="' + esc(p.card) + '">Abrir este card</button>' : '') + '</li>';
+  };
+  const bloqueiam = l.filter(function (p) { return !!p.bloqueia; });
+  const avisos = l.filter(function (p) { return !p.bloqueia; });
+  let h = '';
+  if (bloqueiam.length) h += '<h4 class="fl-res__tit">Impede de publicar</h4><ul class="fl-problemas">' + bloqueiam.map(item).join('') + '</ul>';
+  if (avisos.length) h += '<h4 class="fl-res__tit">Avisos (não impedem de publicar)</h4><ul class="fl-problemas">' + avisos.map(item).join('') + '</ul>';
+  return h;
+}
+
+// O primeiro card que a recusa do Publicar aponta E que a gaveta sabe abrir. '' = nenhum.
+function poFluxoCardCulpado(problemas, cards) {
+  const l = Array.isArray(problemas) ? problemas : [];
+  const cs = Array.isArray(cards) ? cards : [];
+  for (let i = 0; i < l.length; i++) {
+    const p = l[i];
+    if (!p || typeof p !== 'object' || !p.bloqueia || Number(p.regra) === 0 || p.card == null || p.card === '') continue;
+    const c = cs.find(function (x) { return x && typeof x === 'object' && x.id != null && String(x.id) === String(p.card); });
+    if (c && poFluxoEditavel(c)) return String(c.id);
+  }
+  return '';
+}
+
+/* Quem decide o botao Publicar. estado = {conferido, problemas, editadoDesde}.
+   So uma conferencia limpa habilita, e qualquer edicao depois dela desabilita de
+   novo (porte da aba Modelos). Aviso (bloqueia:false) nao impede. Estado que nao
+   da para ler NAO libera: na duvida, o botao fica apagado. */
+function poFluxoPodePublicar(estado) {
+  const e = estado && typeof estado === 'object' ? estado : {};
+  if (e.conferido !== true || e.editadoDesde) return false;
+  if (!Array.isArray(e.problemas)) return false;
+  return !e.problemas.some(function (p) { return !!p && typeof p === 'object' && (!!p.bloqueia || Number(p.regra) === 0); });
+}
+
+/* A ordem de ligar. A regra 11 do validador exige que o destino de um salto para
+   outro fluxo esteja publicado E ativo, e a triagem salta para a espera: com a
+   espera desligada, a triagem nao republica, e a cliente acharia o fluxo quebrado. */
+function poFluxoOrdemLigar(fluxos) {
+  const l = Array.isArray(fluxos) ? fluxos.filter(function (f) { return f && typeof f === 'object'; }) : [];
+  const espera = l.find(function (f) { return String(f.nome == null ? '' : f.nome).trim() === 'Lista de espera'; });
+  if (!espera || espera.ativo) return '';
+  return 'Ligue primeiro a “Lista de espera” e só depois as “Boas-vindas e triagem”. A triagem passa o cliente para a espera, ' +
+    'e o sistema só deixa publicar a triagem se a espera já estiver ligada.';
+}
+
+// Onde o fluxo esta: ligado ou nao, publicado ou nao, e o que esta de fato no ar.
+function poFluxoEstado(fluxo) {
+  const x = fluxo && typeof fluxo === 'object' ? fluxo : null;
+  if (!x) return '';
+  const tag = x.ativo ? '<span class="fl-estado__tag fl-estado__tag--on">Ligado</span>'
+    : '<span class="fl-estado__tag fl-estado__tag--off">Desligado</span>';
+  const nunca = x.versao_atual == null || x.versao_atual === '';
+  const v = x.versao_numero != null ? ' (versão ' + esc(x.versao_numero) + ')' : '';
+  let txt;
+  if (nunca) txt = 'Nunca foi publicado. Publique antes de ligar.';
+  else if (x.publicado_igual === true) txt = 'Publicado' + v + ', sem edição pendente.';
+  else if (x.publicado_igual === false) {
+    txt = 'Tem edição não publicada.';
+    if (x.ativo) txt += ' O que está no ar é a versão anterior' + v + ': suas edições só passam a valer depois de publicar.';
+  } else txt = 'Não consegui confirmar se há edição não publicada.';
+  return '<strong class="fl-estado__nome">' + esc(x.nome || '(sem nome)') + '</strong> ' + tag + ' <span class="fl-estado__txt">' + txt + '</span>';
+}
+
+// Por que o Publicar esta apagado. Texto so; quem apaga o botao e poFluxoPodePublicar.
+function poFluxoPorqueNao(estado) {
+  if (poFluxoPodePublicar(estado)) return '';
+  const e = estado && typeof estado === 'object' ? estado : {};
+  if (e.conferido === true && e.editadoDesde) return 'Você editou depois da última conferência. Confira de novo para liberar o Publicar.';
+  if (e.conferido !== true) return 'Confira o fluxo para liberar o Publicar.';
+  return 'A conferência achou problemas que impedem de publicar.';
+}
+
+/* A barra: estado, ordem de ligar e os botoes. O disabled do Publicar sai de
+   poFluxoPodePublicar(estado) e de NENHUMA outra condicao (travado por teste),
+   senao a tela e a funcao divergem. Publicar e Ligar sao dois botoes, dois atos. */
+function poFluxoBarra(fluxo, estado, fluxos) {
+  const f = fluxo && typeof fluxo === 'object' ? fluxo : null;
+  if (!f) return '';
+  const ordem = poFluxoOrdemLigar(fluxos);
+  const porque = poFluxoPorqueNao(estado);
+  const publicado = !(f.versao_atual == null || f.versao_atual === '');
+  const liga = f.ativo
+    ? '<button type="button" class="btn-ghost" data-bar="desligar">Desligar</button>'
+    : '<button type="button" class="btn-primary" data-bar="ligar"' + (publicado ? '' : ' disabled') + '>Ligar</button>';
+  return '<div class="fl-barra__estado">' + poFluxoEstado(f) + '</div>' +
+    (ordem ? '<p class="fl-ordem">' + esc(ordem) + '</p>' : '') +
+    '<div class="fl-barra__acoes">' +
+    '<button type="button" class="btn-ghost" data-bar="conferir">Conferir</button>' +
+    '<button type="button" class="btn-primary" data-bar="publicar"' + (poFluxoPodePublicar(estado) ? '' : ' disabled') + '>Publicar</button>' +
+    liga + '</div>' +
+    '<p class="fl-dica">Publicar grava a versão e não liga o fluxo. Ligar é um passo à parte.</p>' +
+    (porque ? '<p class="fl-dica">' + esc(porque) + '</p>' : '');
+}
+
+/* O que a tela diz de cada resposta do endpoint. resp = {http, j, erro}.
+   O 200 do publicar traz AVISOS (bloqueia:false): nao sao erro e a cliente tem de
+   le-los. Regra 0 e falha de sistema (poFluxoPainelProblemas). O 409 do ligar traz
+   o nome do fluxo que ocupa a porta na mensagem: sem ele ela leria um erro cru. */
+function poFluxoResultado(modo, resp, cards) {
+  const r = resp && typeof resp === 'object' ? resp : {};
+  const j = r.j && typeof r.j === 'object' ? r.j : null;
+  const sistema = function (msg) {
+    return '<div class="fl-res fl-res--sistema fl-sistema"><p>' + esc(msg) + '</p></div>';
+  };
+  if (!j) return sistema(r.erro || 'O servidor não respondeu direito. Tente de novo.');
+  const problemas = Array.isArray(j.problemas) ? j.problemas : null;
+  if (modo === 'conferir') {
+    if (!j.ok) return sistema(j.error || 'Não consegui conferir o fluxo agora.');
+    return '<div class="fl-res">' + poFluxoPainelProblemas(problemas, cards) + '</div>';
+  }
+  if (modo === 'publicar') {
+    if (j.ok) {
+      return '<div class="fl-res fl-res--ok"><p>Publicada a versão ' + esc(j.versao) + '. Publicar não liga o fluxo: ele fica como estava.</p>' +
+        (problemas && problemas.length ? poFluxoPainelProblemas(problemas, cards) : '') + '</div>';
+    }
+    if (problemas && problemas.length) {
+      if (problemas.some(function (p) { return p && Number(p.regra) === 0; })) {
+        return '<div class="fl-res fl-res--sistema">' + poFluxoPainelProblemas(problemas, cards) + '</div>';
+      }
+      return '<div class="fl-res fl-res--erro"><p><strong>O fluxo não foi publicado.</strong> Corrija o que impede e publique de novo.</p>' +
+        poFluxoPainelProblemas(problemas, cards) + '</div>';
+    }
+    return sistema(j.error || 'Não consegui publicar o fluxo agora.');
+  }
+  if (modo === 'ligar' || modo === 'desligar') {
+    if (j.ok) return '<div class="fl-res fl-res--ok"><p>' + (modo === 'ligar' ? 'Fluxo ligado.' : 'Fluxo desligado.') + '</p></div>';
+    if (r.http === 409) {
+      return '<div class="fl-res fl-res--erro"><p><strong>A porta de entrada já está ocupada.</strong></p><p>' + esc(j.error) + '</p></div>';
+    }
+    return '<div class="fl-res fl-res--erro"><p>' + esc(j.error || 'Não consegui fazer isso agora.') + '</p></div>';
+  }
+  return '';
 }
 
 function poFluxoGaveta(card) {
@@ -451,20 +625,134 @@ function poFluxoSeletor(fluxos, selecionado) {
 let PO_FLUXOS = [];
 let PO_FLUXO_SEL = null;
 let PO_FLUXO_CARD = null;
+let PO_FLUXO_CONF = {};
+let PO_FLUXO_RES = '';
+let PO_FLUXO_OCUPADO = false;
 
-/* O token vem de sb.auth.getSession() na hora, como nos outros endpoints. */
-async function poFluxoPost(modo, extra) {
+/* O token vem de sb.auth.getSession() na hora, como nos outros endpoints.
+   Devolve {http, j, erro} e NUNCA lanca por causa da resposta: o 400 do publicar
+   (com os problemas) e o 409 do ligar (com o nome de quem ocupa a porta) sao
+   respostas que a tela precisa ler, nao falhas. */
+async function poFluxoChama(modo, extra) {
   const s = await sb.auth.getSession();
   const fd = new FormData();
   fd.append('modo', modo);
   fd.append('sb_token', (s && s.data && s.data.session && s.data.session.access_token) || '');
   Object.keys(extra || {}).forEach(function (k) { fd.append(k, extra[k]); });
-  const res = await fetch('../fluxo.php', { method: 'POST', body: fd });
+  let res;
+  try { res = await fetch('../fluxo.php', { method: 'POST', body: fd }); }
+  catch (e) { return { http: 0, j: null, erro: 'Sem conexão com o servidor. Tente de novo.' }; }
   let j = null;
   try { j = await res.json(); } catch (e) { j = null; }
-  if (!j) throw new Error('O servidor não respondeu direito. Tente de novo.');
+  if (!j || typeof j !== 'object') return { http: res.status, j: null, erro: 'O servidor não respondeu direito. Tente de novo.' };
+  return { http: res.status, j: j, erro: '' };
+}
+
+// Para quem so quer o sucesso (ler): qualquer resposta que nao seja ok vira erro.
+async function poFluxoPost(modo, extra) {
+  const r = await poFluxoChama(modo, extra);
+  const j = r.j;
+  if (!j) throw new Error(r.erro);
   if (!j.ok) throw new Error(j.error || 'Falha ao ler o fluxo.');
   return j;
+}
+
+function poFluxoAtual() {
+  return PO_FLUXOS.find(function (x) { return String(x.id) === String(PO_FLUXO_SEL); }) || null;
+}
+
+/* O estado da conferencia de cada fluxo. `edicoes` conta os salvamentos: uma
+   conferencia so vale se nenhum salvamento aconteceu enquanto ela rodava. */
+function poFluxoConf(id) {
+  const k = String(id);
+  if (!Object.prototype.hasOwnProperty.call(PO_FLUXO_CONF, k)) PO_FLUXO_CONF[k] = { conferido: false, problemas: [], editadoDesde: false, edicoes: 0 };
+  return PO_FLUXO_CONF[k];
+}
+
+// Relê TUDO do servidor: o publicado_igual so e verdade quando vem do `ler`.
+async function poFluxoRecarrega() {
+  const j = await poFluxoPost('ler');
+  PO_FLUXOS = Array.isArray(j.fluxos) ? j.fluxos : [];
+}
+
+function poFluxoDesenhaBarra() {
+  const f = poFluxoAtual();
+  const el = document.querySelector('#fl-barra');
+  if (el && f) el.innerHTML = poFluxoBarra(f, poFluxoConf(f.id), PO_FLUXOS);
+}
+
+function poFluxoResultadoHtml(html) {
+  PO_FLUXO_RES = html;
+  const el = document.querySelector('#fl-resultado');
+  if (el) el.innerHTML = html;
+}
+
+async function poFluxoConfere() {
+  const f = poFluxoAtual();
+  if (!f || PO_FLUXO_OCUPADO) return;
+  PO_FLUXO_OCUPADO = true;
+  const conf = poFluxoConf(f.id);
+  const edicoes = conf.edicoes;
+  poFluxoResultadoHtml('<p class="fl-vazio">Conferindo…</p>');
+  const resp = await poFluxoChama('conferir', { fluxo_id: f.id });
+  const ok = !!resp.j && resp.j.ok === true && Array.isArray(resp.j.problemas);
+  conf.conferido = ok;
+  conf.problemas = ok ? resp.j.problemas : [];
+  conf.editadoDesde = ok && conf.edicoes !== edicoes;
+  poFluxoResultadoHtml(poFluxoResultado('conferir', resp, f.cards));
+  PO_FLUXO_OCUPADO = false;
+  poFluxoDesenhaBarra();
+}
+
+/* PUBLICAR: grava a versao e mais nada. Nao liga (isso e poFluxoLiga). A recusa
+   lista os problemas e ABRE a gaveta do card culpado: a cliente precisa chegar no
+   lugar de consertar. */
+async function poFluxoPublicar() {
+  const f = poFluxoAtual();
+  if (!f || PO_FLUXO_OCUPADO) return;
+  const conf = poFluxoConf(f.id);
+  if (!poFluxoPodePublicar(poFluxoConf(f.id))) return;
+  PO_FLUXO_OCUPADO = true;
+  poFluxoResultadoHtml('<p class="fl-vazio">Publicando…</p>');
+  const resp = await poFluxoChama('publicar', { fluxo_id: f.id });
+  poFluxoResultadoHtml(poFluxoResultado('publicar', resp, f.cards));
+  if (resp.j && resp.j.ok === true) {
+    conf.conferido = false;
+    conf.problemas = [];
+    conf.editadoDesde = false;
+    try { await poFluxoRecarrega(); } catch (e) { const g = poFluxoAtual(); if (g) g.publicado_igual = null; }
+    poFluxoRender();
+  } else {
+    const culpado = poFluxoCardCulpado(resp.j && resp.j.problemas, f.cards);
+    if (culpado) {
+      poFluxoAbre(culpado);
+      poFluxoStatus(poFluxoProblemas(resp.j.problemas, culpado));
+    }
+  }
+  PO_FLUXO_OCUPADO = false;
+  poFluxoDesenhaBarra();
+}
+
+/* LIGAR / DESLIGAR: ato a parte do publicar. Ligar poe o robo para atender
+   cliente de verdade, entao pede confirmacao; desligar nunca trava. */
+async function poFluxoLiga(modo) {
+  if (['ligar', 'desligar'].indexOf(modo) < 0) throw new Error('Modo inválido.');
+  const f = poFluxoAtual();
+  if (!f || PO_FLUXO_OCUPADO) return;
+  if (modo === 'ligar' && !confirm('Ligar este fluxo? O robô passa a atender clientes de verdade com a versão publicada.')) return;
+  PO_FLUXO_OCUPADO = true;
+  const resp = await poFluxoChama(modo, { fluxo_id: f.id });
+  poFluxoResultadoHtml(poFluxoResultado(modo, resp, f.cards));
+  if (resp.j && resp.j.ok === true) f.ativo = modo === 'ligar';
+  PO_FLUXO_OCUPADO = false;
+  poFluxoDesenhaBarra();
+}
+
+function poFluxoBarraAcao(acao) {
+  if (acao === 'conferir') return poFluxoConfere();
+  if (acao === 'publicar') return poFluxoPublicar();
+  if (acao === 'ligar' || acao === 'desligar') return poFluxoLiga(acao);
+  return null;
 }
 
 function poFluxoRender() {
@@ -476,12 +764,14 @@ function poFluxoRender() {
   /* As duas vistas saem no HTML; o CSS mostra a lista no celular e o canvas a
      partir de 980px (fluxo.css). Nao ha JavaScript lendo largura de tela. */
   box.innerHTML = poFluxoSeletor(PO_FLUXOS, f.id) +
+    '<section id="fl-barra" class="fl-barra">' + poFluxoBarra(f, poFluxoConf(f.id), PO_FLUXOS) + '</section>' +
+    '<div id="fl-resultado" class="fl-resultado" role="status">' + PO_FLUXO_RES + '</div>' +
     '<div class="fl-vista fl-vista--lista">' + poFluxoLista(f) + '</div>' +
     '<div class="fl-vista fl-vista--canvas">' + poFluxoCanvas(f) + '</div>' +
     '<aside id="fl-gaveta" class="fl-gaveta" hidden></aside>';
   PO_FLUXO_CARD = null;
   const s = box.querySelector('#fl-seletor');
-  if (s) s.onchange = function () { PO_FLUXO_SEL = s.value; poFluxoRender(); };
+  if (s) s.onchange = function () { PO_FLUXO_SEL = s.value; PO_FLUXO_RES = ''; poFluxoRender(); };
   box.onclick = poFluxoClique;
 }
 
@@ -491,7 +781,14 @@ function poFluxoRender() {
    vista escondida e abriria "o card errado" de vez em quando. Para marcar o card
    aberto, as DUAS ocorrencias, por querySelectorAll. */
 function poFluxoClique(ev) {
-  const alvo = ev && ev.target && ev.target.closest ? ev.target.closest('[data-card]') : null;
+  const t = ev && ev.target && ev.target.closest ? ev.target : null;
+  if (!t) return;
+  // os botoes da barra (conferir, publicar, ligar) e o atalho "Abrir este card" dos problemas
+  const bar = t.closest('[data-bar]');
+  if (bar) { poFluxoBarraAcao(bar.getAttribute('data-bar')); return; }
+  const abrir = t.closest('[data-abrir]');
+  if (abrir) { poFluxoAbre(abrir.getAttribute('data-abrir')); return; }
+  const alvo = ev.target.closest('[data-card]');
   if (!alvo) return;
   poFluxoAbre(alvo.getAttribute('data-card'));
 }
@@ -578,7 +875,14 @@ async function poFluxoGavetaSalva() {
     return;
   }
   Object.assign(card, patch);
-  f.publicado_igual = false;
+  /* Editou: o Publicar apaga ate nova conferencia. E se o fluxo publicado ainda
+     bate com o rascunho NAO e palpite desta tela: vem do `ler`. Se o `ler` falhar,
+     o estado fica desconhecido (null), nunca "igual" nem "diferente" por chute. */
+  const conf = poFluxoConf(f.id);
+  conf.edicoes += 1;
+  conf.editadoDesde = true;
+  conf.conferido = false;
+  try { await poFluxoRecarrega(); } catch (e) { const g2 = poFluxoAtual(); if (g2) g2.publicado_igual = null; }
   poFluxoRender();
   poFluxoAbre(id);
   poFluxoStatus('Salvo. Conferindo o fluxo…');
