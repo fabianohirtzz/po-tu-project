@@ -1,0 +1,90 @@
+/* ============================================================
+   Fluxo do robo: lista (celular) e canvas (desktop).
+
+   As duas vistas saem juntas no HTML (painel/fluxo.js) e QUEM ESCOLHE E ESTE
+   CSS: lista por padrao, canvas a partir de 980px (o mesmo ponto de quebra em
+   que a barra lateral do painel vira gaveta). Nada de JavaScript lendo
+   largura de tela. A dona da agencia usa o painel no celular: o caminho
+   primario e a lista; o canvas e melhoria do desktop.
+   Tokens vem do painel.css (--azul, --verde, --border...).
+============================================================ */
+
+.fl-seletor{width:100%;max-width:420px;margin:0 0 16px;padding:10px 12px;border:1px solid var(--border2);border-radius:8px;background:var(--surface);color:var(--text);font:inherit}
+.fl-vazio{color:var(--muted);padding:24px 0}
+.fl-aviso{color:var(--st-perdido);font-size:.85rem;margin:6px 0 0}
+
+/* ---------- o card (igual na lista e no canvas) ---------- */
+.fl-card{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--azul);border-radius:10px;padding:14px 16px;box-sizing:border-box}
+.fl-card--inicial{border-left-color:var(--verde);box-shadow:0 0 0 2px rgba(132,196,64,.28)}
+.fl-card--desconhecido{border-left-color:var(--st-perdido)}
+.fl-card__tipo{font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.fl-card__titulo{font-family:var(--font-display);font-size:1rem;line-height:1.25;margin:0 0 6px;color:var(--ink)}
+.fl-card__previa{font-family:var(--font-body);font-size:.85rem;line-height:1.4;color:var(--muted);margin:0 0 8px}
+.fl-saidas{list-style:none;margin:8px 0 0;padding:8px 0 0;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:4px}
+.fl-saida{font-size:.8rem;color:var(--text)}
+.fl-saida__rot{font-weight:600}
+.fl-saida__seta{color:var(--azul)}
+
+/* ---------- lista (padrao, celular) ---------- */
+.fl-lista{display:flex;flex-direction:column;gap:12px;max-width:640px}
+.fl-vista--canvas{display:none}
+
+/* ---------- canvas (desktop) ---------- */
+@media (min-width:980px){
+  .fl-vista--lista{display:none}
+  .fl-vista--canvas{display:block;overflow:auto;max-height:78vh;background:var(--surface3);border:1px solid var(--border);border-radius:12px}
+  .fl-canvas{position:relative}
+  .fl-setas{position:absolute;left:0;top:0;pointer-events:none}
+  .fl-seta{fill:none;stroke:var(--azul);stroke-width:2;opacity:.75}
+  .fl-ponta{fill:var(--azul)}
+  .fl-no{position:absolute}
+  /* o no tem a altura ESTIMADA pelo JS e o card o preenche; nada e cortado,
+     porque as setas nao tem rotulo e as saidas so existem dentro do card */
+  .fl-no .fl-card{height:100%}
+}
+
+/* ---------- a gaveta de edicao do card ---------- */
+.fl-card--editavel{cursor:pointer}
+.fl-card--aberto{outline:2px solid var(--azul);outline-offset:2px}
+.fl-card__editar{margin-top:10px;padding:6px 12px;border:1px solid var(--border2);border-radius:8px;background:var(--surface);color:var(--azul);font:inherit;font-size:.8rem;cursor:pointer}
+.fl-gaveta{position:fixed;top:0;right:0;height:100vh;width:min(520px,96vw);background:var(--surface);box-shadow:var(--shadow-pop);z-index:75;display:flex;flex-direction:column}
+.fl-gaveta[hidden]{display:none}
+.fl-gaveta__cab{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:18px 20px 12px;border-bottom:1px solid var(--border)}
+.fl-gaveta__titulo{font-family:var(--font-display);font-size:1.1rem;margin:0;color:var(--ink)}
+.fl-gaveta__x{border:0;background:none;font-size:1.6rem;line-height:1;color:var(--muted);cursor:pointer;padding:0 4px}
+.fl-gaveta__corpo{flex:1;overflow:auto;padding:16px 20px;display:flex;flex-direction:column;gap:8px}
+.fl-gaveta__rodape{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 20px;border-top:1px solid var(--border)}
+.fl-gaveta__status{flex-basis:100%;font-size:.85rem;color:var(--text);max-height:30vh;overflow:auto}
+.fl-rot{font-weight:600;font-size:.85rem;color:var(--ink)}
+.fl-campo{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border2);border-radius:8px;background:var(--surface);color:var(--text);font:inherit;resize:vertical}
+.fl-cont{font-size:.78rem;color:var(--muted)}
+.fl-cont--estouro{color:var(--st-perdido);font-weight:600}
+.fl-dica{font-size:.78rem;color:var(--muted);margin:0}
+.fl-opcoes{border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.fl-check{display:flex;gap:8px;align-items:center;font-size:.9rem;margin-top:8px}
+.fl-problemas{margin:6px 0 0;padding-left:18px}
+.fl-problema--bloqueia{color:var(--st-perdido)}
+.fl-ok{color:var(--st-venda);margin:6px 0 0}
+
+/* ---------- publicar, ligar e a lista de problemas ---------- */
+.fl-barra{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin:0 0 14px;max-width:760px}
+.fl-barra__estado{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline;font-size:.9rem;color:var(--text)}
+.fl-estado__nome{font-family:var(--font-display);color:var(--ink)}
+.fl-estado__tag{font-size:.7rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:99px}
+.fl-estado__tag--on{background:rgba(22,163,74,.12);color:var(--st-venda)}
+.fl-estado__tag--off{background:var(--surface3);color:var(--muted)}
+.fl-ordem{margin:10px 0 0;padding:10px 12px;border-left:4px solid var(--st-aberto);background:var(--surface2);font-size:.85rem;color:var(--text)}
+.fl-barra__acoes{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.fl-barra__acoes button:disabled{opacity:.45;cursor:not-allowed}
+.fl-resultado{max-width:760px;margin:0 0 14px}
+.fl-res{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--azul);border-radius:10px;padding:12px 16px;font-size:.9rem;color:var(--text)}
+.fl-res p{margin:0 0 6px}
+.fl-res--ok{border-left-color:var(--st-venda)}
+.fl-res--erro{border-left-color:var(--st-perdido)}
+.fl-res--sistema,.fl-sistema{border-left-color:var(--st-aberto)}
+.fl-sistema{background:var(--surface2);border:1px solid var(--border);border-left:4px solid var(--st-aberto);border-radius:10px;padding:12px 16px;font-size:.9rem}
+.fl-sistema p{margin:0 0 6px}
+.fl-sistema__det{color:var(--muted);font-size:.8rem}
+.fl-res__tit{font-family:var(--font-display);font-size:.85rem;margin:10px 0 4px;color:var(--ink)}
+.fl-problema__abrir{margin-left:6px;padding:2px 8px;border:1px solid var(--border2);border-radius:6px;background:var(--surface);color:var(--azul);font:inherit;font-size:.78rem;cursor:pointer}
+.fl-problemas--fluxo{margin-top:2px}

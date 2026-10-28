@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="painel.css?v=14">
+<link rel="stylesheet" href="fluxo.css?v=4">
 </head>
 <body>
 
@@ -71,9 +72,9 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6"/></svg>
         Modelos
       </button>
-      <button class="nav-item" data-view="textos">
+      <button class="nav-item" data-view="fluxo">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/><path d="M8 9h8M8 13h5"/></svg>
-        Textos do robô
+        Fluxo do robô
       </button>
       <button class="nav-item" data-view="avaliacoes">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.8l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z"/></svg>
@@ -369,15 +370,15 @@
       </div>
     </section>
 
-    <!-- ===== TEXTOS DO ROBÔ ===== -->
-    <section class="view" data-view="textos" id="view-textos">
-      <h2 class="ic-h3 txt-h2">Textos do robô</h2>
-      <p class="ic-sub">É o que o robô manda no WhatsApp. As palavras entre chaves são
-      trocadas na hora do envio: <code>{nome}</code> pelo nome da pessoa,
-      <code>{roteiro}</code> pelo nome da viagem, <code>{data}</code> pela data de saída.
-      Estes textos também viram os modelos aprovados pela Meta.</p>
-      <div id="txt-lista"></div>
-      <button id="txt-salvar" class="btn btn-primary" type="button">Salvar textos</button>
+    <!-- ===== FLUXO DO ROBÔ (painel/fluxo.js) ===== -->
+    <section class="view" data-view="fluxo" id="view-fluxo">
+      <h2 class="ic-h3 txt-h2">Fluxo do robô</h2>
+      <p class="ic-sub">É o caminho que o robô percorre no WhatsApp, card a card. Clique num
+      card para editar o texto. As palavras entre chaves são trocadas na hora do envio:
+      <code>{nome}</code> pelo nome da pessoa, <code>{roteiro}</code> pelo nome da viagem,
+      <code>{data}</code> pela data de saída. Depois de editar, confira e publique; publicar
+      não liga o fluxo.</p>
+      <div id="fluxo-lista"></div>
     </section>
 
     <!-- ===== AVALIAÇÕES (painel/vitrine.js) ===== -->
@@ -732,15 +733,15 @@
 <script src="config.js"></script>
 <script src="video-encode.js?v=2"></script>
 <script src="fone.js?v=2"></script>
-<script src="app.js?v=19"></script>
+<script src="app.js?v=20"></script>
 <script src="clientes.js?v=2"></script>
 <script src="funil.js?v=1"></script>
 <script src="conversa.js?v=1"></script>
 <script src="importar-contatos.js?v=5"></script>
 <script src="revisao.js?v=2"></script>
-<script src="textos.js?v=2"></script>
 <script src="campanhas.js?v=2"></script>
 <script src="modelos.js?v=3"></script>
 <script src="vitrine.js?v=3"></script>
+<script src="fluxo.js?v=10"></script>
 </body>
 </html>

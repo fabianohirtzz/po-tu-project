@@ -368,6 +368,12 @@ O Plano A nunca foi publicado, então os dois vão juntos. **Nada liga o robô.*
    **rodada única** (está escrito no cabeçalho dela): reaplicada depois do go-live, ela
    colapsa em `encerrado` o marcador de cadeia parada (`novo` **com** `card_atual`) e as
    conversas recém-criadas, e essas pessoas voltariam a receber as boas-vindas e o PDF.
+   **Por que é seguro rodar as migrations antes de o código subir:** a conversão reescreve
+   `po_wa_conversas` para valores de estado que o motor antigo (ainda no ar naquele instante)
+   não conhece. Isso é inofensivo **hoje** porque as tabelas de conversa estão vazias e o
+   webhook não está inscrito, então nenhuma conversa real passa pelo motor antigo nessa
+   janela. A janela existe e foi considerada; se alguém reler isto com o webhook já
+   inscrito, a premissa mudou e a ordem precisa ser reavaliada.
 2. **Conferir as três TABELAS e as cinco COLUNAS**, não só as tabelas: se a parte de
    `alter table` falhar sozinha, a sonda de tabela passa verde e o motor quebra em produção.
    `select fluxo_versao_id, card_atual, tentativas from po_wa_conversas limit 1` e
@@ -382,12 +388,26 @@ O Plano A nunca foi publicado, então os dois vão juntos. **Nada liga o robô.*
    `wa-fluxo.php` antes do `wa-motor.php` porque o motor faz `require_once` dele (a janela
    invertida dá fatal error em `whatsapp.php` e `wa-cron.php`), e o `index.html` por último
    porque é ele quem passa a pedir os arquivos novos.
-5. **Apagar `painel/textos.js` do servidor** depois de o `index.html` subir.
+5. **Apagar `painel/textos.js` do servidor** depois de o `index.html` subir, e conferir que
+   saiu: `curl -s -o /dev/null -w '%{http_code}' https://pereiraoliveiraturismo.com.br/painel/textos.js`
+   tem que devolver **404**.
 6. **Não** cadastrar cron e **não** inscrever o webhook. Com o webhook inscrito e nenhum
    fluxo ligado o robô não responde nada — a cliente precisa saber disso antes, porque o
    motor antigo mandava o menu.
-7. Conferir no ar com **Ctrl+F5** e `bash scripts/confere-deploy.sh`.
-8. **Avisar a cliente de duas coisas** antes de ela ligar: a ordem (Lista de espera
+7. Conferir no ar com **Ctrl+F5** e `bash scripts/confere-deploy.sh`. O script só olha
+   `painel/`; **nada confere o `fluxo.php` nem os `lib/wa-*.php`**. Por isso, a sonda:
+   `curl -i https://pereiraoliveiraturismo.com.br/fluxo.php` tem que devolver **405** com
+   `{"ok":false,"error":"Método não permitido."}`. O `ffail(405)` roda depois dos dois
+   `require_once` e antes do `wa_config()` e do login, então essa resposta sozinha prova que
+   a cadeia inteira carregou, sem efeito colateral. Um `lib/wa-fluxo.php` esquecido daria
+   500 com HTML ("Call to undefined function wa_fluxo_valida"), e a tela só diria "O servidor
+   não respondeu direito": a cliente acharia que é a internet dela.
+8. **Avisar a cliente de três coisas** antes de ela ligar: a ordem (Lista de espera
    primeiro, senão a triagem não republica) e que a triagem tem dois botões que hoje levam
    ao mesmo catálogo ("Roteiro específico" e "Ver a programação"), coisa que ela resolve
    pela própria tela com o filtro de ano.
+   **A terceira, a mais importante no dia:** ligar o fluxo **não liga o robô** enquanto o
+   webhook não for inscrito e a forma de pagamento não entrar na conta da Meta. A tela diz
+   "Fluxo ligado" e o `confirm` fala em atender clientes de verdade, mas no dia do deploy
+   `subscribed_apps` está vazio e `can_send_message` está `BLOCKED` (erro 141006), então
+   nada acontece e não há jeito de saber pela tela. Ela precisa ouvir isso de nós.
