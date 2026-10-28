@@ -118,4 +118,14 @@ assert.ok(/sb_token/.test(src), 'e manda o token do login');
 assert.ok(/poFluxoLista\(/.test(src.replace(pega('poFluxoLista'), '')), 'a tela desenha pela poFluxoLista');
 assert.ok(/poFluxoSeletor\(/.test(src.replace(pega('poFluxoSeletor'), '')), 'e escolhe o fluxo pelo poFluxoSeletor');
 
+/* INERTE AO CARREGAR. O painel baixa o fluxo.js antes de existir a aba que o
+   usa (a Task 7 liga o app.js): ele so pode DEFINIR coisas. Nada de
+   DOMContentLoaded, listener, timer nem chamada solta no topo do arquivo. */
+assert.ok(!/DOMContentLoaded|addEventListener|setTimeout|setInterval|onload/.test(src), 'sem gatilho de load');
+const topo = src.split('\n').filter(l => /^\S/.test(l) && !/^(\/\*|\*|\}|\/\/|=+)/.test(l));
+topo.forEach(l => assert.ok(/^(function |async function |let |const )/.test(l),
+  'linha de topo so define: ' + l));
+assert.ok(!topo.some(l => /^(let|const) \w+\s*=\s*[^;]*\(/.test(l) && !/Object\.create|\[\]|null/.test(l)),
+  'nenhuma constante de topo chama algo');
+
 console.log('test-fluxo-painel OK');

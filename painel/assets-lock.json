@@ -51,5 +51,9 @@
   "video-encode.js": {
     "v": 2,
     "sha": "cb5a5a5625fb12a2"
+  },
+  "fluxo.js": {
+    "v": 1,
+    "sha": "c40934c192a0e208"
   }
 }
