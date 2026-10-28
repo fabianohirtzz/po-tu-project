@@ -131,39 +131,77 @@ function poFluxoLista(fluxo) {
    gravou, e um <svg> por baixo com UM segmento por seta. Saida nula ou para
    card que nao existe NAO vira segmento: a seta apontaria para o canto da
    tela e a cliente leria uma ligacao que nao existe.
-   x/y que nao sao numero finito (ausente, texto, NaN) caem numa grade derivada
-   da ordem: um NaN num style="" apaga o card da tela sem erro no console.
-   As medidas moram AQUI DENTRO (constante de topo quebraria o teste). A altura
-   do card no canvas e fixa (o CSS corta o excesso), senao a ponta da seta nao
-   teria onde encostar. Quem mostra isto e quem esconde a lista e o CSS
-   (@media 980px), nao o JavaScript. */
+
+   x/y PODEM SER NEGATIVOS (a semente grava uma faixa superior com y < 0). Por
+   isso o desenho inteiro e DESLOCADO (x - minimo + margem), nunca cortado em
+   zero: cortar empilharia cards de y diferente na mesma posicao e esconderia
+   um atras do outro, sem erro nenhum.
+   x/y que nao sao numero finito (ausente, texto, NaN), ou so um dos dois,
+   caem numa grade derivada da ordem: um NaN num style="" apaga o card da tela.
+
+   A altura do no e ESTIMADA pelo conteudo (o JS nao mede DOM): o card mostra
+   TODAS as saidas, porque a seta nao tem rotulo. Estimativa generosa de
+   proposito. As setas saem e chegam no meio da altura. O controle da curva
+   fica a no maximo DX_MAX do card e a margem e maior que isso, entao a curva
+   toda cabe no svg (seta "para tras" nao e clipada).
+   As medidas moram AQUI DENTRO (constante de topo quebraria o teste). Quem
+   mostra isto e quem esconde a lista e o CSS (@media 980px), nao o JS. */
 function poFluxoCanvas(fluxo) {
   const f = fluxo && typeof fluxo === 'object' ? fluxo : {};
   const cards = Array.isArray(f.cards) ? f.cards.filter(function (c) { return c && typeof c === 'object'; }) : [];
   if (!cards.length) return '<p class="fl-vazio">Este fluxo ainda não tem cards.</p>';
-  const L = 260, A = 150, FOLGA = 60, POR_LINHA = 3, MARGEM = 40;
+  const L = 260, FOLGA = 60, POR_LINHA = 3, MARGEM = 120, DX_MAX = 100, LINHA_GRADE = 320;
   const num = function (v) {
     if (typeof v === 'string' && v.trim() !== '') v = Number(v);
-    return typeof v === 'number' && isFinite(v) ? Math.max(0, Math.round(v)) : null;
+    return typeof v === 'number' && isFinite(v) ? Math.round(v) : null;
   };
   const porId = Object.create(null);
+  cards.forEach(function (c) { if (c.id != null) porId[c.id] = c; });
+
+  // altura estimada: cabecalho + titulo + previa + aviso + UMA linha por saida (ou duas se o texto for longo)
+  const alturaDe = function (c) {
+    const saidas = poFluxoOpcoes(c.opcoes).map(function (o) {
+      return String(o.rotulo || '(sem nome)').length + 12 + (o.destino && porId[o.destino] ? String(porId[o.destino].titulo || '').length : 12);
+    });
+    [c.proximo, c.fallback, c.sem_resposta].forEach(function (d) {
+      if (d != null && d !== '') saidas.push(16 + (porId[d] ? String(porId[d].titulo || '').length : 24));
+    });
+    let h = 28 + 20 + 28 * Math.ceil(String(c.titulo || '(sem título)').length / 20);
+    const previa = poFluxoPrevia(c.texto);
+    if (previa) h += 8 + 20 * Math.ceil(previa.length / 30);
+    h += 44;
+    if (saidas.length) h += 20 + saidas.reduce(function (s, n) { return s + 22 * Math.ceil(n / 30); }, 0);
+    return Math.max(150, h);
+  };
+
+  // 1) posicao crua; o deslocamento sai do minimo dos cards que TEM posicao valida
+  const cru = cards.map(function (c) { return { x: num(c.x), y: num(c.y) }; });
+  let minX = null, minY = null;
+  cru.forEach(function (p) {
+    if (p.x === null || p.y === null) return;
+    minX = minX === null ? p.x : Math.min(minX, p.x);
+    minY = minY === null ? p.y : Math.min(minY, p.y);
+  });
   const pos = Object.create(null);
   let largura = 0, altura = 0;
-  // 1) onde cada card fica (e o mapa id -> card, para nomear as saidas)
   const lugar = cards.map(function (c, i) {
-    let x = num(c.x), y = num(c.y);
-    if (x === null || y === null) {
+    let x, y;
+    if (cru[i].x === null || cru[i].y === null) {
       x = MARGEM + (i % POR_LINHA) * (L + FOLGA);
-      y = MARGEM + Math.floor(i / POR_LINHA) * (A + FOLGA);
+      y = MARGEM + Math.floor(i / POR_LINHA) * LINHA_GRADE;
+    } else {
+      x = cru[i].x - minX + MARGEM;
+      y = cru[i].y - minY + MARGEM;
     }
-    if (c.id != null) { porId[c.id] = c; pos[c.id] = { x: x, y: y }; }
+    const h = alturaDe(c);
+    if (c.id != null) pos[c.id] = { x: x, y: y, h: h };
     largura = Math.max(largura, x + L + MARGEM);
-    altura = Math.max(altura, y + A + MARGEM);
-    return { x: x, y: y };
+    altura = Math.max(altura, y + h + MARGEM);
+    return { x: x, y: y, h: h };
   });
   // 2) os nos, ja com o mapa completo
   const nos = cards.map(function (c, i) {
-    return '<div class="fl-no" style="left:' + lugar[i].x + 'px;top:' + lugar[i].y + 'px;width:' + L + 'px;height:' + A + 'px">' +
+    return '<div class="fl-no" style="left:' + lugar[i].x + 'px;top:' + lugar[i].y + 'px;width:' + L + 'px;height:' + lugar[i].h + 'px">' +
       poFluxoCard(c, porId, c.id != null && c.id === f.card_inicial) + '</div>';
   });
 
@@ -173,14 +211,13 @@ function poFluxoCanvas(fluxo) {
     const destinos = [];
     poFluxoOpcoes(c.opcoes).forEach(function (o) { destinos.push(o.destino); });
     destinos.push(c.proximo, c.fallback, c.sem_resposta);
-    const vivos = destinos.filter(function (d) {
+    destinos.filter(function (d) {
       return d != null && d !== '' && Object.prototype.hasOwnProperty.call(pos, d);
-    });
-    vivos.forEach(function (d, k) {
+    }).forEach(function (d) {
       const de = pos[c.id], para = pos[d];
-      const x1 = de.x + L, y1 = Math.round(de.y + A * (k + 1) / (vivos.length + 1));
-      const x2 = para.x, y2 = para.y + Math.round(A / 2);
-      const dx = Math.max(60, Math.abs(x2 - x1) / 2);
+      const x1 = de.x + L, y1 = Math.round(de.y + de.h / 2);
+      const x2 = para.x, y2 = Math.round(para.y + para.h / 2);
+      const dx = Math.min(DX_MAX, Math.max(40, Math.round(Math.abs(x2 - x1) / 2)));
       setas.push('<path class="fl-seta" data-de="' + esc(c.id) + '" data-para="' + esc(d) + '" d="M' + x1 + ' ' + y1 +
         ' C' + (x1 + dx) + ' ' + y1 + ' ' + (x2 - dx) + ' ' + y2 + ' ' + x2 + ' ' + y2 + '" marker-end="url(#fl-ponta)"/>');
     });

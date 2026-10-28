@@ -38,11 +38,7 @@
   .fl-seta{fill:none;stroke:var(--azul);stroke-width:2;opacity:.75}
   .fl-ponta{fill:var(--azul)}
   .fl-no{position:absolute}
-  /* altura fixa no canvas: a ponta da seta precisa de onde encostar */
-  .fl-no .fl-card{height:100%;overflow:hidden}
-  .fl-no .fl-card__previa{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-}
-
-@media (prefers-reduced-motion:reduce){
-  .fl-card{transition:none}
+  /* o no tem a altura ESTIMADA pelo JS e o card o preenche; nada e cortado,
+     porque as setas nao tem rotulo e as saidas so existem dentro do card */
+  .fl-no .fl-card{height:100%}
 }

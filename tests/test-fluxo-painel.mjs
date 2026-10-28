@@ -183,7 +183,11 @@ assert.equal(conta(cv, 'class="fl-card '), 3, 'cada no leva o card');
 // saidas existentes: a->b, a->c (fallback), b->c. nulo (opcao 2), id inexistente (opcao 3) e sem_resposta null NAO viram segmento
 assert.equal(nSetas(cv), 3, 'um segmento por saida que existe: ' + nSetas(cv));
 assert.ok(/<svg[^>]*class="fl-setas"/.test(cv), 'um svg de setas');
-assert.ok(/left:40px;top:60px/.test(cv), 'o card usa o x/y gravado');
+const posDe = html => [...html.matchAll(/class="fl-no" style="left:(-?\d+)px;top:(-?\d+)px/g)].map(m => [Number(m[1]), Number(m[2])]);
+const pa = posDe(cv);
+assert.equal(pa[1][0] - pa[0][0], 360, 'a distancia em x entre os cards e a gravada (400 - 40)');
+assert.equal(pa[1][1], pa[0][1], 'e o y igual continua igual');
+assert.equal(pa[2][1] - pa[0][1], 200, 'e a distancia em y tambem (260 - 60)');
 assert.equal(conta(cv, 'fl-card--inicial'), 1, 'o inicial e marcado tambem no canvas');
 assert.ok(!/NaN|undefined|Infinity/.test(cv), 'nenhum NaN/undefined no canvas');
 // um fluxo sem nenhuma saida: nenhum segmento
@@ -206,7 +210,75 @@ const pos = [...sem.matchAll(/left:(\d+)px;top:(\d+)px/g)].map(m => m[1] + ',' +
 assert.equal(pos.length, 4, 'card sem posicao ganha posicao');
 assert.equal(new Set(pos).size, 4, 'e cada um numa posicao diferente (nao empilham): ' + pos);
 // x numerico em texto (jsonb pode devolver assim) vale
-assert.ok(/left:120px;top:80px/.test(F.poFluxoCanvas({ cards: [{ id: 'a', tipo: 'fim', titulo: 'A', x: '120', y: '80' }] })), 'x/y em texto numerico valem');
+const pt = posDe(F.poFluxoCanvas({ cards: [{ id: 'a', tipo: 'fim', titulo: 'A', x: '120', y: '80' }, { id: 'b', tipo: 'fim', titulo: 'B', x: '220', y: '80' }] }));
+assert.equal(pt[1][0] - pt[0][0], 100, 'x/y em texto numerico valem');
+
+/* CRITICO: y NEGATIVO. A semente grava uma faixa superior com y < 0; clampar em 0
+   empilhava cards de y diferente na mesma posicao e escondia um atras do outro. */
+const neg = posDe(F.poFluxoCanvas({ cards: [
+  { id: 'a', tipo: 'fim', titulo: 'A', x: 1280, y: 0 }, { id: 'b', tipo: 'fim', titulo: 'B', x: 1280, y: -240 }] }));
+assert.notDeepEqual(neg[0], neg[1], 'y negativo diferente sai em posicao diferente');
+assert.equal(neg[0][1] - neg[1][1], 240, 'e a distancia gravada se preserva');
+assert.ok(neg.flat().every(n => n >= 0), 'e nada sai com coordenada negativa na tela');
+const negx = posDe(F.poFluxoCanvas({ cards: [
+  { id: 'a', tipo: 'fim', titulo: 'A', x: -300, y: 0 }, { id: 'b', tipo: 'fim', titulo: 'B', x: -100, y: 0 }] }));
+assert.equal(negx[1][0] - negx[0][0], 200, 'x negativo tambem preserva a distancia');
+assert.ok(negx.flat().every(n => n >= 0), 'e tambem nao sai negativo');
+// as 20 posicoes da semente (fluxo de boas-vindas, ordem 1..20) dao 20 posicoes distintas
+const SEMENTE = [[0,200],[320,0],[320,200],[320,400],[640,0],[960,0],[1280,0],[1600,-120],[1920,-120],[2240,-200],
+  [2240,-40],[2560,-120],[1600,160],[1920,160],[2240,160],[640,400],[640,600],[1280,-240],[1920,-300],[1920,360]];
+const sem20 = posDe(F.poFluxoCanvas({ cards: SEMENTE.map((p, i) => ({ id: 'c' + i, tipo: 'fim', titulo: 'C' + i, x: p[0], y: p[1] })) }));
+assert.equal(sem20.length, 20, 'os 20 cards estao no canvas');
+assert.equal(new Set(sem20.map(p => p.join(','))).size, 20, 'e em 20 posicoes distintas');
+// nenhum no encosta em outro na mesma coluna: a distancia vertical minima cobre a altura estimada do que esta em cima
+const alturas = [...F.poFluxoCanvas({ cards: SEMENTE.map((p, i) => ({ id: 'c' + i, tipo: 'fim', titulo: 'C' + i, x: p[0], y: p[1] })) })
+  .matchAll(/width:260px;height:(\d+)px/g)].map(m => Number(m[1]));
+assert.ok(alturas.length === 20 && alturas.every(n => n >= 150), 'cada no tem altura estimada');
+
+// XY-13: so um dos dois (x bom, y ausente) cai na grade; nunca "top:nullpx"
+for (const c of [{ x: 100 }, { y: 100 }, { x: 100, y: null }, { x: null, y: 100 }]) {
+  const r = F.poFluxoCanvas({ cards: [Object.assign({ id: 'a', tipo: 'fim', titulo: 'A' }, c)] });
+  assert.ok(!/null|NaN|undefined/.test(r) && /left:\d+px;top:\d+px/.test(r), 'posicao pela metade nao vaza null: ' + JSON.stringify(c));
+}
+
+// a altura do no cresce com as saidas (nada e cortado): 5 saidas pedem mais que 0
+const alt = html => Number(html.match(/width:260px;height:(\d+)px/)[1]);
+const poucas = F.poFluxoCanvas({ cards: [{ id: 'a', tipo: 'texto', titulo: 'A', x: 0, y: 0 }] });
+const muitas = F.poFluxoCanvas({ cards: [{ id: 'a', tipo: 'botoes', titulo: 'Boas-vindas ao robo', texto: 'x'.repeat(130), x: 0, y: 0,
+  opcoes: [1, 2, 3].map(n => ({ id: 'o' + n, rotulo: 'Opcao numero ' + n, destino: 'b' })), fallback: 'b', sem_resposta: 'b' },
+  { id: 'b', tipo: 'fim', titulo: 'Fim', x: 400, y: 0 }] });
+assert.ok(alt(muitas) > alt(poucas) + 100, 'card com 5 saidas e texto longo ganha altura: ' + alt(poucas) + ' -> ' + alt(muitas));
+assert.equal(conta(muitas, 'class="fl-saida"'), 5, 'e as 5 saidas estao no HTML');
+
+// seta "para tras" (origem a direita do destino): a curva inteira cabe no svg
+const tras = F.poFluxoCanvas({ cards: [
+  { id: 'a', tipo: 'texto', titulo: 'A', x: 0, y: 0 }, { id: 'b', tipo: 'texto', titulo: 'B', x: 2560, y: -120, sem_resposta: 'a', fallback: 'a' }] });
+const larg = Number(tras.match(/<svg[^>]*width="(\d+)"/)[1]);
+const alt2 = Number(tras.match(/<svg[^>]*height="(\d+)"/)[1]);
+const d = tras.match(/class="fl-seta"[^>]* d="(M[^"]+)"/)[1];
+const nums = d.match(/-?\d+/g).map(Number);
+assert.ok(nums.length >= 8, 'a seta tem os 8 pontos');
+nums.forEach((n, i) => assert.ok(n >= 0 && n <= (i % 2 === 0 ? larg : alt2), 'ponto ' + i + ' (' + n + ') dentro do svg ' + larg + 'x' + alt2 + ': ' + d));
+
+// card com so um dos dois cai EXATAMENTE onde cairia um card sem posicao nenhuma, e nao entra no minimo
+const semPos = posDe(F.poFluxoCanvas({ cards: [{ id: 'a', tipo: 'fim', titulo: 'A' }] }))[0];
+for (const c of [{ x: 100 }, { y: 100 }, { x: 100, y: null }, { x: null, y: 100 }]) {
+  const m = posDe(F.poFluxoCanvas({ cards: [Object.assign({ id: 'a', tipo: 'fim', titulo: 'A' }, c)] }))[0];
+  assert.deepEqual(m, semPos, 'posicao pela metade = posicao derivada: ' + JSON.stringify(c));
+}
+const comMeia = posDe(F.poFluxoCanvas({ cards: [
+  { id: 'a', tipo: 'fim', titulo: 'A', x: 500, y: 500 }, { id: 'b', tipo: 'fim', titulo: 'B', x: 600, y: 500 },
+  { id: 'c', tipo: 'fim', titulo: 'C', x: -1000 }, { id: 'd', tipo: 'fim', titulo: 'D', y: -1000 }] }));
+assert.deepEqual(comMeia[0], [120, 120], 'o card sem posicao completa nao puxa o minimo: o primeiro valido fica na margem');
+assert.equal(comMeia[1][0] - comMeia[0][0], 100, 'e a distancia entre os validos se preserva');
+
+// a seta sai e chega no MEIO da altura dos nos
+const una = F.poFluxoCanvas({ cards: [{ id: 'a', tipo: 'texto', titulo: 'A', x: 0, y: 0, proximo: 'b' }, { id: 'b', tipo: 'fim', titulo: 'B', x: 400, y: 0 }] });
+const [ha, hb] = [...una.matchAll(/width:260px;height:(\d+)px/g)].map(m => Number(m[1]));
+const [, topo] = posDe(una)[0];
+const dd = una.match(/class="fl-seta"[^>]* d="M(\d+) (\d+) C\d+ \d+ \d+ (\d+) (\d+) (\d+)"/);
+assert.equal(Number(dd[2]), topo + Math.round(ha / 2), 'a seta nasce no meio do card de origem');
+assert.equal(Number(dd[5]), topo + Math.round(hb / 2), 'e chega no meio do card de destino');
 // vazios e degenerados nao lancam
 for (const x of [null, undefined, {}, { cards: null }, { cards: 'x' }, { cards: [null, 3] }]) {
   assert.ok(F.poFluxoCanvas(x).includes('fl-vazio'), 'canvas de fluxo sem cards: ' + JSON.stringify(x));
@@ -236,10 +308,33 @@ for (const [nome, s] of Object.entries(saidas)) {
 
 /* Quem escolhe lista x canvas e o CSS (D5), no ponto de chamada: a tela monta as
    duas vistas e o fluxo.css as alterna a 980px. JS nao le largura. */
-const css = readFileSync(new URL('../painel/fluxo.css', import.meta.url), 'utf8');
-assert.ok(/\.fl-vista--canvas\{display:none\}/.test(css), 'canvas escondido por padrao (celular)');
-assert.ok(/@media \(min-width:980px\)\{[\s\S]*\.fl-vista--lista\{display:none\}[\s\S]*\.fl-vista--canvas\{display:block/.test(css), 'a partir de 980px o canvas substitui a lista');
+const cssBruto = readFileSync(new URL('../painel/fluxo.css', import.meta.url), 'utf8');
+const css = cssBruto.replace(/\/\*[\s\S]*?\*\//g, '');   // regra virada em comentario nao conta
+const render = pega('poFluxoRender');
+assert.ok(render.includes('class="fl-vista fl-vista--lista">\' + poFluxoLista(f)'), 'o render embrulha a lista em .fl-vista--lista');
+assert.ok(render.includes('class="fl-vista fl-vista--canvas">\' + poFluxoCanvas(f)'), 'e o canvas em .fl-vista--canvas');
+// bloco do @media por contagem de chaves, para a regra valer DENTRO dele
+const iMq = css.indexOf('@media (min-width:980px){');
+assert.ok(iMq >= 0, 'existe o @media (min-width:980px)');
+let prof = 0, fim = -1;
+for (let i = css.indexOf('{', iMq); i < css.length; i++) {
+  if (css[i] === '{') prof++;
+  if (css[i] === '}' && --prof === 0) { fim = i; break; }
+}
+assert.ok(fim > 0, 'o @media fecha');
+const dentro = css.slice(iMq, fim), fora = css.slice(0, iMq) + css.slice(fim);
+assert.ok(/\.fl-vista--lista\{display:none\}/.test(dentro), 'a partir de 980px a lista some');
+assert.ok(/\.fl-vista--canvas\{display:block/.test(dentro), 'e o canvas aparece');
+assert.ok(/\.fl-no\{position:absolute\}/.test(dentro), 'o no do canvas e absoluto');
+assert.ok(/\.fl-canvas\{position:relative\}/.test(dentro), 'e o canvas e o referencial dele');
+assert.ok(/\.fl-vista--canvas\{display:none\}/.test(fora), 'fora do @media o canvas esta escondido (celular)');
+assert.ok(!/\.fl-vista--lista\{[^}]*display:none/.test(fora), 'e a lista NUNCA e escondida fora do @media (celular)');
+assert.ok(!/transition/.test(css) || !/prefers-reduced-motion/.test(css), 'sem regra de reduced-motion para animacao que nao existe');
 assert.ok(/poFluxoCanvas\(/.test(src.replace(pega('poFluxoCanvas'), '')), 'a tela desenha pela poFluxoCanvas');
-assert.ok(!/innerWidth|matchMedia|clientWidth|ResizeObserver/.test(semComentario), 'o fluxo.js nao le largura de tela');
+assert.ok(!/\.fl-no[^{]*\{[^}]*overflow/.test(css), 'o card do canvas nao corta o conteudo (as saidas so existem dentro dele)');
+// nada de ler largura de tela no JS (denylist ampla; comentario de fim de linha nao conta)
+const semTudo = semComentario.split('\n').map(l => l.replace(/\s\/\/\s.*$/, '')).join('\n');
+assert.ok(!/innerWidth|innerHeight|outerWidth|matchMedia|clientWidth|offsetWidth|scrollWidth|screen\.|getBoundingClientRect|ResizeObserver|visualViewport/.test(semTudo),
+  'o fluxo.js nao le largura de tela');
 
 console.log('test-fluxo-painel OK');
