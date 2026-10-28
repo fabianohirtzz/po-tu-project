@@ -1303,9 +1303,43 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
       aqui, regex ancorado em `
 ` casa no worktree (LF) e falha no checkout principal
       (CRLF). Custou um vermelho que dez revisoes nao viram, porque o worktree so teve LF.
-  - **Falta o Plano B:** a aba do painel (`painel/fluxo.js`, `fluxo.php`, `fluxo.css`, o
-    simulador e o filtro de transmissao). Sem ela a cliente nao tem como montar nem ligar
-    fluxo: hoje so existe o que as migrations semearam.
+- **FLUXO DE CONVERSA, PLANO B (a aba do painel): FEITO, MERGEADO, NADA ATIVO (28/10/2026).**
+  7 tarefas em TDD na branch `fluxo-painel` (19 commits, merge `1df8065`); a suite foi de
+  56 para **58** arquivos **no Git** (3 nascem, 1 morre com a aba antiga). **Atencao: o
+  runner executa 72.** A diferenca sao **14 arquivos de teste que existem so no disco**,
+  parte dos ~63 arquivos nunca commitados (`test-cadastur`, `test-faq`, `test-home-index`,
+  `test-home-slide`, `test-home-sobre`, `test-htaccess-redirects`, `test-limpa-cache`,
+  `test-rot-preenche`, `test-rot-save-erro`, `test-roteiro-preview`, `test-social`,
+  `test-status-tag`, `test-urls-limpas`, `test-vitrine`). Quem clonar o repo roda 58 e
+  **nao tem como saber que faltam 14**. Novos: `fluxo.php`,
+  `painel/fluxo.js`, `painel/fluxo.css`. Plano:
+  `docs/superpowers/plans/2026-10-27-fluxo-painel.md` · **pendencias, heranca e as tres
+  pre-condicoes do Plano C: `docs/superpowers/reviews/2026-10-27-fluxo-painel-pendencias.md`**.
+  - A cliente passa a **montar o atendimento sem codigo**: le os fluxos do banco, ve o grafo
+    desenhado, edita card em gaveta, **Publica** (retrato de versao) e **Liga** (uma porta de
+    entrada por vez), com a **lista de problemas do validador antes de qualquer dos dois**.
+    O `fluxo.php` entra com cinco modos (`ler|conferir|publicar|ligar|desligar`).
+  - **A aba "Textos do robo" SAIU** (`painel/textos.js` e `tests/test-textos.mjs` apagados):
+    os 7 textos soltos viraram cards do grafo. Nao ha mais dois lugares escrevendo a mesma
+    mensagem.
+  - **NADA FOI PUBLICADO.** As migrations do Plano A seguem **sem rodar**, nada por FTP,
+    nenhum cron, webhook nao inscrito. `tests/test-wa-schema.php` esta **vermelho de
+    proposito** por isso, e fica verde quando as migrations rodarem.
+  - **Regras permanentes deste subsistema:**
+    - **O canvas nao pode ter altura fixa.** Medido na migration semeada: com 150px o card
+      de boas-vindas perdia 4 das 5 saidas e 16 dos 20 cards tinham corte. Como o canvas
+      nao rotula as setas, o cortado nao migra para elas: deixa de existir na tela.
+    - **`Ligar` recusa fluxo nunca publicado.** Fluxo ligado sem versao ocupa a porta de
+      entrada sem atender nada, e impede ligar o legitimo.
+    - **`confirm` so no Ligar.** Desligar e o freio, e freio com caixa de dialogo falha na
+      hora em que serve.
+    - **Limite de caracteres nao bloqueia o Salvar** (o contador e projecao e rascunho nao
+      vai ao ar), mas bloqueia o Publicar.
+    - **Arquivo novo em `painel/` que ninguem carrega deixa a suite vermelha na hora:**
+      criar e fiar (`<script>`/`<link>` + entrada no `assets-lock.json`) sao a **mesma**
+      tarefa, nunca duas.
+  - **Falta o Plano C:** o simulador e o filtro de transmissao por fluxo. As tres
+    pre-condicoes estao no documento de pendencias.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro
