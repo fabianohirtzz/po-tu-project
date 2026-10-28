@@ -53,7 +53,11 @@
     "sha": "cb5a5a5625fb12a2"
   },
   "fluxo.js": {
-    "v": 2,
-    "sha": "bc54615bfc3c1e6b"
+    "v": 3,
+    "sha": "c86244f3397ea6ad"
+  },
+  "fluxo.css": {
+    "v": 1,
+    "sha": "d81a29e0f7047044"
   }
 }

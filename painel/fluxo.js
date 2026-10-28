@@ -74,7 +74,7 @@ function poFluxoPrevia(texto) {
 /* Um card. `porId` e o mapa id -> card do fluxo, para NOMEAR as saidas.
    Card degenerado (null, sem tipo, tipo que a tela nao conhece) vira card
    marcado, nunca excecao: um card ruim nao pode derrubar a tela inteira. */
-function poFluxoCard(card, porId) {
+function poFluxoCard(card, porId, inicial) {
   const c = card && typeof card === 'object' ? card : {};
   const mapa = porId && typeof porId === 'object' ? porId : {};
   const def = poFluxoTipo(c.tipo);
@@ -105,7 +105,7 @@ function poFluxoCard(card, porId) {
   else if (c.tipo === 'botoes' && !opcoes.length) aviso = '<p class="fl-aviso">Este card de botões está sem opções.</p>';
 
   const previa = poFluxoPrevia(c.texto);
-  const classe = 'fl-card ' + (def ? 'fl-card--' + def.tipo : 'fl-card--desconhecido');
+  const classe = 'fl-card ' + (inicial ? 'fl-card--inicial ' : '') + (def ? 'fl-card--' + def.tipo : 'fl-card--desconhecido');
   return '<article class="' + classe + '" data-card="' + esc(c.id) + '">' +
     '<div class="fl-card__tipo">' + (def ? esc(def.rotulo) : 'Desconhecido') + '</div>' +
     '<h3 class="fl-card__titulo">' + esc(c.titulo || '(sem título)') + '</h3>' +
@@ -123,11 +123,74 @@ function poFluxoLista(fluxo) {
   const porId = Object.create(null);
   cards.forEach(function (c) { if (c.id != null) porId[c.id] = c; });
   return '<div class="fl-lista">' + cards.map(function (c) {
-    const h = poFluxoCard(c, porId);
-    return c.id != null && c.id === f.card_inicial
-      ? h.replace('class="fl-card ', 'class="fl-card fl-card--inicial ')
-      : h;
+    return poFluxoCard(c, porId, c.id != null && c.id === f.card_inicial);
   }).join('') + '</div>';
+}
+
+/* O canvas do desktop: os mesmos cards, cada um no lugar (x, y) que a semente
+   gravou, e um <svg> por baixo com UM segmento por seta. Saida nula ou para
+   card que nao existe NAO vira segmento: a seta apontaria para o canto da
+   tela e a cliente leria uma ligacao que nao existe.
+   x/y que nao sao numero finito (ausente, texto, NaN) caem numa grade derivada
+   da ordem: um NaN num style="" apaga o card da tela sem erro no console.
+   As medidas moram AQUI DENTRO (constante de topo quebraria o teste). A altura
+   do card no canvas e fixa (o CSS corta o excesso), senao a ponta da seta nao
+   teria onde encostar. Quem mostra isto e quem esconde a lista e o CSS
+   (@media 980px), nao o JavaScript. */
+function poFluxoCanvas(fluxo) {
+  const f = fluxo && typeof fluxo === 'object' ? fluxo : {};
+  const cards = Array.isArray(f.cards) ? f.cards.filter(function (c) { return c && typeof c === 'object'; }) : [];
+  if (!cards.length) return '<p class="fl-vazio">Este fluxo ainda não tem cards.</p>';
+  const L = 260, A = 150, FOLGA = 60, POR_LINHA = 3, MARGEM = 40;
+  const num = function (v) {
+    if (typeof v === 'string' && v.trim() !== '') v = Number(v);
+    return typeof v === 'number' && isFinite(v) ? Math.max(0, Math.round(v)) : null;
+  };
+  const porId = Object.create(null);
+  const pos = Object.create(null);
+  let largura = 0, altura = 0;
+  // 1) onde cada card fica (e o mapa id -> card, para nomear as saidas)
+  const lugar = cards.map(function (c, i) {
+    let x = num(c.x), y = num(c.y);
+    if (x === null || y === null) {
+      x = MARGEM + (i % POR_LINHA) * (L + FOLGA);
+      y = MARGEM + Math.floor(i / POR_LINHA) * (A + FOLGA);
+    }
+    if (c.id != null) { porId[c.id] = c; pos[c.id] = { x: x, y: y }; }
+    largura = Math.max(largura, x + L + MARGEM);
+    altura = Math.max(altura, y + A + MARGEM);
+    return { x: x, y: y };
+  });
+  // 2) os nos, ja com o mapa completo
+  const nos = cards.map(function (c, i) {
+    return '<div class="fl-no" style="left:' + lugar[i].x + 'px;top:' + lugar[i].y + 'px;width:' + L + 'px;height:' + A + 'px">' +
+      poFluxoCard(c, porId, c.id != null && c.id === f.card_inicial) + '</div>';
+  });
+
+  const setas = [];
+  cards.forEach(function (c) {
+    if (c.id == null) return;
+    const destinos = [];
+    poFluxoOpcoes(c.opcoes).forEach(function (o) { destinos.push(o.destino); });
+    destinos.push(c.proximo, c.fallback, c.sem_resposta);
+    const vivos = destinos.filter(function (d) {
+      return d != null && d !== '' && Object.prototype.hasOwnProperty.call(pos, d);
+    });
+    vivos.forEach(function (d, k) {
+      const de = pos[c.id], para = pos[d];
+      const x1 = de.x + L, y1 = Math.round(de.y + A * (k + 1) / (vivos.length + 1));
+      const x2 = para.x, y2 = para.y + Math.round(A / 2);
+      const dx = Math.max(60, Math.abs(x2 - x1) / 2);
+      setas.push('<path class="fl-seta" data-de="' + esc(c.id) + '" data-para="' + esc(d) + '" d="M' + x1 + ' ' + y1 +
+        ' C' + (x1 + dx) + ' ' + y1 + ' ' + (x2 - dx) + ' ' + y2 + ' ' + x2 + ' ' + y2 + '" marker-end="url(#fl-ponta)"/>');
+    });
+  });
+
+  return '<div class="fl-canvas" style="width:' + largura + 'px;height:' + altura + 'px">' +
+    '<svg class="fl-setas" width="' + largura + '" height="' + altura + '" viewBox="0 0 ' + largura + ' ' + altura + '" aria-hidden="true">' +
+    '<defs><marker id="fl-ponta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">' +
+    '<path d="M0 0 L10 5 L0 10 z" class="fl-ponta"/></marker></defs>' + setas.join('') + '</svg>' +
+    nos.join('') + '</div>';
 }
 
 // O seletor de fluxo. Sao poucos fluxos e a cliente precisa alcancar todos.
@@ -167,7 +230,11 @@ function poFluxoRender() {
   const f = PO_FLUXOS.find(function (x) { return String(x.id) === String(PO_FLUXO_SEL); }) || PO_FLUXOS[0] || null;
   if (!f) { box.innerHTML = '<p class="fl-vazio">Nenhum fluxo encontrado.</p>'; return; }
   PO_FLUXO_SEL = f.id;
-  box.innerHTML = poFluxoSeletor(PO_FLUXOS, f.id) + poFluxoLista(f);
+  /* As duas vistas saem no HTML; o CSS mostra a lista no celular e o canvas a
+     partir de 980px (fluxo.css). Nao ha JavaScript lendo largura de tela. */
+  box.innerHTML = poFluxoSeletor(PO_FLUXOS, f.id) +
+    '<div class="fl-vista fl-vista--lista">' + poFluxoLista(f) + '</div>' +
+    '<div class="fl-vista fl-vista--canvas">' + poFluxoCanvas(f) + '</div>';
   const s = box.querySelector('#fl-seletor');
   if (s) s.onchange = function () { PO_FLUXO_SEL = s.value; poFluxoRender(); };
 }

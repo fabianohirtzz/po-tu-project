@@ -16,7 +16,7 @@ const ESC = 'function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,' +
             'c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c]));}';
 
 const PURAS_NOMES = ['poFluxoTipos', 'poFluxoTipo', 'poFluxoOpcoes', 'poFluxoPrevia',
-                     'poFluxoCard', 'poFluxoLista', 'poFluxoSeletor'];
+                     'poFluxoCard', 'poFluxoLista', 'poFluxoSeletor', 'poFluxoCanvas'];
 const F = new Function(ESC + PURAS_NOMES.map(pega).join('\n') +
   '; return {' + PURAS_NOMES.join(',') + '};')();
 
@@ -151,7 +151,7 @@ assert.ok(/poFluxoSeletor\(/.test(src.replace(pega('poFluxoSeletor'), '')), 'e e
    STATEMENT DE TOPO, nao sobre o texto: dentro de funcao pode ter
    addEventListener e setTimeout (a gaveta da Task 5 vai precisar). Allowlist
    de formas, nao denylist, e sobre o fonte sem comentarios. */
-const PERMITIDA = [/^(?:async )?function \w+\(/, /^(?:let|const) \w+ = (?:\[\]|null|\{\}|''|0|false|true);$/, /^\}$/];
+const PERMITIDA = [/^(?:async )?function \w+\(.*\{$/,/^(?:let|const) \w+ = (?:\[\]|null|\{\}|''|0|false|true);$/, /^\}$/];
 semComentario.split('\n').filter(l => /^\S/.test(l)).forEach(l =>
   assert.ok(PERMITIDA.some(r => r.test(l)), 'linha de topo fora das formas permitidas (carregar nao pode executar nada): ' + l));
 
@@ -159,5 +159,87 @@ semComentario.split('\n').filter(l => /^\S/.test(l)).forEach(l =>
    aspas DUPLAS; um atributo com aspa simples deixaria o texto da cliente fechar o atributo. */
 assert.ok(!/=\\'/.test(semComentario), 'nenhum atributo com aspa simples');
 assert.ok(/aspas DUPLAS/.test(src), 'o aviso sobre o esc() esta no fonte');
+
+/* H2: o fallback "(sem titulo)" do card de DESTINO (dentro de nomeDe) */
+assert.ok(F.poFluxoCard({ id: 'a', tipo: 'texto', titulo: 'Oi', proximo: 'b' }, { b: { id: 'b', tipo: 'fim' } }).includes('(sem título)</li>'),
+  'destino sem titulo sai marcado, na saida do card de origem');
+
+/* H3: a allowlist de topo exige fechar a chave na linha: nada de segundo statement colado */
+assert.ok(!PERMITIDA[0].test('function q(){} poCarregaFluxo();'), 'allowlist recusa statement colado na declaracao');
+assert.ok(PERMITIDA[0].test('function poFluxoTipos() {') && PERMITIDA[0].test('async function poCarregaFluxo() {'), 'e aceita a declaracao normal');
+
+/* ---------- o canvas ---------- */
+const nSetas = s => conta(s, 'class="fl-seta"');
+const nNos = s => conta(s, 'class="fl-no"');
+const base = { card_inicial: 'a', cards: [
+  { id: 'a', tipo: 'botoes', titulo: 'Escolha', x: 40, y: 60,
+    opcoes: [{ id: '1', rotulo: 'Sim', destino: 'b' }, { id: '2', rotulo: 'Nao', destino: null }, { id: '3', rotulo: 'Sei la', destino: 'sumiu' }],
+    fallback: 'c', sem_resposta: null },
+  { id: 'b', tipo: 'texto', titulo: 'B', x: 400, y: 60, proximo: 'c' },
+  { id: 'c', tipo: 'fim', titulo: 'C', x: 400, y: 260 }] };
+const cv = F.poFluxoCanvas(base);
+assert.equal(nNos(cv), 3, 'um no por card');
+assert.equal(conta(cv, 'class="fl-card '), 3, 'cada no leva o card');
+// saidas existentes: a->b, a->c (fallback), b->c. nulo (opcao 2), id inexistente (opcao 3) e sem_resposta null NAO viram segmento
+assert.equal(nSetas(cv), 3, 'um segmento por saida que existe: ' + nSetas(cv));
+assert.ok(/<svg[^>]*class="fl-setas"/.test(cv), 'um svg de setas');
+assert.ok(/left:40px;top:60px/.test(cv), 'o card usa o x/y gravado');
+assert.equal(conta(cv, 'fl-card--inicial'), 1, 'o inicial e marcado tambem no canvas');
+assert.ok(!/NaN|undefined|Infinity/.test(cv), 'nenhum NaN/undefined no canvas');
+// um fluxo sem nenhuma saida: nenhum segmento
+assert.equal(nSetas(F.poFluxoCanvas({ cards: [{ id: 'a', tipo: 'fim', titulo: 'F', x: 0, y: 0 }] })), 0, 'sem saida, sem segmento');
+// so saida nula
+assert.equal(nSetas(F.poFluxoCanvas({ cards: [{ id: 'a', tipo: 'texto', titulo: 'F', x: 0, y: 0, proximo: null, fallback: '', sem_resposta: null, opcoes: [{ destino: null }] }] })), 0,
+  'saida nula nao vira segmento');
+// destino que nao existe
+assert.equal(nSetas(F.poFluxoCanvas({ cards: [{ id: 'a', tipo: 'texto', titulo: 'F', x: 0, y: 0, proximo: 'sumiu' }] })), 0, 'destino inexistente nao vira segmento');
+// x/y ruins ou ausentes: posicao derivada da ordem, nunca NaN
+const ruins = [undefined, null, '', 'abc', NaN, Infinity, {}, [], -5];
+for (const v of ruins) {
+  const r = F.poFluxoCanvas({ cards: [{ id: 'a', tipo: 'texto', titulo: 'A', x: v, y: v, proximo: 'b' }, { id: 'b', tipo: 'fim', titulo: 'B', x: v, y: v }] });
+  assert.ok(!/NaN|undefined|Infinity|null/.test(r), 'x/y = ' + String(v) + ' nao vaza NaN: ' + r);
+  assert.equal(nNos(r), 2, 'x/y ruim: os dois cards continuam la');
+  assert.equal(nSetas(r), 1, 'x/y ruim: a seta continua');
+}
+const sem = F.poFluxoCanvas({ cards: [{ id: 'a', tipo: 'fim', titulo: 'A' }, { id: 'b', tipo: 'fim', titulo: 'B' }, { id: 'c', tipo: 'fim', titulo: 'C' }, { id: 'd', tipo: 'fim', titulo: 'D' }] });
+const pos = [...sem.matchAll(/left:(\d+)px;top:(\d+)px/g)].map(m => m[1] + ',' + m[2]);
+assert.equal(pos.length, 4, 'card sem posicao ganha posicao');
+assert.equal(new Set(pos).size, 4, 'e cada um numa posicao diferente (nao empilham): ' + pos);
+// x numerico em texto (jsonb pode devolver assim) vale
+assert.ok(/left:120px;top:80px/.test(F.poFluxoCanvas({ cards: [{ id: 'a', tipo: 'fim', titulo: 'A', x: '120', y: '80' }] })), 'x/y em texto numerico valem');
+// vazios e degenerados nao lancam
+for (const x of [null, undefined, {}, { cards: null }, { cards: 'x' }, { cards: [null, 3] }]) {
+  assert.ok(F.poFluxoCanvas(x).includes('fl-vazio'), 'canvas de fluxo sem cards: ' + JSON.stringify(x));
+}
+assert.equal(nNos(F.poFluxoCanvas({ cards: [null, { id: 'a', tipo: 'fim', titulo: 'A' }] })), 1, 'card nulo no meio e ignorado');
+// o id nunca vira atributo cru
+const cvx = F.poFluxoCanvas({ cards: [{ id: '"><img src=x>', tipo: 'texto', titulo: 'x', x: 1, y: 1, proximo: '"><img src=x>' }] });
+assert.ok(!cvx.includes('<img'), 'id malicioso nao vira tag no canvas');
+
+/* H1: a trava do atributo com aspa simples olha a SAIDA renderizada, nao a forma
+   de escrever (aspas duplas, template literal, ...). Fixture com texto malicioso
+   em tudo que a cliente escreve. */
+const FX = { nome: XSS, card_inicial: XSS, cards: [
+  { id: XSS, tipo: 'botoes', titulo: XSS, texto: XSS, x: 10, y: 10, opcoes: [{ id: XSS, rotulo: XSS, destino: XSS + 'b' }], proximo: XSS + 'b', fallback: XSS, sem_resposta: XSS + 'b' },
+  { id: XSS + 'b', tipo: XSS, titulo: XSS, texto: XSS, x: 300, y: 10 }] };
+const saidas = {
+  card: F.poFluxoCard(FX.cards[0], { [XSS]: FX.cards[0], [XSS + 'b']: FX.cards[1] }, true),
+  lista: F.poFluxoLista(FX),
+  seletor: F.poFluxoSeletor([{ id: XSS, nome: XSS }], XSS),
+  canvas: F.poFluxoCanvas(FX),
+};
+for (const [nome, s] of Object.entries(saidas)) {
+  assert.ok(s.length > 50, nome + ' renderizou');
+  assert.ok(!s.includes("='") && !s.includes("=\\'"), nome + ' nao emite atributo com aspa simples');
+  assert.ok(!s.includes('<script'), nome + ' nao deixa <script> passar');
+}
+
+/* Quem escolhe lista x canvas e o CSS (D5), no ponto de chamada: a tela monta as
+   duas vistas e o fluxo.css as alterna a 980px. JS nao le largura. */
+const css = readFileSync(new URL('../painel/fluxo.css', import.meta.url), 'utf8');
+assert.ok(/\.fl-vista--canvas\{display:none\}/.test(css), 'canvas escondido por padrao (celular)');
+assert.ok(/@media \(min-width:980px\)\{[\s\S]*\.fl-vista--lista\{display:none\}[\s\S]*\.fl-vista--canvas\{display:block/.test(css), 'a partir de 980px o canvas substitui a lista');
+assert.ok(/poFluxoCanvas\(/.test(src.replace(pega('poFluxoCanvas'), '')), 'a tela desenha pela poFluxoCanvas');
+assert.ok(!/innerWidth|matchMedia|clientWidth|ResizeObserver/.test(semComentario), 'o fluxo.js nao le largura de tela');
 
 console.log('test-fluxo-painel OK');
