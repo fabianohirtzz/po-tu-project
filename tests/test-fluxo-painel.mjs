@@ -16,7 +16,10 @@ const ESC = 'function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,' +
             'c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c]));}';
 
 const PURAS_NOMES = ['poFluxoTipos', 'poFluxoTipo', 'poFluxoOpcoes', 'poFluxoPrevia',
-                     'poFluxoCard', 'poFluxoLista', 'poFluxoSeletor', 'poFluxoCanvas'];
+                     'poFluxoCard', 'poFluxoLista', 'poFluxoSeletor', 'poFluxoCanvas',
+                     'poFluxoLimite', 'poFluxoTemTexto', 'poFluxoMaxOpcoes', 'poFluxoPiorCaso', 'poFluxoContador',
+                     'poFluxoOpcoesComRotulos', 'poFluxoPatch', 'poFluxoQuem', 'poFluxoBloqueio', 'poFluxoProblemas',
+                     'poFluxoEditavel', 'poFluxoGaveta'];
 const F = new Function(ESC + PURAS_NOMES.map(pega).join('\n') +
   '; return {' + PURAS_NOMES.join(',') + '};')();
 
@@ -255,6 +258,7 @@ Object.values(porColuna).forEach(col => {
   col.sort((m, n) => m.y - n.y);
   for (let j = 1; j < col.length; j++) menorFolga = Math.min(menorFolga, col[j].y - (col[j - 1].y + col[j - 1].h));
 });
+assert.ok(isFinite(menorFolga), 'H1: houve ao menos um par na mesma coluna (senao a folga abaixo passaria vazia)');
 assert.ok(menorFolga >= 24, 'nenhum no cobre ou encosta no o de baixo na mesma coluna da semente (menor folga: ' + menorFolga + ')');
 const altSvg = Number(htmlSem.match(/<svg[^>]*height="(\d+)"/)[1]);
 assert.ok(nosSem.every(n => n.y + n.h <= altSvg), 'e o svg e alto o bastante para o no mais baixo (' + altSvg + ')');
@@ -364,7 +368,10 @@ assert.ok(/\.fl-no\{position:absolute\}/.test(dentro), 'o no do canvas e absolut
 assert.ok(/\.fl-canvas\{position:relative\}/.test(dentro), 'e o canvas e o referencial dele');
 assert.ok(/\.fl-vista--canvas\{display:none\}/.test(fora), 'fora do @media o canvas esta escondido (celular)');
 const regrasFora = [...fora.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(m => ({ sel: m[1].trim(), corpo: m[2] }));
-const escondeNoCelular = regrasFora.filter(r => /fl-vista/.test(r.sel) && !/^\.fl-vista--canvas$/.test(r.sel) && /display\s*:\s*none/.test(r.corpo));
+/* H2: CSS e case-insensitive (DISPLAY:NONE esconde igual) e esconder a lista tambem se faz com
+   visibility:hidden ou pelo conteiner interno (.fl-lista). Fora do @media a lista tem que aparecer. */
+const ESCONDE = /display\s*:\s*none|visibility\s*:\s*hidden/i;
+const escondeNoCelular = regrasFora.filter(r => /fl-vista|fl-lista/i.test(r.sel) && !/^\.fl-vista--canvas$/.test(r.sel) && ESCONDE.test(r.corpo));
 assert.deepEqual(escondeNoCelular, [], 'fora do @media (celular) nenhuma regra com seletor de .fl-vista (composto ou nao) esconde a lista');
 assert.ok(regrasFora.some(r => r.sel === '.fl-vista--canvas' && /display\s*:\s*none/.test(r.corpo)), 'e o canvas segue escondido ali');
 assert.ok(!/transition/.test(css) || !/prefers-reduced-motion/.test(css), 'sem regra de reduced-motion para animacao que nao existe');
@@ -374,5 +381,151 @@ assert.ok(!/\.fl-no[^{]*\{[^}]*overflow/.test(css), 'o card do canvas nao corta 
 const semTudo = semComentario.split('\n').map(l => l.replace(/\s\/\/\s.*$/, '')).join('\n');
 assert.ok(!/innerWidth|innerHeight|outerWidth|matchMedia|clientWidth|offsetWidth|scrollWidth|screen\.|getBoundingClientRect|ResizeObserver|visualViewport/.test(semTudo),
   'o fluxo.js nao le largura de tela');
+
+/* H2: a propria guarda pega os jeitos de esconder a lista (provada contra CSS plantado) */
+for (const ruim of ['.fl-vista--lista{DISPLAY:NONE}', '.fl-vista--lista{visibility:hidden}', '.fl-lista{display:none}', '.fl-lista{Display : None}']) {
+  const rr = [...ruim.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(m => ({ sel: m[1].trim(), corpo: m[2] }));
+  assert.equal(rr.filter(r => /fl-vista|fl-lista/i.test(r.sel) && !/^\.fl-vista--canvas$/.test(r.sel) && ESCONDE.test(r.corpo)).length, 1, 'a guarda de CSS pega: ' + ruim);
+}
+
+/* ====================== TASK 5: a gaveta do card ====================== */
+
+for (const [t, n] of [['botoes', 1024], ['lista', 1024], ['pdf', 1024], ['texto', 4096], ['humano', 4096], ['fim', 4096]]) {
+  assert.equal(F.poFluxoLimite(t), n, 'limite de ' + t);
+}
+for (const t of ['marca', 'ir_para_fluxo', 'inventado', null, undefined, 'toString', '__proto__']) {
+  assert.equal(F.poFluxoLimite(t), null, 'tipo sem texto nao tem limite: ' + t);
+}
+
+/* pior caso: a expansao, nao o texto cru */
+assert.equal(F.poFluxoPiorCaso('abc'), 3, 'texto sem variavel vale o proprio tamanho');
+assert.equal(F.poFluxoPiorCaso('{roteiro}'), 60, '{roteiro} vale 60');
+assert.equal(F.poFluxoPiorCaso('{nome}'), 40, '{nome} vale 40');
+assert.equal(F.poFluxoPiorCaso('{data}'), 40, '{data} vale 40');
+assert.equal(F.poFluxoPiorCaso('oi {nome}, {roteiro} em {data}'), 3 + 40 + 2 + 60 + 4 + 40, 'mistura soma cada uma');
+assert.equal(F.poFluxoPiorCaso('{nome}{nome}'), 80, 'repetida conta cada vez');
+assert.equal(F.poFluxoPiorCaso('a {inventada} b'), 4, 'variavel desconhecida e removida no envio: vale 0');
+assert.equal(F.poFluxoPiorCaso(null), 0);
+assert.equal(F.poFluxoPiorCaso('ção ✈'), 5, 'conta caracteres, nao bytes');
+assert.equal(F.poFluxoPiorCaso('\u{1F600}'), 1, 'caractere fora do plano basico conta 1');
+const mil = 'a'.repeat(1000 - '{roteiro}'.length) + '{roteiro}';
+assert.equal(mil.length, 1000, 'o texto cru tem 1000');
+assert.equal(F.poFluxoPiorCaso(mil), 1051, 'mas pode chegar a 1051 depois da expansao');
+assert.ok(F.poFluxoContador(mil, 1024).estoura, 'o contador ACENDE: 1000 cru com {roteiro} estoura 1024');
+assert.ok(!F.poFluxoContador('a'.repeat(1000), 1024).estoura, 'sem variavel, 1000 cabe');
+assert.ok(!F.poFluxoContador('a'.repeat(1024), 1024).estoura, 'exatamente o limite nao estoura');
+assert.ok(F.poFluxoContador('a'.repeat(1025), 1024).estoura, 'um a mais estoura');
+
+/* a gaveta usa o pior caso e o limite do TIPO */
+const gTxt = F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: mil, opcoes: [{ id: 'o1', rotulo: 'Sim' }] });
+assert.ok(gTxt.includes('fl-cont--estouro'), 'gaveta de botoes com 1000 + {roteiro} abre com o aviso aceso');
+assert.ok(gTxt.includes('1051 de 1024'), 'e mostra o pior caso contra o limite do tipo');
+const gOk = F.poFluxoGaveta({ id: 'a', tipo: 'texto', titulo: 'T', texto: mil });
+assert.ok(!gOk.includes('fl-cont--estouro') && gOk.includes('1051 de 4096'), 'o mesmo texto num card de texto (4096) nao acende');
+assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'pdf', titulo: 'T', texto: mil }).includes('1051 de 1024'), 'legenda de pdf: 1024');
+assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'lista', titulo: 'T', texto: mil }).includes('1051 de 1024'), 'lista: 1024');
+assert.ok(gOk.includes('data-limite="4096"') && gTxt.includes('data-limite="1024"'), 'o limite viaja no textarea para o contador ao vivo');
+
+/* lembrete so em card que ESPERA */
+for (const t of ['texto', 'pdf', 'humano', 'fim']) {
+  assert.ok(!F.poFluxoGaveta({ id: 'a', tipo: t, titulo: 'T', texto: 'x', lembrete_ativo: true }).includes('lembrete'), t + ' nao espera: sem lembrete na gaveta');
+}
+for (const t of ['botoes', 'lista']) {
+  const gl = F.poFluxoGaveta({ id: 'a', tipo: t, titulo: 'T', texto: 'x', lembrete_ativo: true, lembrete_texto: 'Oi?', opcoes: [{ id: 'o', rotulo: 'A' }] });
+  assert.ok(gl.includes('data-campo="lembrete_ativo" checked') && gl.includes('data-campo="lembrete_texto"'), t + ' espera: oferece lembrete');
+  assert.ok(!F.poFluxoGaveta({ id: 'a', tipo: t, titulo: 'T', texto: 'x', lembrete_ativo: false, opcoes: [] }).includes('lembrete_ativo" checked'), t + ': desligado nao vem marcado');
+}
+for (const t of ['marca', 'ir_para_fluxo', 'xyz']) {
+  assert.ok(!F.poFluxoEditavel({ id: 'a', tipo: t }), t + ' nao e editavel');
+  assert.ok(!F.poFluxoCard({ id: 'a', tipo: t, titulo: 'T' }).includes('fl-card__editar'), t + ': sem botao de editar');
+  assert.ok(!F.poFluxoGaveta({ id: 'a', tipo: t, titulo: 'T' }).includes('<textarea'), t + ': gaveta sem campo');
+}
+assert.ok(F.poFluxoCard({ id: 'a', tipo: 'texto', titulo: 'T' }).includes('fl-card__editar'), 'card de texto tem botao de editar');
+
+/* 3 botoes no maximo */
+assert.equal(F.poFluxoMaxOpcoes('botoes'), 3);
+assert.equal(F.poFluxoMaxOpcoes('lista'), null);
+const op = n => Array.from({ length: n }, (_, i) => ({ id: 'o' + i, rotulo: 'B' + i }));
+assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', opcoes: op(3) }).includes('3 de 3 botões'), 'mostra o limite de 3');
+assert.ok(!F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', opcoes: op(3) }).includes('Não dá para salvar'), '3 botoes passa');
+assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', opcoes: op(4) }).includes('Não dá para salvar'), '4 botoes avisa');
+assert.equal(F.poFluxoBloqueio({ tipo: 'botoes', opcoes: op(3) }), '', '3 botoes salva');
+assert.ok(F.poFluxoBloqueio({ tipo: 'botoes', opcoes: op(4) }).includes('no máximo 3'), '4 botoes BLOQUEIA o salvar');
+assert.ok(F.poFluxoBloqueio({ tipo: 'botoes', opcoes: JSON.stringify(op(5)) }).includes('5 botões'), '5 vindo como texto JSON tambem');
+assert.equal(F.poFluxoBloqueio({ tipo: 'lista', opcoes: op(8) }), '', 'lista nao tem esse teto');
+
+/* a gaveta nunca emite campo de estrutura */
+const gTudo = F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', proximo: 'b', fallback: 'b', sem_resposta: 'b',
+  opcoes: [{ id: 'sair', rotulo: 'Sim', destino: 'b' }] });
+assert.ok(!/data-campo="(?!texto"|lembrete_ativo"|lembrete_texto"|rotulo")/.test(gTudo), 'so os 4 campos tem data-campo');
+assert.ok(!gTudo.includes('value="sair"') && !gTudo.includes('value="b"'), 'identificacao de opcao e destino nao viram campo');
+
+/* o patch: exatamente as 4 chaves, mesmo com lixo em v */
+const lixo = { texto: ' Oi ', lembrete_ativo: true, lembrete_texto: ' L ', rotulos: [' Novo '],
+  id: 'x', tipo: 'fim', proximo: 'z', fallback: 'z', sem_resposta: 'z', x: 9, y: 9, titulo: 'hack', config: {}, fluxo_id: 'q', ordem: 3 };
+const cardP = { id: 'a', tipo: 'botoes', opcoes: [{ id: 'sair', rotulo: 'Velho', destino: 'b', descricao: 'd' }] };
+const pt0 = F.poFluxoPatch(cardP, lixo);
+assert.deepEqual(Object.keys(pt0).sort(), ['lembrete_ativo', 'lembrete_texto', 'opcoes', 'texto'], 'o patch tem EXATAMENTE as quatro chaves');
+assert.equal(pt0.texto, 'Oi'); assert.equal(pt0.lembrete_ativo, true); assert.equal(pt0.lembrete_texto, 'L');
+assert.deepEqual(pt0.opcoes, [{ id: 'sair', rotulo: 'Novo', destino: 'b', descricao: 'd' }], 'so o rotulo muda; id, destino e descricao passam intactos');
+assert.equal(cardP.opcoes[0].rotulo, 'Velho', 'e o card original nao e mutado');
+assert.deepEqual(Object.keys(F.poFluxoPatch(cardP, {})), [], 'sem campos oferecidos, patch vazio');
+assert.deepEqual(Object.keys(F.poFluxoPatch(cardP, { texto: 'a' })), ['texto'], 'so o que veio');
+assert.equal(F.poFluxoPatch(cardP, { texto: '   ' }).texto, null, 'texto vazio vira null');
+assert.equal(F.poFluxoPatch(cardP, { lembrete_ativo: 'sim' }).lembrete_ativo, false, 'lembrete_ativo so vale true de verdade');
+assert.deepEqual(Object.keys(F.poFluxoPatch(null, null)), []);
+const tres3 = [{ id: 'a', rotulo: '1', destino: 'x' }, { id: 'b', rotulo: '2' }, { id: 'c', rotulo: '3' }];
+assert.equal(F.poFluxoOpcoesComRotulos(tres3, ['A', 'B', 'C', 'D', 'E']).length, 3, 'rotulo a mais nao cria opcao');
+assert.deepEqual(F.poFluxoOpcoesComRotulos(tres3, ['A']).map(o => o.rotulo), ['A', '2', '3'], 'rotulo a menos deixa o resto');
+assert.deepEqual(F.poFluxoOpcoesComRotulos(tres3, ['A', 'B', 'C']).map(o => o.id), ['a', 'b', 'c'], 'os ids seguem na ordem');
+assert.equal(F.poFluxoOpcoesComRotulos(JSON.stringify(tres3), ['A']).length, 3, 'opcoes como texto JSON');
+assert.deepEqual(F.poFluxoOpcoesComRotulos(null, ['A']), [], 'null vira lista vazia');
+assert.deepEqual(F.poFluxoQuem({ id: ' abc ' }), { id: 'abc' });
+for (const c of [null, undefined, {}, { id: '' }, { id: '  ' }, { id: null }]) assert.throws(() => F.poFluxoQuem(c), /identificação/, 'sem id nao filtra: ' + JSON.stringify(c));
+
+/* TRAVA DE FONTE: o que poFluxoSalva/poFluxoPatch escrevem. Comentario nao conta. */
+const semCom = t => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+const corpoSalva = semCom(pega('poFluxoSalva')), corpoPatch = semCom(pega('poFluxoPatch'));
+const PROIBIDAS = /\b(id|tipo|proximo|fallback|sem_resposta|x|y)\b/;
+assert.ok(!PROIBIDAS.test(corpoSalva), 'poFluxoSalva nao cita id, tipo, setas nem posicao: ' + (corpoSalva.match(PROIBIDAS) || [])[0]);
+assert.ok(!PROIBIDAS.test(corpoPatch), 'poFluxoPatch tambem nao: ' + (corpoPatch.match(PROIBIDAS) || [])[0]);
+assert.deepEqual([...corpoPatch.matchAll(/patch\.(\w+)\s*=/g)].map(m => m[1]).sort(), ['lembrete_ativo', 'lembrete_texto', 'opcoes', 'texto'],
+  'poFluxoPatch atribui exatamente essas quatro chaves');
+assert.ok(/\.from\('po_wa_cards'\)\.update\(patch\)\.match\(poFluxoQuem\(card\)\)\.select\(\)/.test(corpoSalva),
+  'o PATCH grava SO o patch, na linha de poFluxoQuem(card), e confere a linha devolvida');
+assert.ok(/poFluxoPatch\(card, v\)/.test(corpoSalva) && /poFluxoBloqueio\(card\)/.test(corpoSalva), 'e passa pelo bloqueio e pelo patch');
+assert.ok(/if \(bloqueio\) throw new Error\(bloqueio\);/.test(corpoSalva), 'e o bloqueio (mais de 3 botoes) INTERROMPE o salvar');
+assert.ok(/!r\.data \|\| !r\.data\.length/.test(corpoSalva), 'RLS que nega (zero linhas) vira erro, nao "salvo"');
+assert.ok(!/\.(insert|upsert|delete)\(/.test(semComentario), 'o fluxo.js nunca insere, apaga nem faz upsert');
+assert.equal(conta(semComentario, '.update('), 1, 'um unico update em todo o fluxo.js');
+
+/* o aviso de variavel desconhecida vem do ENDPOINT */
+assert.ok(/poFluxoPost\('conferir', \{ fluxo_id: f\.id \}\)/.test(semComentario), 'depois de salvar, confere pelo endpoint (modo=conferir)');
+assert.ok(/poFluxoProblemas\(j\.problemas, id\)/.test(semComentario), 'e mostra os problemas que ELE devolveu');
+assert.ok(!/vari[aá]vel desconhecida/i.test(semComentario), 'a tela nao escreve o proprio aviso de variavel desconhecida');
+const prob = F.poFluxoProblemas([{ regra: 6, card: 'a', texto: XSS, bloqueia: true }, { regra: 2, card: 'b', texto: 'x', bloqueia: false }, null], 'a');
+assert.ok(prob.includes(ESCAPADO) && !prob.includes('<script'), 'o texto do problema sai escapado');
+assert.ok(prob.includes('fl-problema--bloqueia') && prob.includes('E mais 1 aviso em outro card'), 'so os do card; o resto vira contagem');
+assert.ok(F.poFluxoProblemas([], 'a').includes('sem problemas'), 'fluxo limpo diz que esta limpo');
+
+/* A ARMADILHA DO data-card DUPLICADO: o card sai na lista E no canvas. */
+const dup = F.poFluxoLista({ cards: [{ id: 'a', tipo: 'texto', titulo: 'A' }] }) + F.poFluxoCanvas({ cards: [{ id: 'a', tipo: 'texto', titulo: 'A' }] });
+assert.equal(conta(dup, 'data-card="a"'), 2, 'o data-card sai DUAS vezes (lista e canvas)');
+const clique = semComentario.match(/function poFluxoClique[\s\S]*?\n\}/)[0];
+assert.ok(/ev\.target\.closest\('\[data-card\]'\)/.test(clique), 'o clique acha o card pelo no clicado (closest), que e o da vista visivel');
+assert.ok(!/querySelector\('\[data-card/.test(semComentario), 'ninguem acha o card por querySelector (pegaria a vista escondida)');
+assert.ok(/querySelectorAll\('\[data-card\]'\)/.test(semComentario) && /getAttribute\('data-card'\) === String\(id\)/.test(semComentario),
+  'marcar o card aberto trata as DUAS ocorrencias');
+assert.ok(/box\.onclick = poFluxoClique/.test(semComentario), 'o clique e ligado no contentor');
+assert.ok(/id="fl-gaveta" class="fl-gaveta" hidden/.test(semComentario), 'a gaveta nasce escondida');
+assert.ok(/!poFluxoEditavel\(card\)\) return;/.test(semComentario), 'card sem texto nao abre gaveta');
+
+/* escape: todo ponto de saida novo */
+const gx = F.poFluxoGaveta({ id: XSS, tipo: 'botoes', titulo: XSS, texto: XSS, lembrete_ativo: true, lembrete_texto: XSS,
+  opcoes: [{ id: XSS, rotulo: XSS, destino: XSS }] });
+assert.ok(!gx.includes('<script') && !gx.includes('"aspas"'), 'gaveta nao deixa <script> nem aspa crua');
+assert.equal(conta(gx, ESCAPADO), 4, 'titulo, texto, lembrete e rotulo saem escapados: ' + conta(gx, ESCAPADO));
+assert.ok(!gx.includes("='"), 'gaveta nao emite atributo com aspa simples');
+assert.ok(!F.poFluxoCard({ id: XSS, tipo: 'texto', titulo: XSS, texto: XSS }).includes("='"), 'card com botao de editar tambem');
 
 console.log('test-fluxo-painel OK');
