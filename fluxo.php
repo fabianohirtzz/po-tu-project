@@ -5,6 +5,11 @@
      modo=ler      -> os fluxos com os cards do rascunho de cada um, a versao
                       publicada e se o rascunho ainda bate com ela.
      modo=conferir -> o julgamento do fluxo (fluxo_id), SEM gravar nada.
+     modo=publicar -> congela o rascunho como a proxima versao (wa_fluxo_publica
+                      valida por dentro e NAO toca em `ativo`) e limpa o cache.
+     modo=ligar    -> poe o fluxo no ar (ativo=true). E ato a parte do publicar.
+     modo=desligar -> tira do ar. Nao olha o grafo: um fluxo quebrado tem que
+                      poder ser desligado, senao fica atendendo cliente real.
 
    O texto de cada problema vem de wa_fluxo_valida e e repassado sem
    alteracao: e a mesma funcao que o publicar roda por dentro, entao a tela
@@ -67,7 +72,7 @@ if (!po_auth_ok($cfg['SUPABASE_URL'] ?? '', $cfg['SUPABASE_ANON_KEY'] ?? '')) {
 }
 
 $modo = fpost('modo');
-if (!in_array($modo, ['ler', 'conferir'], true)) {
+if (!in_array($modo, ['ler', 'conferir', 'publicar', 'ligar', 'desligar'], true)) {
     ffail(400, 'Modo inválido.');
 }
 
@@ -119,18 +124,91 @@ if ($modo === 'ler') {
 }
 
 /* ------------------------------------------------------------
+   Os demais modos pedem um fluxo
+------------------------------------------------------------ */
+$SEM_ID = [
+    'conferir' => 'Não foi dito qual fluxo conferir.',
+    'publicar' => 'Não foi dito qual fluxo publicar.',
+    'ligar'    => 'Não foi dito qual fluxo ligar.',
+    'desligar' => 'Não foi dito qual fluxo desligar.',
+];
+$fluxo_id = fpost('fluxo_id');
+if ($fluxo_id === '') ffail(400, $SEM_ID[$modo]);
+$id = rawurlencode($fluxo_id);
+
+/* ------------------------------------------------------------
    conferir
 ------------------------------------------------------------ */
-$fluxo_id = fpost('fluxo_id');
-if ($fluxo_id === '') ffail(400, 'Não foi dito qual fluxo conferir.');
+if ($modo === 'conferir') {
+    $linhas = wa_fl_ler('po_wa_fluxos', 'id=eq.' . $id . '&limit=1');
+    if ($linhas === null) ffail(502, $FALHA_LEITURA);
+    if (!$linhas) ffail(404, 'Este fluxo não existe.');
 
-$id     = rawurlencode($fluxo_id);
+    $cards  = wa_fl_ler('po_wa_cards', 'fluxo_id=eq.' . $id . '&order=ordem.asc');
+    $outros = wa_fl_ler('po_wa_fluxos', 'select=id,gatilho,gatilho_valor,ativo,versao_atual');
+    if ($cards === null || $outros === null) ffail(502, $FALHA_LEITURA);
+
+    fok(['problemas' => wa_fluxo_valida($linhas[0], $cards, $outros)]);
+}
+
+/* ------------------------------------------------------------
+   publicar
+   Repassa o que wa_fluxo_publica devolve, sem revalidar e sem filtrar: os
+   AVISOS (regras 15 e 16) chegam a tela junto com a publicacao permitida.
+   Publicar nao liga: `ativo` nao e escrito aqui nem la.
+------------------------------------------------------------ */
+if ($modo === 'publicar') {
+    $r = wa_fluxo_publica($fluxo_id);
+    if (empty($r['ok'])) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'problemas' => $r['problemas'] ?? []],
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+    // As paginas do site leem o fluxo por cache em disco de 10 min.
+    po_cache_limpa();
+    fok(['versao' => (int) $r['versao'], 'problemas' => $r['problemas']]);
+}
+
+/* ------------------------------------------------------------
+   ligar / desligar
+------------------------------------------------------------ */
 $linhas = wa_fl_ler('po_wa_fluxos', 'id=eq.' . $id . '&limit=1');
 if ($linhas === null) ffail(502, $FALHA_LEITURA);
 if (!$linhas) ffail(404, 'Este fluxo não existe.');
+$fluxo = $linhas[0];
 
-$cards  = wa_fl_ler('po_wa_cards', 'fluxo_id=eq.' . $id . '&order=ordem.asc');
-$outros = wa_fl_ler('po_wa_fluxos', 'select=id,gatilho,gatilho_valor,ativo,versao_atual');
-if ($cards === null || $outros === null) ffail(502, $FALHA_LEITURA);
+if ($modo === 'desligar') {
+    if (!wa_fl_call('update', 'po_wa_fluxos', 'id=eq.' . $id, ['ativo' => false])) {
+        ffail(502, 'Não consegui desligar o fluxo agora. Tente de novo em instantes.');
+    }
+    fok(['ativo' => false]);
+}
 
-fok(['problemas' => wa_fluxo_valida($linhas[0], $cards, $outros)]);
+if ($modo === 'ligar') {
+    // Fluxo nunca publicado nao atende ninguem, mas ocuparia a porta.
+    if (($fluxo['versao_atual'] ?? '') === '') ffail(400, 'Publique o fluxo antes de ligar.');
+
+    if (!wa_fl_call('update', 'po_wa_fluxos', 'id=eq.' . $id, ['ativo' => true])) {
+        /* O indice po_wa_fluxos_porta_ativa_uniq recusa dois fluxos ligados na
+           mesma (gatilho, coalesce(gatilho_valor,'')). wa_db_update nao devolve
+           o status, entao pergunta-se quem ocupa a porta: sem o nome a cliente
+           leria um erro de banco e nao teria o que fazer (mesma ideia do
+           rotSaveErro do painel). O nome e texto escrito por ela no painel, nao
+           dado de cliente. */
+        $ativos = wa_fl_ler('po_wa_fluxos', 'ativo=eq.true&select=id,nome,gatilho,gatilho_valor');
+        if ($ativos === null) ffail(502, $FALHA_LEITURA);
+        foreach ($ativos as $a) {
+            if ((string) $a['id'] === (string) $fluxo['id']) continue;
+            if (($a['gatilho'] ?? '') === ($fluxo['gatilho'] ?? '')
+                && (string) ($a['gatilho_valor'] ?? '') === (string) ($fluxo['gatilho_valor'] ?? '')) {
+                ffail(409, 'Já existe outro fluxo ligado nesta porta de entrada: "' . (string) ($a['nome'] ?? '')
+                    . '". Desligue esse fluxo antes ou mude a porta deste.');
+            }
+        }
+        ffail(502, 'Não consegui ligar o fluxo agora. Tente de novo em instantes.');
+    }
+    fok(['ativo' => true]);
+}
+
+ffail(400, 'Modo inválido.');
