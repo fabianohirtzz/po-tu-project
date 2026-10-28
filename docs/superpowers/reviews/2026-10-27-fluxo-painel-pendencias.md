@@ -200,3 +200,12 @@ Valem para o repositório inteiro, não só para este plano.
 - **Trava de fonte é contornável movendo a palavra de lugar.** A trava das chaves do salvar
   continuava verde quando um auxiliar gravava chave proibida. A trava certa **executa** e
   compara o conjunto de chaves que sai.
+- **A suíte verde na branch não prova a árvore mesclada, e o fim de linha é o motivo.**
+  Arquivo que uma ferramenta escreve nasce LF; arquivo que o git materializa nasce CRLF.
+  Um arquivo **novo** é LF nos commits todos e vira CRLF no merge, que é o primeiro
+  checkout que o apaga e o recria. O `test-fluxo-painel.mjs` passou nos 19 commits e
+  ficou vermelho na mescla com o `painel/fluxo.js` idêntico: a allowlist de statement de
+  topo ancora em `$` e `function poFluxoTipos() {` passou a terminar em CR. Corrigido
+  roteando as 9 leituras de fonte por uma função `le()` que normaliza — **na leitura, não
+  em cada regex** (mutante do `.replace` morto; verde medido nos dois fins de linha).
+  Rodar a suíte **depois** do merge e **antes** de apagar a branch é o que pegou isto.

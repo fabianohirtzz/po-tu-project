@@ -1123,6 +1123,22 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
   o lock depender de como o arquivo tinha sido materializado, e o merge do plano 4 ficou
   vermelho com o `painel.css` idêntico. Para restaurar arquivo em rodada de mutação, use
   cópia de bytes.
+  **A regra por trás disso, medida no merge do Plano B (28/10/2026):** arquivo que uma
+  ferramenta escreve nasce **LF**; arquivo que o **git** materializa nasce **CRLF**. Um
+  arquivo novo, portanto, é LF durante todo o desenvolvimento e só vira CRLF no primeiro
+  checkout que o apaga e o recria — ou seja, **no merge**. Foi assim que o
+  `test-fluxo-painel.mjs` passou nos 19 commits da branch e ficou vermelho na árvore
+  mesclada, com o `painel/fluxo.js` idêntico: a trava de statement de topo ancora em `$`
+  e `function poFluxoTipos() {` passou a terminar em CR. Por isso o worktree tem fim de
+  linha **misto** (o checkout só reescreve o que mudou).
+  **REGRA: teste que lê fonte normaliza na LEITURA**, nunca em cada regex. Em `.mjs`, uma
+  função `le(rel)` por onde passam todas as leituras (`test-fluxo-painel.mjs`); em PHP,
+  `str_replace("\r\n", "\n", file_get_contents(...))` (`test-wa-fluxo-versao.php`). Os
+  outros ~45 testes que leem fonte seguem crus e **passam nos dois estados hoje** (medido:
+  suíte verde com LF na branch e com CRLF em `main`); quem mexer num deles e vê-lo ficar
+  vermelho sem ter mudado o código, suspeite disto primeiro.
+  **Suíte verde na branch não prova a árvore mesclada** — rodar depois do merge, antes de
+  apagar a branch, é o que pegou isto.
 - **Falta:** a conexão real com a Meta e a homologação. (O plano 4 saiu, e a
   conferência visual do painel logado foi feita em 08/10/2026 — ver abaixo.)
 

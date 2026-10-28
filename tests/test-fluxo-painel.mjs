@@ -1,12 +1,23 @@
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
+/* Le o fonte com o fim de linha NORMALIZADO. `core.autocrlf=true` neste repo:
+   o mesmo arquivo chega LF no worktree e CRLF no checkout principal, e uma
+   trava ancorada em $ (ou um split de '\n') deixa de casar sem nada ter
+   mudado no codigo. Foi assim que o merge do Plano B ficou vermelho com o
+   fluxo.js identico ao da branch: a allowlist PERMITIDA recusou
+   `function poFluxoTipos() {` porque a linha terminava em CR. TODA leitura
+   de fonte deste arquivo passa por aqui. */
+function le(rel) {
+  return readFileSync(new URL(rel, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+}
+
 
 /* Extrai as funcoes puras do fluxo.js por regex e roda com new Function, no
    padrao de tests/test-textos.mjs. Por isso NENHUMA constante de topo de
    arquivo pode ser dependencia delas: a lista de tipos mora DENTRO de
    poFluxoTipos(). As Tasks 4, 5 e 6 ESTENDEM este arquivo: acrescente o nome
    da funcao nova em PURAS_NOMES (e so isso: o resto sai dali). */
-const src = readFileSync(new URL('../painel/fluxo.js', import.meta.url), 'utf8');
+const src = le('../painel/fluxo.js');
 function pega(nome) {
   const m = src.match(new RegExp('(?:async )?function ' + nome + '\\([\\s\\S]*?\\n\\}'));
   assert.ok(m, nome + ' encontrada no fluxo.js');
@@ -243,7 +254,7 @@ assert.ok(alturas.length === 20 && alturas.every(n => n >= 150), 'cada no tem al
    fluxo de boas-vindas, com titulo, texto, opcoes e saidas reais, nas posicoes reais. A
    semente espaca 200px e o card estimado mede de 150 a ~470, entao sem o empurrao 8 dos
    12 pares da mesma coluna se cobriam. Folga >= 24px (respiro) em TODA coluna, e a mesma folga minima. */
-const mig = readFileSync(new URL('../supabase/migrations/2026-10-27-fluxo-semeado.sql', import.meta.url), 'utf8');
+const mig = le('../supabase/migrations/2026-10-27-fluxo-semeado.sql');
 const grafo = JSON.parse(mig.split('$grafo$')[1]);
 const posSem = Object.fromEntries([...mig.matchAll(/\('(c1000000-[0-9a-f-]+)', \d+, (-?\d+), (-?\d+)\)/g)].map(m => [m[1], [Number(m[2]), Number(m[3])]]));
 const cardsSem = Object.values(grafo.cards).map(c => Object.assign({}, c, { x: posSem[c.id][0], y: posSem[c.id][1] }));
@@ -349,7 +360,7 @@ for (const [nome, s] of Object.entries(saidas)) {
 
 /* Quem escolhe lista x canvas e o CSS (D5), no ponto de chamada: a tela monta as
    duas vistas e o fluxo.css as alterna a 980px. JS nao le largura. */
-const cssBruto = readFileSync(new URL('../painel/fluxo.css', import.meta.url), 'utf8');
+const cssBruto = le('../painel/fluxo.css');
 const css = cssBruto.replace(/\/\*[\s\S]*?\*\//g, '');   // regra virada em comentario nao conta
 const render = pega('poFluxoRender');
 assert.ok(render.includes('class="fl-vista fl-vista--lista">\' + poFluxoLista(f)'), 'o render embrulha a lista em .fl-vista--lista');
@@ -604,7 +615,7 @@ assert.ok(cor('.fl-cont') && cor('.fl-cont--estouro') && cor('.fl-cont') !== cor
 assert.ok(/width\s*:\s*100%/.test((rg('.fl-campo')[0] || { corpo: '' }).corpo), 'o campo ocupa a largura da gaveta');
 
 /* (5) espelho PHP <-> JS dos limites */
-const php = readFileSync(new URL('../lib/wa-fluxo.php', import.meta.url), 'utf8');
+const php = le('../lib/wa-fluxo.php');
 const lim = Object.fromEntries([...php.match(/const WA_FLUXO_LIMITE\s*=\s*\[([\s\S]*?)\];/)[1].matchAll(/'(\w+)'\s*=>\s*(\d+)/g)].map(m => [m[1], Number(m[2])]));
 assert.ok(Object.keys(lim).length >= 6, 'WA_FLUXO_LIMITE lido do PHP');
 for (const [t, n] of Object.entries(lim)) assert.equal(F.poFluxoLimite(t), n, 'limite de ' + t + ' igual ao do PHP');
@@ -1237,9 +1248,9 @@ assert.ok(!F.poFluxoTextoLigar({ publicado_igual: undefined, versao_numero: 7 })
 /* ====================== TASK 7: a aba, o roteamento e a saida do textos.js ====================== */
 /* Migrado do antigo tests/test-textos.mjs tudo o que NAO era dos 7 textos: a ligacao do painel
    (index.html + app.js) e a trava de scripts. */
-const painelHtml = readFileSync(new URL('../painel/index.html', import.meta.url), 'utf8');
-const appJs = readFileSync(new URL('../painel/app.js', import.meta.url), 'utf8');
-const lockJson = JSON.parse(readFileSync(new URL('../painel/assets-lock.json', import.meta.url), 'utf8'));
+const painelHtml = le('../painel/index.html');
+const appJs = le('../painel/app.js');
+const lockJson = JSON.parse(le('../painel/assets-lock.json'));
 
 // a aba existe na navegacao e a secao correspondente tem o conteiner da tela
 const navFluxo = painelHtml.match(/<button class="nav-item" data-view="fluxo">([\s\S]*?)<\/button>/);
@@ -1253,7 +1264,7 @@ assert.equal(conta(painelHtml, 'data-view="fluxo"'), 2, 'a aba e a secao, nenhum
 
 /* O canvas tem ~3060px de largura: o #fluxo-lista precisa ficar em contexto de BLOCO, ou ele estoura o
    painel em vez de rolar dentro do .fl-vista--canvas. Nenhum ancestral pode ser grid/flex sem min-width:0. */
-const painelCss = readFileSync(new URL('../painel/painel.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+const painelCss = le('../painel/painel.css').replace(/\/\*[\s\S]*?\*\//g, '');
 const todasRegras = regrasTodas(painelCss).concat(regrasTodas(css));
 const alvo = todasRegras.filter(r => /#fluxo-lista|#view-fluxo|\[data-view="fluxo"\]/.test(r.sel));
 assert.deepEqual(alvo.filter(r => /display\s*:\s*(grid|inline-grid|flex|inline-flex)/i.test(r.corpo)), [], '#fluxo-lista / #view-fluxo nao ganham grid nem flex');
@@ -1317,7 +1328,7 @@ assert.equal([...gBot.matchAll(/<button[^>]*class="[^"]*btn-(?:primary|ghost)/g)
 assert.deepEqual(botoesSemBase(gBot), [], 'gaveta: Salvar e Cancelar tem a classe base btn');
 assert.deepEqual(botoesSemBase('<button class="btn-primary">x</button>'), [['btn-primary']], 'a verificacao pega o botao sem btn');
 assert.ok(!/class="btn-(?:primary|ghost)/.test(semComentario), 'o fonte nao emite btn-primary/btn-ghost sem a base');
-assert.ok(/\.btn\{/.test(readFileSync(new URL('../painel/painel.css', import.meta.url), 'utf8')), 'a classe base btn existe no painel.css');
+assert.ok(/\.btn\{/.test(le('../painel/painel.css')), 'a classe base btn existe no painel.css');
 
 /* (2) depois de salvar, a lista de problemas da tela acompanha a barra */
 {
