@@ -43,8 +43,21 @@ function fx_dados($caso) {
         fx_card('mk', 'f2', 'marca', 'Anota', null, ['config' => ['espera' => '+destino'], 'proximo' => 'f2fim', 'ordem' => 1]),
         fx_card('f2fim', 'f2', 'fim', 'Fim', 'Anotado.', ['ordem' => 2]),
     ];
-    // O retrato publicado e tirado ANTES de qualquer mutacao do caso.
-    $versoes = [['id' => 'v1', 'fluxo_id' => 'f1', 'versao' => 3, 'grafo' => wa_fluxo_grafo_de($f1, $c1)]];
+    if ($caso === 'ler-utf8') $c1[0]['texto'] = 'Oi ' . chr(255);   // nem o retrato nem o rascunho codificam
+    // O retrato publicado e tirado ANTES de qualquer mutacao do caso. Chaves
+    // embaralhadas de proposito: o jsonb do banco nao guarda a ordem delas.
+    $g = wa_fluxo_grafo_de($f1, $c1);
+    foreach ($g['cards'] as $k => $c) krsort($g['cards'][$k]);
+    $g['cards'] = array_reverse($g['cards'], true);
+    krsort($g);
+    $versoes = [['id' => 'v1', 'fluxo_id' => 'f1', 'versao' => 3, 'grafo' => $g]];
+    if ($caso === 'ler') { $f2['ativo'] = false; $f2['gatilho_valor'] = 'portugal'; }
+    if ($caso === 'ler-nada-publicado') { $f1['versao_atual'] = null; $versoes = []; }
+    if ($caso === 'conf-aviso') {
+        // sem card de fim: so aviso, nenhum bloqueio novo
+        $c1 = array_values(array_filter($c1, fn($c) => $c['id'] !== 'fim'));
+        $c1[0]['sem_resposta'] = null;
+    }
 
     if ($caso === 'ler-mudou') $c1[0]['texto'] = 'Texto alterado depois de publicar.';
     if ($caso === 'conf-r11') {
@@ -83,6 +96,8 @@ function fx_filho($caso) {
         $chave = ['po_wa_fluxos' => 'fluxos', 'po_wa_cards' => 'cards', 'po_wa_fluxo_versoes' => 'versoes'][$tabela] ?? null;
         if ($chave === null) return null;
         parse_str($query, $q);
+        /* PostgREST recusa lista vazia em in.() com 400, que wa_fl_ler le como null. */
+        foreach ($q as $v) if (is_string($v) && strpos($v, 'in.()') === 0) return null;
         $linhas = [];
         foreach ($dados[$chave] as $l) {
             foreach (['id', 'fluxo_id'] as $k) {
@@ -91,6 +106,9 @@ function fx_filho($caso) {
                 if (strpos($q[$k], 'in.(') === 0 &&
                     !in_array((string) $l[$k], explode(',', substr($q[$k], 4, -1)), true)) continue 2;
             }
+            /* filtro de booleano (ativo=eq.true), como o PostgREST faria */
+            if (isset($q['ativo']) && strpos($q['ativo'], 'eq.') === 0 &&
+                (!empty($l['ativo']) ? 'true' : 'false') !== substr($q['ativo'], 3)) continue;
             $linhas[] = $l;
         }
         if (isset($q['limit'])) $linhas = array_slice($linhas, 0, (int) $q['limit']);
@@ -101,12 +119,13 @@ function fx_filho($caso) {
     $conf = ['modo' => 'conferir', 'sb_token' => 'tok.valido', 'fluxo_id' => 'f1'];
     switch ($caso) {
         case 'get':              $_SERVER['REQUEST_METHOD'] = 'GET'; $_POST = []; break;
-        case 'modo-invalido':    $_POST['modo'] = 'apagar'; break;
-        case 'modo-array':       $_POST['modo'] = ['ler']; break;
-        case 'conf-inexistente': $_POST = ['fluxo_id' => 'nao-existe'] + $conf; break;
+        case 'modo-invalido':    $_POST = ['modo' => 'apagar'] + $conf; break;
+        case 'modo-array':       $_POST = ['modo' => ['ler']] + $conf; break;
+        case 'conf-inexistente': $_POST = ['fluxo_id' => '00000000-0000-4000-8000-000000000099'] + $conf; break;
         case 'conf-sem-id':      $_POST = ['fluxo_id' => ''] + $conf; break;
         case 'conf-id-array':    $_POST = ['fluxo_id' => ['f1']] + $conf; break;
         case 'conf-ok':
+        case 'conf-aviso':
         case 'conf-r11':
         case 'conf-r9':
         case 'conf-fora-fluxos':
@@ -138,6 +157,15 @@ function fx_roda($caso) {
     $json = json_decode(trim($corpo), true);
     ok(is_array($json),
        "caso $caso respondeu JSON limpo, sem aviso do PHP junto (veio: " . substr(trim($corpo), 0, 200) . ')');
+    /* A mensagem de erro e um literal de um conjunto fechado: nunca ecoa o
+       que veio no POST (ela vaza para log, print e suporte). */
+    if (($json['ok'] ?? null) === false) {
+        ok(in_array($json['error'] ?? null, [
+            'Método não permitido.', 'Sessão expirada. Entre de novo no painel.', 'Modo inválido.',
+            'Não consegui ler o banco agora. Tente de novo em instantes.',
+            'Não foi dito qual fluxo conferir.', 'Este fluxo não existe.',
+        ], true), "caso $caso: erro fora do conjunto fechado (veio: " . json_encode($json['error'] ?? null) . ')');
+    }
     return ['json' => $json, 'codigo' => $c === 0 ? 200 : $c,
             'chamadas' => json_decode(trim($chams), true) ?: []];
 }
@@ -146,6 +174,11 @@ function fx_por_id($r) {
     $m = [];
     foreach ($r['json']['fluxos'] ?? [] as $f) $m[$f['id']] = $f;
     return $m;
+}
+function fx_esperado($caso) {
+    $d = fx_dados($caso);
+    $meus = array_values(array_filter($d['cards'], fn($c) => $c['fluxo_id'] === 'f1'));
+    return json_decode(json_encode(wa_fluxo_valida($d['fluxos'][0], $meus, $d['fluxos'])), true);
 }
 function fx_regras($r) { return array_map(fn($p) => $p['regra'], $r['json']['problemas'] ?? []); }
 
@@ -186,10 +219,24 @@ ok($m['f1']['versao_numero'] === 3, 'versao_numero e o numero da versao apontada
    . json_encode($m['f1']['versao_numero']) . ')');
 ok($m['f1']['publicado_igual'] === true, 'rascunho igual ao retrato publicado: publicado_igual true');
 
+ok($m['f1']['ativo'] === true && $m['f2']['ativo'] === false, 'ativo vem do banco, nao e fixo');
+ok($m['f1']['card_inicial'] === 'bv' && $m['f1']['gatilho'] === 'mensagem_nova', 'card_inicial e gatilho vem do banco');
+ok($m['f2']['gatilho'] === 'chamado' && $m['f2']['card_inicial'] === 'mk', 'e o f2 tem os dele');
+ok($m['f1']['gatilho_valor'] === null && $m['f2']['gatilho_valor'] === 'portugal', 'gatilho_valor vem do banco');
+
 /* Fluxo nunca publicado NAO e erro. */
 ok($m['f2']['versao_atual'] === null, 'f2 nunca foi publicado');
 ok($m['f2']['versao_numero'] === null, 'sem versao_atual, versao_numero e null');
 ok($m['f2']['publicado_igual'] === false, 'e publicado_igual e false');
+
+/* Primeiro dia: nenhum fluxo publicado. Sem a guarda, sairia id=in.() e a tela nao abriria. */
+$r = fx_roda('ler-nada-publicado');
+ok($r['codigo'] === 200, 'nada publicado ainda: ler responde 200 (deu: ' . $r['codigo'] . ')');
+foreach (fx_por_id($r) as $f) ok($f['publicado_igual'] === false && $f['versao_numero'] === null, 'e nenhum vem como publicado');
+
+/* Se nao da para codificar, nao da para afirmar que e igual. */
+$r = fx_roda('ler-utf8');
+ok($r['codigo'] === 200 && fx_por_id($r)['f1']['publicado_igual'] === false, 'retrato que nao codifica nunca vira "igual"');
 
 $r = fx_roda('ler-mudou');
 ok(fx_por_id($r)['f1']['publicado_igual'] === false,
@@ -222,24 +269,33 @@ foreach (['conf-fora-fluxos', 'conf-fora-cards'] as $caso) {
 /* Repasse SEM alterar: o que o endpoint devolve e exatamente o que a funcao devolve. */
 $r = fx_roda('conf-ok');
 ok($r['codigo'] === 200, 'conferir responde (deu: ' . $r['codigo'] . ')');
-$d = fx_dados('conf-ok');
-$cards_f1 = array_values(array_filter($d['cards'], fn($c) => $c['fluxo_id'] === 'f1'));
-$esperado = json_decode(json_encode(wa_fluxo_valida($d['fluxos'][0], $cards_f1, $d['fluxos'])), true);
+$esperado = fx_esperado('conf-ok');
 ok($r['json']['problemas'] === $esperado, 'problemas repassados sem alterar (veio: '
    . json_encode($r['json']['problemas']) . ')');
 foreach ($r['json']['problemas'] as $p) {
     ok(array_keys($p) === ['regra', 'card', 'texto', 'bloqueia'], 'cada problema tem a forma regra/card/texto/bloqueia');
 }
 
+/* Aviso chega, com bloqueia=false, na mesma lista. */
+$r = fx_roda('conf-aviso');
+$esperado = fx_esperado('conf-aviso');
+ok($r['json']['problemas'] === $esperado, 'conf-aviso: lista repassada sem alterar (veio: ' . json_encode($r['json']['problemas']) . ')');
+$avisos = array_filter($r['json']['problemas'], fn($p) => $p['bloqueia'] === false);
+ok(count($avisos) >= 1 && in_array(16, fx_regras($r), true), 'o aviso da regra 16 chega a tela');
+foreach ($r['json']['problemas'] as $p) {
+    ok(array_keys($p) === ['regra', 'card', 'texto', 'bloqueia'], 'forma regra/card/texto/bloqueia');
+}
+
 /* $outros e load-bearing: sem ele o conferir aprova o que o publicar recusa. */
 $r = fx_roda('conf-r11');
 ok($r['codigo'] === 200, 'conf-r11 responde');
-ok(in_array(11, fx_regras($r), true),
-   'ir_para_fluxo para destino desligado traz a regra 11 (veio: ' . json_encode(fx_regras($r)) . ')');
+ok(in_array(11, fx_regras($r), true), 'ir_para_fluxo para destino desligado traz a regra 11');
+ok($r['json']['problemas'] === fx_esperado('conf-r11'),
+   'e o texto e o de "desligado", da lista inteira (veio: ' . json_encode($r['json']['problemas']) . ')');
 
 $r = fx_roda('conf-r9');
-ok(in_array(9, fx_regras($r), true),
-   'mesma porta de outro fluxo ativo traz a regra 9 (veio: ' . json_encode(fx_regras($r)) . ')');
+ok(in_array(9, fx_regras($r), true), 'mesma porta de outro fluxo ativo traz a regra 9');
+ok($r['json']['problemas'] === fx_esperado('conf-r9'), 'e a lista inteira bate com a funcao');
 
 /* ============================================================
    ASSERCAO DE FONTE

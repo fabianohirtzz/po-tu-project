@@ -54,7 +54,9 @@ function fcanon($v) {
 function fgrafo_igual($a, $b) {
     if (is_string($b)) $b = json_decode($b, true);
     if (!is_array($a) || !is_array($b)) return false;
-    return json_encode(fcanon($a)) === json_encode(fcanon($b));
+    $ja = json_encode(fcanon($a));
+    // Nao conseguir codificar nao e "igual".
+    return $ja !== false && $ja === json_encode(fcanon($b));
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') ffail(405, 'Método não permitido.');
