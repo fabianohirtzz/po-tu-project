@@ -79,6 +79,8 @@ function fx_dados($caso) {
         if ($caso === 'lig-vazio-igual-nulo') { $f1['gatilho_valor'] = ''; }
         if ($caso === 'lig-nunca-publicado') $f2['versao_atual'] = null;
     }
+    if ($caso === 'lig-ocupada-aspas') $f1['nome'] = 'Fluxo "novo" de teste';
+    if ($caso === 'lig-ocupada-vazio') $f1['nome'] = '';
     if ($caso === 'lig-falha-desligado') $f1['ativo'] = false;   // ocupante da porta ja desligado
     if ($caso === 'lig-falha-ligado') { $f2['ativo'] = true; $f2['gatilho'] = 'chamado'; }
     if ($caso === 'ligar-ja-ligado') { $f2['ativo'] = true; $f2['gatilho'] = 'chamado'; }
@@ -193,6 +195,8 @@ function fx_filho($caso) {
         case 'lig-falha-desligado':
         case 'lig-fora-fluxos':
         case 'lig-ocupada':
+        case 'lig-ocupada-aspas':
+        case 'lig-ocupada-vazio':
         case 'lig-vazio-igual-nulo':
         case 'lig-nunca-publicado':
         case 'ligar-ja-ligado':  $_POST = ['modo' => 'ligar', 'fluxo_id' => 'f2'] + $conf; break;
@@ -470,6 +474,14 @@ ok($r['codigo'] === 409, 'porta ocupada, 409 (deu: ' . $r['codigo'] . ' ' . json
 ok(strpos($r['json']['error'], '"Boas-vindas"') !== false, 'a mensagem cita o nome de quem ocupa (veio: ' . $r['json']['error'] . ')');
 ok(strpos($r['json']['error'], 'Lista de espera') === false, 'e nao cita o proprio fluxo');
 ok(fx_estado_fluxo($r, 'f2')['ativo'] === false, 'e o f2 segue desligado');
+/* Nome do ocupante com aspas (ou vazio): o 409 continua valido e passa pelo
+   conjunto fechado. Esta trava segura a regex FX_ERRO_PORTA frouxa: apertar o
+   nome de volta para [^"]{1,200} so quebraria quando a cliente usasse aspas. */
+$r = fx_roda('lig-ocupada-aspas');
+ok($r['codigo'] === 409 && strpos($r['json']['error'], 'Fluxo "novo" de teste') !== false,
+   'nome com aspas: 409 com JSON valido e o nome inteiro (deu: ' . $r['codigo'] . ' ' . json_encode($r['json']) . ')');
+$r = fx_roda('lig-ocupada-vazio');
+ok($r['codigo'] === 409, 'nome vazio: 409 e a mensagem passa pelo conjunto fechado (deu: ' . $r['codigo'] . ')');
 /* "" e NULL na mesma porta: o indice usa coalesce(gatilho_valor, ''). */
 $r = fx_roda('lig-vazio-igual-nulo');
 ok($r['codigo'] === 409 && strpos($r['json']['error'], 'Boas-vindas') !== false, 'valor vazio e nulo sao a mesma porta (deu: ' . $r['codigo'] . ')');
