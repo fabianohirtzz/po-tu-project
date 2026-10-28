@@ -533,9 +533,9 @@ assert.ok(!F.poFluxoCard({ id: XSS, tipo: 'texto', titulo: XSS, texto: XSS }).in
 /* (1) As chaves EFETIVAS que o poFluxoSalva manda ao banco. O fonte INTEIRO roda com um
    `sb` duble (sem rede): qualquer auxiliar que enriqueca o patch (poFluxoCarimba...) entra
    no caminho e aparece aqui. Lista de palavras no corpo nao enxerga isso. */
-async function salvaCom(card, v) {
+async function salvaCom(card, v, resposta = { data: [{}], error: null }) {
   const reg = { tabela: null, enviado: null, filtro: null };
-  const sb = { from: t => { reg.tabela = t; return { update: p => { reg.enviado = p; return { match: m => { reg.filtro = m; return { select: () => Promise.resolve({ data: [{}], error: null }) }; } }; } }; } };
+  const sb = { from: t => { reg.tabela = t; return { update: p => { reg.enviado = p; return { match: m => { reg.filtro = m; return { select: () => Promise.resolve(resposta) }; } }; } }; } };
   const salva = new Function('sb', 'esc', src + '; return poFluxoSalva;')(sb, s => s);
   await salva(card, v);
   return reg;
@@ -548,6 +548,13 @@ assert.deepEqual(regLixo.filtro, { id: 'a' }, 'e o filtro e o id do card');
 assert.deepEqual(Object.keys((await salvaCom(cardP, { texto: 'x' })).enviado), ['texto'], 'so o que a gaveta ofereceu');
 for (const ruim of [{ ...cardP, opcoes: op(4) }]) await assert.rejects(() => salvaCom(ruim, { texto: 'x' }), /no máximo 3/, '4 botoes nao chega ao banco');
 await assert.rejects(() => salvaCom({ tipo: 'texto' }, { texto: 'x' }), /identificação/, 'sem id nao chega ao banco');
+/* COMPORTAMENTO da guarda: a RLS que nega nao da erro, so afeta zero linhas. Se isto virar
+   "salvo", a cliente edita, le "salvo" e o robo segue mandando o texto ANTIGO a cliente real. */
+await assert.rejects(() => salvaCom(cardP, { texto: 'x' }, { data: [], error: null }), /não gravou nada/, 'zero linhas (data: []) e erro, nao "salvo"');
+await assert.rejects(() => salvaCom(cardP, { texto: 'x' }, { data: null, error: null }), /não gravou nada/, 'data: null tambem');
+await assert.rejects(() => salvaCom(cardP, { texto: 'x' }, { data: [{}], error: { message: 'boom' } }), /Erro ao salvar: boom/, 'r.error vence, mesmo com linha devolvida, e traz o motivo');
+await assert.rejects(() => salvaCom(cardP, { texto: 'x' }, { data: null, error: { message: 'boom' } }), /Erro ao salvar: boom/, 'r.error sem dados traz o motivo (nao a mensagem de zero linhas)');
+assert.ok((await salvaCom(cardP, { texto: 'x' }, { data: [{}, {}], error: null })).enviado, 'resposta com linha passa');
 
 /* (2) Lixo no opcoes nao desalinha rotulo e opcao */
 const suja = ['lixo', { id: 'o1', rotulo: 'A', destino: 'dA' }, null, { id: 'o2', rotulo: 'B', destino: 'dB' }];
