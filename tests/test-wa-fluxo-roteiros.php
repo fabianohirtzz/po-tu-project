@@ -30,6 +30,12 @@ ok(wa_fluxo_casa_roteiro('VIETNA', $slugs, $v) === 'vietna', 'casa sem acento');
 ok(wa_fluxo_casa_roteiro('  2  ', $slugs, $v) === 'chile', 'ignora espaco em volta');
 // as que NAO podem escolher
 ok(wa_fluxo_casa_roteiro('9', $slugs, $v) === null, 'numero fora da lista nao escolhe');
+ok(wa_fluxo_casa_roteiro('2.', $slugs, $v) === 'chile', 'numero com ponto resolve por posicao');
+ok(wa_fluxo_casa_roteiro('2)', $slugs, $v) === 'chile', 'numero com parentese resolve por posicao');
+ok(wa_fluxo_casa_roteiro('2 - Chile', $slugs, $v) === 'chile', 'numero, hifen e nome resolve por posicao');
+ok(wa_fluxo_casa_roteiro('2. Chile e Deserto do Atacama (25/11/26 a 02/12/26)', $slugs, $v) === 'chile', 'a linha copiada inteira resolve por posicao');
+ok(wa_fluxo_casa_roteiro('22', $slugs, $v) === null, 'dois digitos sem marcador seguem como numero e nao viram 2');
+ok(wa_fluxo_casa_roteiro('3. Vietna', $slugs, $v) === 'peru', 'a posicao vence o nome (nunca escolhe o errado)');
 ok(wa_fluxo_casa_roteiro('0', $slugs, $v) === null, 'zero nao escolhe');
 ok(wa_fluxo_casa_roteiro('', $slugs, $v) === null, 'resposta vazia nao escolhe');
 ok(wa_fluxo_casa_roteiro('bom dia', $slugs, $v) === null, 'frase qualquer nao escolhe');

@@ -214,6 +214,9 @@ function wa_fluxo_casa_roteiro($resposta, $slugs_enviados, $venda) {
     $resposta = trim((string) $resposta);
     if ($resposta === '') return null;
     $slugs_enviados = array_values((array) $slugs_enviados);
+    // Marcador de lista na frente ("2.", "2)", "2 - Chile", a linha copiada
+    // inteira): vale pela POSICAO, o sinal mais forte e o que nao escolhe errado.
+    if (preg_match('/^\s*(\d{1,3})\s*[.)\-\x{2013}:]/u', $resposta, $m)) $resposta = $m[1];
     if (preg_match('/^[0-9]+$/', $resposta)) {
         $n = (int) $resposta;
         return ($n >= 1 && $n <= count($slugs_enviados)) ? (string) $slugs_enviados[$n - 1] : null;
