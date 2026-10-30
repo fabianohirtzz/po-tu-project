@@ -1993,6 +1993,11 @@ assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', op
   const gav = F.poFluxoGaveta({ id: 'x', tipo: 'texto', titulo: 'T', texto: '' });
   const dica = (gav.match(/<p class="fl-dica">Use [^<]*<\/p>/) || [''])[0];
   assert.ok(dica, 'guarda: a dica das variaveis aparece na gaveta');
+  // O artigo nao tem par no PHP: variavel nova sem `art` (ou com art vazio) imprimiria
+  // "undefined maior x" na tela. Cada entrada precisa de um artigo de verdade.
+  vars.forEach(v => assert.ok(typeof v.art === 'string' && v.art.trim() !== '', 'a variavel ' + v.nome + ' tem artigo nao vazio'));
+  assert.ok(!/undefined|null/.test(contador + dica), 'o contador e a dica nao imprimem undefined/null');
+  assert.ok(/ o maior roteiro e a maior data /.test(contador) && /o roteiro e a data\./.test(dica), 'guarda: as frases saem completas com o artigo');
   vars.forEach(v => {
     assert.ok(dica.includes('{' + v.nome + '}'), 'a dica cita {' + v.nome + '}');
     assert.ok(contador.includes(v.nome), 'o contador cita ' + v.nome);
