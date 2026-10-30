@@ -58,7 +58,7 @@ foreach (['po_wa_contatos','po_wa_conversas','po_wa_mensagens','po_wa_anuncios',
 foreach (['wa_id','ctwa_clid','ad_id','qualif_data','qualif_grupo','qualif_at','proposta_at','interesses','espera'] as $c) {
     ok(po_http_get($base . 'po_leads?select=' . $c . '&limit=0', 0) !== null, "po_leads.$c existe");
 }
-foreach (['fluxo_versao_id','card_atual','tentativas'] as $c) {
+foreach (['fluxo_versao_id','card_atual','tentativas','roteiros_enviados'] as $c) {
     ok(po_http_get($base . 'po_wa_conversas?select=' . $c . '&limit=0', 0) !== null, "po_wa_conversas.$c existe");
 }
 

@@ -548,7 +548,8 @@ function wa_processar($ev) {
             wa_entrega_humana($wa_id, 'O robô perdeu o ponto da conversa (o card em que ela estava não existe mais no fluxo). Entregue para atendimento humano.');
             return 'card_perdido';
         }
-        $ctx = ['roteiro_slug' => $conv['roteiro_slug'] ?? null, 'tentativas' => (int) ($conv['tentativas'] ?? 0)];
+        $ctx = ['roteiro_slug' => $conv['roteiro_slug'] ?? null, 'tentativas' => (int) ($conv['tentativas'] ?? 0),
+                'roteiros_enviados' => is_array($conv['roteiros_enviados'] ?? null) ? $conv['roteiros_enviados'] : []];
         /* Retomada: o card_atual ainda nao foi entregue (cadeia interrompida)
            ou nao e de um tipo que espera. Roteia-lo pularia o card que falhou,
            e o cliente nunca receberia a pergunta. A mensagem dele nao decide
@@ -667,6 +668,7 @@ function wa_fluxo_percorre($wa_id, $nome, $grafo, $versao_id, $card, $ctx, $esta
             'card_atual'   => $card,
             'tentativas'   => (int) ($ctx['tentativas'] ?? 0),
             'roteiro_slug' => $ctx['roteiro_slug'] ?? null,
+            'roteiros_enviados' => array_values((array) ($ctx['roteiros_enviados'] ?? [])),
             'lembrete_at'  => null,
         ];
         if ($estampar) $grava['fluxo_versao_id'] = $versao_id;

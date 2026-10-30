@@ -173,6 +173,63 @@ function wa_fluxo_campos_marca($config, $ctx) {
    o robo desistir e chamar a dona. Com 2, a terceira vai para o humano. */
 const WA_FLUXO_MAX_TENTATIVAS = 2;
 
+/* ---------- card `roteiros`: lista numerada em texto puro ----------
+   O publico digita, entao a escolha e "1", o nome inteiro ou um pedaco dele.
+   O NUMERO vale pela lista que foi ENVIADA (roteiros_enviados, guardado na
+   conversa), nunca pela de agora: se a cliente editar uma viagem entre o envio
+   e a resposta, o "2" tem que ser o que a pessoa leu. */
+
+/* O que esta a venda, na ordem recebida. Pura. */
+function wa_fluxo_roteiros_venda($roteiros) {
+    $venda = [];
+    foreach ((array) $roteiros as $r) {
+        if (!is_array($r) || empty($r['ativo'])) continue;
+        if (in_array($r['status_viagem'] ?? null, ['esgotado', 'em_viagem'], true)) continue;
+        if (trim((string) ($r['slug'] ?? '')) === '' || trim((string) ($r['titulo'] ?? '')) === '') continue;
+        $venda[] = $r;
+    }
+    return $venda;
+}
+
+/* "1. Titulo — periodo", uma linha por roteiro, sem quebra no fim. Pura. */
+function wa_fluxo_lista_roteiros($venda) {
+    $linhas = [];
+    foreach (array_values($venda) as $i => $r) {
+        $quando = trim((string) ($r['data_label'] ?? '') ?: (string) ($r['periodo'] ?? ''));
+        $linhas[] = ($i + 1) . '. ' . trim((string) $r['titulo']) . ($quando !== '' ? ' — ' . $quando : '');
+    }
+    return implode("
+", $linhas);
+}
+
+/* Slug escolhido pela resposta, ou null. Numero resolve em $slugs_enviados;
+   nome resolve entre os titulos de $venda que foram enviados, e so quando
+   EXATAMENTE um serve (igual ao titulo inteiro, ou contendo o trecho com 3+
+   caracteres normalizados). Pura. */
+function wa_fluxo_casa_roteiro($resposta, $slugs_enviados, $venda) {
+    $resposta = trim((string) $resposta);
+    if ($resposta === '') return null;
+    $slugs_enviados = array_values((array) $slugs_enviados);
+    if (preg_match('/^[0-9]+$/', $resposta)) {
+        $n = (int) $resposta;
+        return ($n >= 1 && $n <= count($slugs_enviados)) ? (string) $slugs_enviados[$n - 1] : null;
+    }
+    $q = trim(wa_normaliza($resposta));
+    if (mb_strlen($q, 'UTF-8') < 3) return null;
+    $iguais = []; $contem = [];
+    foreach ((array) $venda as $r) {
+        $slug = (string) ($r['slug'] ?? '');
+        if (!in_array($slug, $slugs_enviados, true)) continue;
+        $t = trim(wa_normaliza($r['titulo'] ?? ''));
+        if ($t === '') continue;
+        if ($t === $q) $iguais[$slug] = true;
+        elseif (strpos($t, $q) !== false) $contem[$slug] = true;
+    }
+    if (count($iguais) === 1) return (string) array_key_first($iguais);
+    if (!$iguais && count($contem) === 1) return (string) array_key_first($contem);
+    return null;
+}
+
 /* Retorna ['card' => ?string, 'ctx' => array, 'motivo' => string].
    motivo: opcao | escolheu | fallback | socorro | invalido | ir_para_fluxo
    mais dois que nomeiam os "sem proximo" que, sem nome, seriam um null mudo:
@@ -210,7 +267,16 @@ function wa_fluxo_proximo($grafo, $card_id, $resposta, $ctx) {
     // Lista dinamica: a resposta e o slug e o destino e um so (proximo). Esta
     // funcao e pura e nao sabe quais roteiros existem; conferir o slug contra
     // o catalogo e da execucao. Resposta vazia nao e escolha.
-    if ($tipo === 'lista' && ($card['config']['fonte'] ?? null) === 'roteiros') {
+    if ($tipo === 'roteiros') {
+        // SO o casamento de roteiro: as `opcoes` largadas neste card nao valem
+        // (o validador as ignora), nem como segunda tentativa.
+        $slug = wa_fluxo_casa_roteiro($resposta, (array) ($ctx['roteiros_enviados'] ?? []),
+                                      wa_fluxo_roteiros_venda(wa_fl_call('roteiros')));
+        if ($slug !== null && $existe($card['proximo'] ?? null)) {
+            $certo['roteiro_slug'] = $slug;
+            return ['card' => $card['proximo'], 'ctx' => $certo, 'motivo' => 'escolheu'];
+        }
+    } elseif ($tipo === 'lista' && ($card['config']['fonte'] ?? null) === 'roteiros') {
         if ($resposta !== '' && $existe($card['proximo'] ?? null)) {
             $certo['roteiro_slug'] = $resposta;
             return ['card' => $card['proximo'], 'ctx' => $certo, 'motivo' => 'escolheu'];
@@ -931,6 +997,23 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
         }
         $botao = wa_fluxo_corta(trim((string) ($card['config']['botao'] ?? '')) ?: 'Ver roteiros', 20);
         return $saiu(wa_fl_call('send_list', $wa_id, $corpo, $botao, $itens), 'list', $corpo, true);
+
+    case 'roteiros':
+        if ($vazio) return $recusa('texto do card vazio');
+        $venda = wa_fluxo_roteiros_venda($roteiros());
+        if (!$venda) {
+            /* Lista vazia nunca vai ao cliente. po_fetch_roteiros devolve []
+               tanto para "nada a venda" quanto para Supabase fora, e a agencia
+               sempre tem roteiro a venda: vazio e falha, e e transitoria (a
+               proxima mensagem tenta de novo, a humana nao e acionada). */
+            error_log('wa_fluxo_executa: roteiros sem nada a venda (catalogo vazio ou indisponivel), transitorio | ' . $wa_id);
+            return $res(false, ['erro' => 'catalogo indisponivel']);
+        }
+        $ctx['roteiros_enviados'] = array_map(function ($r) { return (string) $r['slug']; }, $venda);
+        $texto = trim($corpo . "
+
+" . wa_fluxo_lista_roteiros($venda));
+        return $saiu(wa_fl_call('send_text', $wa_id, $texto), 'text', $texto, true);
 
     case 'pdf':
         if ($roteiro === null) {
