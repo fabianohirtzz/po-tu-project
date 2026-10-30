@@ -236,7 +236,9 @@ function poFluxoCanvas(fluxo) {
       const x1 = de.x + L, y1 = Math.round(de.y + de.h / 2);
       const x2 = para.x, y2 = Math.round(para.y + para.h / 2);
       const dx = Math.min(DX_MAX, Math.max(40, Math.round(Math.abs(x2 - x1) / 2)));
-      setas.push('<path class="fl-seta" data-de="' + esc(c.id) + '" data-para="' + esc(d) + '" d="M' + x1 + ' ' + y1 +
+      /* Retorno = o destino esta na mesma coluna ou a esquerda da origem. */
+      const volta = para.x <= de.x;
+      setas.push('<path class="fl-seta' + (volta ? ' fl-seta--volta' : '') + '" data-de="' + esc(c.id) + '" data-para="' + esc(d) + '" d="M' + x1 + ' ' + y1 +
         ' C' + (x1 + dx) + ' ' + y1 + ' ' + (x2 - dx) + ' ' + y2 + ' ' + x2 + ' ' + y2 + '" marker-end="url(#fl-ponta)"/>');
     });
   });

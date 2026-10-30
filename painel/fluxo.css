@@ -46,6 +46,8 @@
   .fl-canvas{position:relative;transform-origin:0 0}
   .fl-setas{position:absolute;left:0;top:0;pointer-events:none}
   .fl-seta{fill:none;stroke:var(--azul);stroke-width:2;opacity:.75}
+  /* Depois da base: mesma especificidade, vence a ultima. Retorno tracejado e laranja. */
+  .fl-seta--volta{stroke:var(--st-aberto);stroke-dasharray:7 5}
   .fl-ponta{fill:var(--azul)}
   .fl-no{position:absolute}
   /* o no tem a altura ESTIMADA pelo JS e o card o preenche; nada e cortado,

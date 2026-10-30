@@ -187,7 +187,7 @@ assert.ok(!PERMITIDA[0].test('function q(){} poCarregaFluxo();'), 'allowlist rec
 assert.ok(PERMITIDA[0].test('function poFluxoTipos() {') && PERMITIDA[0].test('async function poCarregaFluxo() {'), 'e aceita a declaracao normal');
 
 /* ---------- o canvas ---------- */
-const nSetas = s => conta(s, 'class="fl-seta"');
+const nSetas = s => (s.match(/class="fl-seta(?: fl-seta--volta)?"/g) || []).length;
 const nNos = s => conta(s, 'class="fl-no"');
 const base = { card_inicial: 'a', cards: [
   { id: 'a', tipo: 'botoes', titulo: 'Escolha', x: 40, y: 60,
@@ -309,7 +309,7 @@ const tras = F.poFluxoCanvas({ cards: [
   { id: 'a', tipo: 'texto', titulo: 'A', x: 0, y: 0 }, { id: 'b', tipo: 'texto', titulo: 'B', x: 2560, y: -120, sem_resposta: 'a', fallback: 'a' }] });
 const larg = Number(tras.match(/<svg[^>]*width="(\d+)"/)[1]);
 const alt2 = Number(tras.match(/<svg[^>]*height="(\d+)"/)[1]);
-const d = tras.match(/class="fl-seta"[^>]* d="(M[^"]+)"/)[1];
+const d = tras.match(/class="fl-seta(?: fl-seta--volta)?"[^>]* d="(M[^"]+)"/)[1];
 const nums = d.match(/-?\d+/g).map(Number);
 assert.ok(nums.length >= 8, 'a seta tem os 8 pontos');
 nums.forEach((n, i) => assert.ok(n >= 0 && n <= (i % 2 === 0 ? larg : alt2), 'ponto ' + i + ' (' + n + ') dentro do svg ' + larg + 'x' + alt2 + ': ' + d));
@@ -330,7 +330,7 @@ assert.equal(comMeia[1][0] - comMeia[0][0], 100, 'e a distancia entre os validos
 const una = F.poFluxoCanvas({ cards: [{ id: 'a', tipo: 'texto', titulo: 'A', x: 0, y: 0, proximo: 'b' }, { id: 'b', tipo: 'fim', titulo: 'B', x: 400, y: 0 }] });
 const [ha, hb] = [...una.matchAll(/width:260px;height:(\d+)px/g)].map(m => Number(m[1]));
 const [, topo] = posDe(una)[0];
-const dd = una.match(/class="fl-seta"[^>]* d="M(\d+) (\d+) C\d+ \d+ \d+ (\d+) (\d+) (\d+)"/);
+const dd = una.match(/class="fl-seta(?: fl-seta--volta)?"[^>]* d="M(\d+) (\d+) C\d+ \d+ \d+ (\d+) (\d+) (\d+)"/);
 assert.equal(Number(dd[2]), topo + Math.round(ha / 2), 'a seta nasce no meio do card de origem');
 assert.equal(Number(dd[5]), topo + Math.round(hb / 2), 'e chega no meio do card de destino');
 // vazios e degenerados nao lancam
@@ -1951,6 +1951,30 @@ assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', op
     'a altura minima nao vaza para o <input class="fl-campo"> do rotulo da opcao');
   // guarda: o <input class="fl-campo"> existe de fato no JS, senao a assercao acima prova nada
   assert.ok(/<input type="text" class="fl-campo"/.test(src), 'o input com .fl-campo existe no fluxo.js');
+}
+
+/* Task 8: o canvas distingue o caminho de volta (destino a esquerda ou na mesma coluna
+   da origem) do de avanco. Todo caminho era o mesmo azul e um grafo de vinte cards
+   virava emaranhado. */
+{
+  const g = {card_inicial:'a', cards:[
+    {id:'a',tipo:'botoes',titulo:'A',x:0,y:0,opcoes:[{id:'1',rotulo:'vai',destino:'b'}]},
+    {id:'b',tipo:'botoes',titulo:'B',x:600,y:0,opcoes:[{id:'2',rotulo:'volta',destino:'a'}]}]};
+  const h8 = F.poFluxoCanvas(g);
+  const tags = h8.match(/<path class="fl-seta[^>]*>/g) || [];
+  assert.equal(tags.length, 2, 'guarda: o canvas desenha as duas setas do grafo de teste');
+  const de = id => tags.find(t => t.includes('data-de="' + id + '"'));
+  assert.ok(de('b') && /fl-seta--volta/.test(de('b')), 'a seta que volta para a esquerda vem marcada');
+  assert.ok(de('a') && !/fl-seta--volta/.test(de('a')), 'e a que avanca nao');
+  // a classe base fica nas duas: o estilo comum nao depende da marca de volta
+  assert.ok(tags.every(t => /class="fl-seta[ "]/.test(t)), 'as duas seguem com a classe base fl-seta');
+  // CSS: o retorno tem traco proprio DENTRO do @media do canvas, depois da base (mesma especificidade)
+  const base = dentro.indexOf('.fl-seta{'), volta = dentro.indexOf('.fl-seta--volta{');
+  assert.ok(base >= 0, 'guarda: a regra base .fl-seta esta dentro do @media');
+  assert.ok(volta > base, '.fl-seta--volta vem dentro do @media e DEPOIS da base, senao a base vence');
+  assert.ok(/\.fl-seta--volta\{[^}]*stroke-dasharray/.test(dentro), 'o retorno e tracejado');
+  assert.ok(/\.fl-seta--volta\{[^}]*stroke:/.test(dentro), 'e tem cor propria');
+  assert.ok(!/stroke-dasharray/.test(dentro.slice(base, volta)), 'o avanco segue solido (a base nao tem traco)');
 }
 
 console.log('test-fluxo-painel OK');
