@@ -28,6 +28,15 @@
 -- Ao ligar, "Lista de espera" ANTES de "Boas-vindas e triagem" (o salto exige
 -- destino ativo e publicado).
 --
+-- RODAR INTEIRO, DE UMA VEZ, no SQL Editor. NAO aplicar em pedacos: a regra da casa
+-- "em pedacos" existe porque o portao recusa drop/update no mesmo bloco do DDL, e
+-- este arquivo NAO TEM DDL (sao seis comandos: insert, insert, delete, insert,
+-- update, update). Sem DDL ele roda numa transacao de verdade, tudo ou nada.
+-- Partir e a UNICA forma de chegar ao estado pela metade: parar depois do `delete`
+-- (irreversivel) e antes do redesenho deixa o rascunho sem 5 cards enquanto o
+-- ponteiro ainda aponta a versao 1, e o painel desenha uma conversa que o motor
+-- nao executa.
+--
 -- IDEMPOTENCIA, e o que ela NAO cobre:
 --   - os dois inserts de versao sao `on conflict do nothing`, e o redesenho do
 --     rascunho e `on conflict (id) do update`: rodar de novo nao duplica nada e
@@ -99,6 +108,21 @@
 --
 -- Card que a CLIENTE criou no painel nao aparece aqui, e esta correto: ele nao
 -- existe no retrato da versao 1, e a migration tambem nao o toca.
+--
+-- LIMITE: esta consulta ve card ALTERADO, nao card APAGADO. O join exige a linha do
+-- rascunho, entao um card semeado que a cliente excluiu de proposito nao aparece, e
+-- o passo 3 o recria. Para ver os apagados, rode a segunda consulta abaixo (so as
+-- linhas da consulta, sem os `--`):
+--
+-- select f.nome as fluxo, v.grafo->'cards'->(k.id)->>'titulo' as titulo_semeado, k.id
+--   from public.po_wa_fluxo_versoes v
+--   join public.po_wa_fluxos f on f.id = v.fluxo_id
+--  cross join lateral jsonb_object_keys(v.grafo->'cards') as k(id)
+--  where v.versao = 1
+--    and v.fluxo_id in ('a1000000-0000-4000-8000-000000000001',
+--                       'a1000000-0000-4000-8000-000000000002')
+--    and not exists (select 1 from public.po_wa_cards c where c.id = k.id::uuid);
+--
 --
 -- with semeado as (
 --   select c.*, v.grafo->'cards'->(c.id::text) as s
