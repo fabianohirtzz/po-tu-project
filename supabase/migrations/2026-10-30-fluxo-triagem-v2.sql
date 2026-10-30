@@ -193,7 +193,7 @@ insert into public.po_wa_fluxo_versoes (id, fluxo_id, versao, grafo) values ('b1
             "id": "c1000000-0000-4000-8000-000000000004",
             "tipo": "humano",
             "titulo": "Atendimento humano",
-            "texto": "Combinado. Já avisamos a Laís, que atende você pessoalmente nesta mesma conversa. Se quiser, escreva aqui o que precisa saber: ela lê tudo antes de responder.",
+            "texto": "Combinado. Já avisamos a Laís, que atende você pessoalmente nesta mesma conversa. Se quiser, escreva aqui o que a Laís precisa saber: ela lê tudo antes de responder.",
             "opcoes": [],
             "config": {},
             "proximo": null,
