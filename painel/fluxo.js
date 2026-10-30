@@ -494,6 +494,19 @@ function poFluxoCardFinal(card, v) {
   return Object.assign({}, card, { opcoes: p.opcoes });
 }
 
+/* O contador de botoes da gaveta e, acima do teto, o aviso que diz o caminho:
+   excluir um resolve. Uma funcao so, porque a gaveta a desenha ao abrir e a
+   exclusao a redesenha a cada clique. `max` nulo = o tipo nao tem teto. */
+function poFluxoContagem(n, max) {
+  if (max === null || max === undefined) return '';
+  let h = '<p class="fl-dica">' + n + ' de ' + max + ' botões.</p>';
+  if (n > max) {
+    h += '<p class="fl-aviso">Este card tem ' + n + ' botões e o WhatsApp aceita no máximo ' + max + '. Não dá para salvar assim. Exclua ' +
+      (n - max > 1 ? (n - max) + ' botões' : 'um botão') + ' para poder salvar.</p>';
+  }
+  return h;
+}
+
 /* Os cards que, tiradas estas opcoes, ficam sem NINGUEM apontando para eles.
    So se olha para quem ESTE card apontava (os candidatos): o resto do fluxo ja
    era como era. Conta como entrada toda seta (proximo, fallback, sem_resposta,
@@ -575,7 +588,7 @@ function poFluxoBloqueio(card) {
   const c = card && typeof card === 'object' ? card : {};
   const max = poFluxoMaxOpcoes(c.tipo);
   const n = poFluxoOpcoes(c.opcoes).length;
-  if (max !== null && n > max) return 'Este card tem ' + n + ' botões e o WhatsApp aceita no máximo ' + max + '. Não dá para salvar assim.';
+  if (max !== null && n > max) return 'Este card tem ' + n + ' botões e o WhatsApp aceita no máximo ' + max + '. Não dá para salvar assim. Exclua ' + (n - max > 1 ? (n - max) + ' botões' : 'um botão') + ' para poder salvar.';
   return '';
 }
 
@@ -832,10 +845,7 @@ function poFluxoGaveta(card) {
   h += '<p class="fl-dica">Use {roteiro} e {data} onde quiser que apareçam o roteiro e a data.</p>';
   if (opcoes.length) {
     h += '<fieldset class="fl-opcoes"><legend>' + (def.tipo === 'botoes' ? 'Botões (no máximo ' + max + ')' : 'Linhas da lista') + '</legend>';
-    if (max !== null) h += '<p class="fl-dica">' + opcoes.length + ' de ' + max + ' botões.</p>';
-    if (max !== null && opcoes.length > max) {
-      h += '<p class="fl-aviso">Este card tem ' + opcoes.length + ' botões e o WhatsApp aceita no máximo ' + max + '. Não dá para salvar assim.</p>';
-    }
+    if (max !== null) h += '<div data-contagem>' + poFluxoContagem(opcoes.length, max) + '</div>';
     opcoes.forEach(function (o, i) {
       h += '<div class="fl-opcao" data-opcao="' + i + '"><input type="text" class="fl-campo" data-campo="rotulo" value="' + esc(o.rotulo) + '" aria-label="Texto da opção ' + (i + 1) + '">' +
         '<button type="button" class="fl-opcao__x" data-acao="excluir-opcao" data-i="' + i + '" aria-label="Excluir a opção ' + (i + 1) + '">Excluir</button></div>';
@@ -1111,6 +1121,8 @@ function poFluxoAvisoRedesenha(g) {
   const alvo = g.querySelector('[data-aviso-remocao]');
   if (!card || !f || !alvo) return;
   alvo.innerHTML = poFluxoAvisoRemocao(card, PO_FLUXO_REMOV, f.cards, f.card_inicial);
+  const cont = g.querySelector('[data-contagem]');
+  if (cont) cont.innerHTML = poFluxoContagem(poFluxoOpcoes(card.opcoes).length - PO_FLUXO_REMOV.length, poFluxoMaxOpcoes(card.tipo));
 }
 
 function poFluxoOpcaoExclui(g, i) {
@@ -1178,10 +1190,20 @@ async function poFluxoGavetaSalva() {
   conf.editadoDesde = true;
   conf.conferido = false;
   const edicoes = conf.edicoes;
-  try { await poFluxoRecarrega(); } catch (e) { const g2 = poFluxoAtual(); if (g2) g2.publicado_igual = null; }
-  poFluxoRender();
-  poFluxoAbre(id);
-  PO_FLUXO_SALVANDO = false;
+  /* Ja gravou: a partir daqui as remocoes sao fatos, nao pendencias. O finally
+     garante isso mesmo se o render lancar ou a gaveta nao reabrir (card que sumiu
+     no recarregar): sem ele o flag ficaria travado, ou o Desfazer ficaria vivo
+     para algo que ja esta no servidor. */
+  try {
+    try { await poFluxoRecarrega(); } catch (e) { const g2 = poFluxoAtual(); if (g2) g2.publicado_igual = null; }
+    poFluxoRender();
+    poFluxoAbre(id);
+  } finally {
+    PO_FLUXO_REMOV = [];
+    PO_FLUXO_SALVANDO = false;
+    const velho = g.querySelector('[data-aviso-remocao]');
+    if (velho) velho.innerHTML = '';
+  }
   poFluxoStatus('Salvo. Conferindo o fluxo…');
   try {
     // quem julga (variavel desconhecida, limite, botoes) e o endpoint, nunca esta tela

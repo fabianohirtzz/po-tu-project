@@ -33,7 +33,7 @@ const PURAS_NOMES = ['poFluxoTipos', 'poFluxoTipo', 'poFluxoOpcoes', 'poFluxoPre
                      'poFluxoEditavel', 'poFluxoGaveta',
                      'poFluxoPodePublicar', 'poFluxoOrdemLigar', 'poFluxoSemRepetido', 'poFluxoPainelProblemas',
                      'poFluxoEstado', 'poFluxoPorqueNao', 'poFluxoBarra', 'poFluxoResultado', 'poFluxoCardCulpado', 'poFluxoPodeLigar', 'poFluxoTextoLigar',
-                     'poFluxoRemoveOpcao', 'poFluxoOpcoesSem', 'poFluxoOrfaos', 'poFluxoAvisoRemocao', 'poFluxoCardFinal',
+                     'poFluxoRemoveOpcao', 'poFluxoOpcoesSem', 'poFluxoContagem', 'poFluxoOrfaos', 'poFluxoAvisoRemocao', 'poFluxoCardFinal',
                      'poFluxoZoomNum', 'poFluxoZoomEscada', 'poFluxoZoomPasso', 'poFluxoZoomAjuste', 'poFluxoZoomPalco', 'poFluxoZoomBarra'];
 const F = new Function(ESC + PURAS_NOMES.map(pega).join('\n') +
   '; return {' + PURAS_NOMES.join(',') + '};')();
@@ -925,8 +925,8 @@ function ambiente(tabela, fluxos, confirma = true) {
   let pediuConfirm = 0;
   const msgs = [];
   const api = new Function('sb', 'fetch', 'FormData', 'document', 'confirm', ESC + src +
-    '; return {poFluxoPublicar, poFluxoConfere, poFluxoLiga, poFluxoGavetaSalva, poFluxoChama, poFluxoBarraAcao, poFluxoAbre, poFluxoRender, poFluxoClique, poFluxoDesenhaBarra,' +
-    ' fixa(l,sel){PO_FLUXOS=l;PO_FLUXO_SEL=sel||l[0].id},fluxos(){return PO_FLUXOS}, conf(id){return poFluxoConf(id)}, res(){return PO_FLUXO_RES}, ocupado(){return PO_FLUXO_OCUPADO}};')(
+    '; return {poFluxoPublicar, poFluxoConfere, poFluxoLiga, poFluxoGavetaSalva, poFluxoChama, poFluxoBarraAcao, poFluxoAbre, poFluxoRender, poFluxoClique, poFluxoDesenhaBarra, poFluxoOpcaoExclui, poFluxoOpcaoDesfaz,' +
+    ' rem(){return PO_FLUXO_REMOV}, salvando(){return PO_FLUXO_SALVANDO}, fixa(l,sel){PO_FLUXOS=l;PO_FLUXO_SEL=sel||l[0].id},fluxos(){return PO_FLUXOS}, conf(id){return poFluxoConf(id)}, res(){return PO_FLUXO_RES}, ocupado(){return PO_FLUXO_OCUPADO}};')(
     sbD, fetchD, FD, document, m => { pediuConfirm++; msgs.push(m); return confirma; });
   api.fixa(JSON.parse(JSON.stringify(fluxos)));
   return Object.assign(api, { pedidos, ids, els, msgs, confirmou: () => pediuConfirm });
@@ -1830,6 +1830,111 @@ assert.ok(!/\.(delete|insert|upsert)\(/.test(semComentario), 'excluir opcao nunc
   assert.deepEqual(api.rem(), [], 'fechar a gaveta zera as remocoes');
   api.poFluxoOpcaoExclui(g, 9);
   assert.deepEqual(api.rem(), [], 'linha que nao existe nao entra');
+}
+
+/* ====================== TASK 7, rodada de correcao 1 ====================== */
+
+// (1) O ALINHAMENTO: a k-esima linha que a gaveta desenha e a k-esima opcao que o remover conta.
+//     Hoje isso vale porque poFluxoOpcoes e poFluxoRemoveOpcao usam o mesmo predicado; se um dos dois mudar
+//     sozinho, a cliente apaga um botao que nao escolheu. Lista deliberadamente suja, com tudo que e
+//     `object` (lista vazia) e tudo que nao e.
+{
+  const suja2 = ['lixo', { id: 'o1', rotulo: 'R1', destino: 'd1' }, null, 7, { id: 'o2', rotulo: 'R2' }, undefined, [], true,
+    { id: 'o3', rotulo: 'R3' }, '', { id: 'o4', rotulo: 'R4' }];
+  const linhasDesenhadas = [...F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', opcoes: suja2 })
+    .matchAll(/data-campo="rotulo" value="([^"]*)"/g)].map(m => m[1]);
+  assert.ok(linhasDesenhadas.length >= 4, 'GUARDA: a lista suja tem varias linhas desenhadas, o laco abaixo nao e vazio: ' + linhasDesenhadas.length);
+  linhasDesenhadas.forEach((rot, k) => {
+    const depois = F.poFluxoRemoveOpcao(suja2, k);
+    assert.equal(depois.length, suja2.length - 1, 'remover a linha ' + k + ' tira exatamente uma entrada');
+    assert.ok(!depois.some(o => o && o.rotulo === rot), 'a linha ' + k + ' (' + rot + ') desenhada e a que o remover tira');
+    assert.equal(depois.filter(o => o && typeof o === 'object').length, linhasDesenhadas.length - 1, 'so ela saiu');
+  });
+}
+
+// (4)+(5) o contador de botoes, ao vivo, e a mensagem que diz como resolver
+assert.equal(F.poFluxoContagem(3, 3), '<p class="fl-dica">3 de 3 botões.</p>', 'dentro do limite: so a dica');
+assert.equal(F.poFluxoContagem(2, null), '', 'lista nao tem teto: nada a contar');
+const cont4 = F.poFluxoContagem(4, 3);
+assert.ok(cont4.includes('4 de 3 botões') && cont4.includes('fl-aviso') && cont4.includes('Exclua'), 'acima do limite: avisa e diz que excluir um resolve');
+assert.ok(F.poFluxoBloqueio({ tipo: 'botoes', opcoes: op(4) }).includes('Exclua'), 'o bloqueio do salvar tambem diz como resolver');
+assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', opcoes: op(4) }).includes('data-contagem'), 'a gaveta tem o lugar do contador');
+
+// (3) A SEQUENCIA INTEIRA, rodando: excluir, salvar e so entao desfazer. E os caminhos em que o salvar quebra no meio.
+{
+  const mkG = () => {
+    const linhas = [0, 1, 2, 3].map(() => ({ hidden: false }));
+    const alvo = { innerHTML: '' }, cont = { innerHTML: '' };
+    const g = { innerHTML: '', hidden: true, onclick: null, classList: { toggle() {} }, addEventListener() {}, querySelectorAll: () => [],
+      querySelector: s => (s === '[data-aviso-remocao]' ? alvo : s === '[data-contagem]' ? cont : s === '[data-acao="salvar"]' ? { disabled: false }
+        : (/^\[data-opcao="(\d)"\]$/.test(s) ? linhas[Number(RegExp.$1)] : null)) };
+    return { g, linhas, alvo, cont };
+  };
+  const fx = (cards) => [mkFluxo({ cards, card_inicial: 'm' })];
+  const quatro = [{ id: 'm', tipo: 'botoes', titulo: 'M', texto: 't', opcoes: [0, 1, 2, 3].map(i => ({ id: 'o' + i, rotulo: 'B' + i, destino: i === 0 ? 'x' : null })) },
+    { id: 'x', tipo: 'fim', titulo: 'Card X' }];
+
+  // contador ao vivo: 4 de 3 -> 3 de 3 ao excluir, 4 de 3 ao desfazer
+  {
+    const a = ambiente({ conferir: JSON_(200, { ok: true, problemas: [] }) }, fx(quatro));
+    const t = mkG(); a.els['#fl-gaveta'] = t.g;
+    a.poFluxoAbre('m');
+    a.poFluxoOpcaoExclui(t.g, 3);
+    assert.ok(t.cont.innerHTML.includes('3 de 3 botões') && !t.cont.innerHTML.includes('fl-aviso'), 'excluir um dos 4 atualiza o contador na hora: ' + t.cont.innerHTML);
+    a.poFluxoOpcaoDesfaz(t.g);
+    assert.ok(t.cont.innerHTML.includes('4 de 3 botões') && t.cont.innerHTML.includes('Exclua'), 'e desfazer devolve o aviso');
+  }
+
+  // excluir, salvar, desfazer: o Desfazer nao existe mais
+  {
+    const a = ambiente({ conferir: JSON_(200, { ok: true, problemas: [] }) }, fx(quatro));
+    const t = mkG(); a.els['#fl-gaveta'] = t.g;
+    a.poFluxoAbre('m');
+    a.poFluxoOpcaoExclui(t.g, 0);
+    assert.ok(t.alvo.innerHTML.includes('data-acao="desfazer"') && t.alvo.innerHTML.includes('Card X'), 'antes de salvar: Desfazer e aviso de orfao');
+    await a.poFluxoGavetaSalva();
+    assert.deepEqual(a.rem(), [], 'salvou: nada mais a desfazer');
+    assert.equal(a.salvando(), false, 'e a gaveta nao fica travada');
+    assert.equal(t.alvo.innerHTML, '', 'o aviso com o botao Desfazer sumiu da tela');
+    a.poFluxoOpcaoDesfaz(t.g);
+    assert.equal(t.linhas[0].hidden, true, 'e desfazer depois de salvar nao ressuscita nada');
+  }
+
+  // o salvar quebra DEPOIS de gravar (render lanca): nada fica travado nem desfazivel
+  {
+    const a = ambiente({ conferir: JSON_(200, { ok: true, problemas: [] }) }, fx(quatro));
+    const t = mkG(); a.els['#fl-gaveta'] = t.g;
+    a.els['#fluxo-lista'] = { set innerHTML(v) { throw new Error('render quebrou'); }, get innerHTML() { return ''; }, querySelector: () => null };
+    a.poFluxoAbre('m');
+    a.poFluxoOpcaoExclui(t.g, 0);
+    await assert.rejects(() => a.poFluxoGavetaSalva(), /render quebrou/);
+    assert.equal(a.salvando(), false, 'render que lanca nao deixa o salvar travado');
+    assert.deepEqual(a.rem(), [], 'nem um Desfazer vivo de algo ja salvo');
+    assert.equal(t.alvo.innerHTML, '', 'e o botao some da tela');
+  }
+
+  // o salvar grava e a gaveta nao reabre (o card sumiu no recarregar): mesmo resultado
+  {
+    const semM = [{ id: 'x', tipo: 'fim', titulo: 'Card X' }];
+    const a = ambiente({ conferir: JSON_(200, { ok: true, problemas: [] }), ler: JSON_(200, { ok: true, fluxos: [mkFluxo({ cards: semM })] }) }, fx(quatro));
+    const t = mkG(); a.els['#fl-gaveta'] = t.g;
+    a.poFluxoAbre('m');
+    a.poFluxoOpcaoExclui(t.g, 0);
+    await a.poFluxoGavetaSalva();
+    assert.equal(a.salvando(), false, 'abrir que retorna cedo nao deixa travado');
+    assert.deepEqual(a.rem(), [], 'nem com Desfazer vivo');
+    assert.equal(t.alvo.innerHTML, '');
+  }
+
+  // sem salvar, o Desfazer tira a ultima excluida
+  {
+    const a = ambiente({}, fx(quatro));
+    const t = mkG(); a.els['#fl-gaveta'] = t.g;
+    a.poFluxoAbre('m');
+    [0, 1, 2, 3].forEach(i => a.poFluxoOpcaoExclui(t.g, i));
+    a.poFluxoOpcaoDesfaz(t.g);
+    assert.deepEqual(a.rem(), [0, 1, 2], 'desfazer tira a ultima excluida');
+  }
 }
 
 console.log('test-fluxo-painel OK');
