@@ -191,12 +191,12 @@ function wa_fluxo_roteiros_venda($roteiros) {
     return $venda;
 }
 
-/* "1. Titulo — periodo", uma linha por roteiro, sem quebra no fim. Pura. */
+/* "1. Titulo (periodo)", sem travessao (regra de copy da casa), uma linha por roteiro, sem quebra no fim. Pura. */
 function wa_fluxo_lista_roteiros($venda) {
     $linhas = [];
     foreach (array_values($venda) as $i => $r) {
         $quando = trim((string) ($r['data_label'] ?? '') ?: (string) ($r['periodo'] ?? ''));
-        $linhas[] = ($i + 1) . '. ' . trim((string) $r['titulo']) . ($quando !== '' ? ' — ' . $quando : '');
+        $linhas[] = ($i + 1) . '. ' . trim((string) $r['titulo']) . ($quando !== '' ? ' (' . $quando . ')' : '');
     }
     return implode("
 ", $linhas);
@@ -1009,10 +1009,29 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
             error_log('wa_fluxo_executa: roteiros sem nada a venda (catalogo vazio ou indisponivel), transitorio | ' . $wa_id);
             return $res(false, ['erro' => 'catalogo indisponivel']);
         }
-        $ctx['roteiros_enviados'] = array_map(function ($r) { return (string) $r['slug']; }, $venda);
+        /* Teto da Cloud API (4096, em caracteres). Esta e a unica mensagem cujo
+           tamanho nenhum validador ve: a lista e montada aqui, do banco. Estourar
+           = 400 e o cliente nao recebe nada, calado. Corta ITEM INTEIRO do fim
+           (nunca no meio) e tira o item de roteiros_enviados junto, senao o
+           numero que a pessoa le deixa de casar com o slug. */
         $texto = trim($corpo . "
 
 " . wa_fluxo_lista_roteiros($venda));
+        $total = count($venda);
+        while ($venda && mb_strlen($texto, 'UTF-8') > 4096) {
+            array_pop($venda);
+            $texto = trim($corpo . "
+
+" . wa_fluxo_lista_roteiros($venda));
+        }
+        if (!$venda) {
+            error_log('wa_fluxo_executa: roteiros, nem um item cabe em 4096 caracteres com o corpo do card | ' . $wa_id);
+            return $res(false, ['erro' => 'texto acima do limite']);
+        }
+        if (count($venda) < $total) {
+            error_log('wa_fluxo_executa: roteiros, lista cortada para caber em 4096: ' . ($total - count($venda)) . ' item(ns) fora | ' . $wa_id);
+        }
+        $ctx['roteiros_enviados'] = array_map(function ($r) { return (string) $r['slug']; }, $venda);
         return $saiu(wa_fl_call('send_text', $wa_id, $texto), 'text', $texto, true);
 
     case 'pdf':

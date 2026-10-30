@@ -18,8 +18,9 @@ $txt = wa_fluxo_lista_roteiros($v);
 ok(strpos($txt, '1.') === 0, 'numera a partir de 1');
 ok(strpos($txt, 'Peru') !== false && strpos($txt, '3.') !== false, 'em_breve entra mesmo sem data');
 ok(substr_count($txt, "\n") === 2, 'uma linha por roteiro');
-ok(strpos($txt, '1. Vietnã Completo — De 22/02/27 a 15/03/27') === 0, 'linha com titulo e periodo');
-ok(substr($txt, -7) === '3. Peru', 'sem periodo, sem travessao pendurado: ' . $txt);
+ok(strpos($txt, '1. Vietnã Completo (De 22/02/27 a 15/03/27)') === 0, 'linha com titulo e periodo entre parenteses');
+ok(substr($txt, -7) === '3. Peru', 'sem periodo, sem parenteses pendurados: ' . $txt);
+ok(preg_match('/[\x{2014}\x{2013}]/u', $txt) === 0, 'a lista nao tem travessao nem meia-risca (regra de copy da casa)');
 
 $slugs = array_column($v, 'slug');
 ok(wa_fluxo_casa_roteiro('2', $slugs, $v) === 'chile', 'casa por numero');
@@ -79,6 +80,25 @@ ok(strpos($ENV[0], 'Qual viagem?') === 0, 'corpo do card vem primeiro');
 ok(strpos($ENV[0], $txt) !== false, 'seguido da lista numerada');
 ok(strpos($ENV[0], 'Turquia') === false, 'esgotado nao aparece');
 ok($r['ctx']['roteiros_enviados'] === ['vietna','chile','peru'], 'grava a ordem enviada no contexto');
+
+// teto de 4096: corta ITENS INTEIROS do fim, e a ordem enviada acompanha
+$ENV = [];
+$item = function ($i) { return "$i. Roteiro numero $i com nome razoavelmente comprido (De 01/01/27 a 15/01/27)"; };
+$grande = [];
+for ($i = 1; $i <= 200; $i++) $grande[] = ['slug'=>"r$i",'titulo'=>"Roteiro numero $i com nome razoavelmente comprido",'periodo'=>'De 01/01/27 a 15/01/27','ativo'=>true,'status_viagem'=>null];
+$CAT = $grande;
+$r = wa_fluxo_executa($g, 'rot', $fone, $c0, 'Marta');
+$env = $ENV[0] ?? '';
+ok($r['ok'] === true && mb_strlen($env, 'UTF-8') <= 4096, 'catalogo enorme cabe em 4096: ' . mb_strlen($env, 'UTF-8'));
+$n = count($r['ctx']['roteiros_enviados']);
+ok($n > 10 && $n < 200, 'cortou alguns itens: ' . $n);
+$linhas = explode("\n", $env);
+ok(end($linhas) === $item($n), 'termina num item inteiro, o ultimo de roteiros_enviados: ' . end($linhas));
+ok($r['ctx']['roteiros_enviados'] === array_map(function ($i) { return "r$i"; }, range(1, $n)), 'os cortados saem de roteiros_enviados, numeros e slugs alinhados');
+ok(mb_strlen($env . "\n" . $item($n + 1), 'UTF-8') > 4096, 'cortou so o necessario: mais um item estouraria');
+$CAT = $cat; $ENV = [];
+$r = wa_fluxo_executa($g, 'rot', $fone, $c0, 'Marta');
+ok(count($r['ctx']['roteiros_enviados']) === 3, 'catalogo normal nao perde nenhum item');
 
 // catalogo vazio: erro transitorio, nunca lista vazia
 $ENV = []; $CAT = [];
