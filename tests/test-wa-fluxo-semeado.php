@@ -606,6 +606,74 @@ ok($g2['cards'][$cid('15')]['tipo'] === 'ir_para_fluxo' && $g2['cards'][$cid('15
    'e o salto aponta para o fluxo Lista de espera, pelo id fixo');
 ok(stripos($pe2['texto'], 'lista de espera') !== false, 'e o texto diz o que vai acontecer: ' . $pe2['texto']);
 
+/* ---- 5. os tres textos em que o robo para de falar.
+   Sao as tres saidas da conversa: a despedida (17, de quem calou e de quem recusou a
+   lista de espera) e as duas entregas a Lais (04, pelo menu; 12, de quem qualificou).
+   Ninguem responde a estes tres, e por isso sao os unicos em que uma promessa fica sem
+   dono: o robo NAO sabe quando a Lais vai estar livre, entao ele nao promete prazo. Diz
+   o que ja foi feito e o que acontece em seguida, que e o que sustenta a espera sem
+   inventar hora. `{nome}` tambem sai, nos tres: ela nao e mais variavel valida (regra 14)
+   e tratar alguem pelo nome do perfil do WhatsApp produzia tratamento errado. */
+$PRAZO     = '/\b(volto|retorno|em breve|logo mais|assim que poss[ií]vel)\b/iu';
+$TRAVESSAO = '/[\x{2014}\x{2013}]/u';
+/* A GUARDA DOS REGEX, antes de usa-los para provar ausencia: regex que nao casa nada
+   aprova qualquer texto, e assercao de ausencia sem guarda e o defeito que este plano
+   mais pagou para aprender. */
+ok(preg_match($PRAZO, 'ela fala com você em breve') === 1
+   && preg_match($PRAZO, 'retorno assim que possível') === 1
+   && preg_match($PRAZO, 'eu volto logo mais') === 1,
+   'o regex de prazo casa as promessas que ele existe para proibir');
+ok(preg_match($PRAZO, 'Ela continua o atendimento por aqui mesmo') === 0,
+   'e nao casa uma continuidade sem hora marcada, que e justamente o que se quer escrever');
+ok(preg_match($TRAVESSAO, 'a Laís assume o atendimento — por aqui') === 1, 'o regex de travessao casa um travessao');
+ok(preg_match($emoji, 'tudo certo 🙂') === 1, 'e o regex de emoji casa um emoji');
+
+foreach ([['17', 'a despedida'], ['04', 'a entrega pelo menu'], ['12', 'a entrega de quem qualificou']] as [$nn, $qual]) {
+    $t  = (string) $g2['cards'][$cid($nn)]['texto'];
+    $t1 = (string) $bv['cards'][$cid($nn)]['texto'];
+    /* Vazio nao bloqueia o validador em `fim` nem em `humano` (regra 6 so exige corpo
+       onde a Cloud API exige), entao e aqui que se trava: calar nestes tres encerra a
+       conversa sem uma palavra. */
+    ok(trim($t) !== '', $qual . ' (card ' . $nn . ') tem texto escrito');
+    ok(strpos($t, '{nome}') === false, $qual . ' nao chama a pessoa pelo nome do perfil');
+    ok(strpos($t1, '{nome}') !== false, 'e a versao 1 do card ' . $nn . ' chamava (senao a assercao acima nao prova nada)');
+    ok(!preg_match($PRAZO, $t), $qual . ' nao promete prazo que o atendimento nao controla: ' . $t);
+    // Quem fala e a agencia, na primeira pessoa do plural, nunca um "eu" sem dono.
+    ok(preg_match('/\b(avisamos|passamos|organizamos|ficamos|estamos|vamos|podemos|temos|deixamos)\b/iu', $t),
+       $qual . ' fala em nome da agencia, na primeira pessoa do plural: ' . $t);
+}
+// As duas entregas da versao 1 terminavam em "em breve": sao elas que dao a guarda da
+// assercao de ausencia acima. A despedida (17) nunca prometeu prazo, e nao e dela que
+// se prova que o regex acende.
+foreach (['04', '12'] as $nn) {
+    ok(preg_match($PRAZO, (string) $bv['cards'][$cid($nn)]['texto']) === 1,
+       'a versao 1 do card ' . $nn . ' prometia prazo (senao a assercao de ausencia acima nao prova nada)');
+}
+/* Travessao e emoji no JSON INTEIRO dos dois retratos, config incluido: o confere_copy
+   olha os campos que ele enumera, e este pega qualquer canto que ele nao enumere.
+   Sobre o JSON com JSON_UNESCAPED_UNICODE, nunca sobre json_encode cru: cru, um
+   travessao vira uma sequencia de escape em ASCII e o regex jamais casaria, aprovando tudo. */
+foreach (['triagem' => $j2, 'lista de espera' => $j2e] as $qual => $j) {
+    ok(!preg_match($TRAVESSAO, $j), 'nenhum travessao em canto nenhum da ' . $qual);
+    ok(!preg_match($emoji, $j), 'nenhum emoji em canto nenhum da ' . $qual);
+}
+/* E a prova de que o PAR (regex + JSON_UNESCAPED_UNICODE) acha o caractere DENTRO do
+   retrato codificado: um retrato de mentira, com um travessao e um emoji no texto de dois
+   cards. A segunda assercao de cada par e a que trava o motivo da flag: sem ela o mesmo
+   caractere vira uma sequencia de escape em ASCII e o regex aprova tudo, calado. Colar o
+   caractere DEPOIS do json_encode nao serve de guarda: casaria com flag ou sem ela. */
+$falso = $g2;
+$falso['cards'][$cid('17')]['texto'] = 'Tudo bem — ficamos por aqui.';
+$falso['cards'][$cid('04')]['texto'] = 'Combinado 🙂';
+ok(preg_match($TRAVESSAO, json_encode($falso, JSON_UNESCAPED_UNICODE)) === 1,
+   'o regex acha um travessao dentro de um retrato codificado com JSON_UNESCAPED_UNICODE');
+ok(preg_match($TRAVESSAO, json_encode($falso)) === 0,
+   'e NAO o acha sem a flag: por isso as assercoes acima leem $j2, e nunca json_encode cru');
+ok(preg_match($emoji, json_encode($falso, JSON_UNESCAPED_UNICODE)) === 1,
+   'o mesmo para o emoji, com a flag');
+ok(preg_match($emoji, json_encode($falso)) === 0,
+   'e o mesmo silencio sem ela');
+
 /* ---- o caminho inteiro, pelo roteador de verdade.
    O card `roteiros` e o UNICO ramo de wa_fluxo_proximo que le o catalogo (casar por nome
    precisa dos titulos, e o contexto so guarda slugs). Sem o duble abaixo, converter o
