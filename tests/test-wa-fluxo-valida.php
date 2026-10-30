@@ -401,7 +401,13 @@ ok(bloqueios($fx, $c) === [] && avisos($fx, $c) === [], 'roteiros bem montado na
 // as opcoes vem do banco: quem as escreve esta enganado (problema, mas nao bloqueia)
 $c2 = $c; $c2[4]['opcoes'] = [['id'=>'x','rotulo'=>'X','destino'=>'hum']];
 $pr = array_values(array_filter(wa_fluxo_valida($fx, $c2), fn($x) => $x['card'] === 'rot'));
-ok(count($pr) === 1 && $pr[0]['bloqueia'] === false, 'roteiros com opcoes vira problema que nao bloqueia');
+ok(count($pr) === 1 && $pr[0]['bloqueia'] === false && $pr[0]['regra'] === 7, 'roteiros com opcoes vira problema (regra 7) que nao bloqueia');
+// opcao largada com destino inexistente: nao e saida de verdade, nao pode bloquear (regra 1)
+$c5 = $c; $c5[4]['opcoes'] = [['id'=>'x','rotulo'=>'X','destino'=>'fantasma']];
+ok(!in_array(1, bloqueios($fx, $c5), true) && bloqueios($fx, $c5) === [], 'opcao largada com destino inexistente nao bloqueia');
+// opcao largada nao conta como saida: sem proximo, o beco sem saida (regra 8) continua aparecendo
+$c6 = $c; $c6[4]['proximo'] = null; $c6[4]['opcoes'] = [['id'=>'x','rotulo'=>'X','destino'=>'hum']];
+ok(in_array(8, bloqueios($fx, $c6), true), 'opcao largada nao esconde o beco sem saida (regra 8)');
 // sem proximo a escolha nao leva a lugar nenhum: bloqueia
 $c3 = $c; $c3[4]['proximo'] = null;
 ok(in_array(7, bloqueios($fx, $c3), true), 'roteiros sem proximo bloqueia (regra 7)');

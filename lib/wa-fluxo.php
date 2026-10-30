@@ -317,7 +317,9 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
     };
     $existe = function ($id) use ($C) { return is_string($id) && $id !== '' && isset($C[$id]); };
     $espera = function ($c) { return in_array($c['tipo'], WA_CARD_ESPERA, true); };
-    $listaDin = function ($c) { return $c['tipo'] === 'lista' && ($c['config']['fonte'] ?? null) === 'roteiros'; };
+    // Card cujas linhas vem do banco: `opcoes` nao vale como saida nem como destino.
+    // Vale para a lista dinamica e para o card `roteiros` (que escolhe o roteiro pelo proximo).
+    $listaDin = function ($c) { return $c['tipo'] === 'roteiros' || ($c['tipo'] === 'lista' && ($c['config']['fonte'] ?? null) === 'roteiros'); };
 
     // Saidas de um card. $com_sr inclui o "sem resposta" (so o cron o segue).
     $saidas = function ($c, $com_sr = true) use ($existe, $listaDin) {
@@ -477,7 +479,7 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
         }
     }
 
-    // 7. Card `roteiros`: a lista numerada vem do banco, entao nao tem opcoes
+    // 7a. Card `roteiros`: a lista numerada vem do banco, entao nao tem opcoes
     //    proprias (quem as escreveu esta enganado, mas nada quebra: avisa), e sem
     //    `proximo` a escolha nao leva a lugar nenhum (bloqueia).
     foreach ($C as $id => $c) {
@@ -490,7 +492,7 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
         }
     }
 
-    // 7. Lista sem linhas ou sem fonte: o cliente abre um menu vazio.
+    // 7b. Lista sem linhas ou sem fonte: o cliente abre um menu vazio.
     foreach ($C as $id => $c) {
         if ($c['tipo'] !== 'lista') continue;
         $fonte = $c['config']['fonte'] ?? null;
