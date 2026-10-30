@@ -34,8 +34,8 @@ ok(wa_fluxo_vars_do_roteiro($r_nada, 'X')['data'] === 'na data prevista', 'sem n
 ok(wa_fluxo_vars_do_roteiro(null, 'X')['roteiro'] === '', 'sem roteiro no contexto, roteiro vazio');
 
 // valor maior que o maximo e cortado, senao o pior caso conferido na validacao mentiria
-$longo = wa_fluxo_vars_do_roteiro(['titulo' => str_repeat('á', 90)], str_repeat('ã', 70));
-ok(mb_strlen($longo['roteiro']) === 60 && mb_strlen($longo['data']) <= 40, 'valores respeitam WA_FLUXO_VAR_MAX');
+$longo = wa_fluxo_vars_do_roteiro(['titulo' => str_repeat('á', 90), 'periodo' => str_repeat('ã', 90)], 'ignorado');
+ok(mb_strlen($longo['roteiro']) === 60 && mb_strlen($longo['data']) === 40 && mb_substr($longo['data'], -1) === '…', 'valores respeitam WA_FLUXO_VAR_MAX');
 
 // 4. substituicao, e nenhum {buraco} sobra na mensagem do cliente
 ok(wa_fluxo_texto('A {roteiro} sai em {data}.', $v) === 'A Turquia com Antalia sai em 27/10/27 a 12/11/27.', 'substitui as duas');

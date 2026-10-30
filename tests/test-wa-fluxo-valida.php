@@ -248,6 +248,9 @@ ok(!in_array(14, bloqueios($fx, $c), true), 'regra 14: {roteiro} depois da escol
 $c[1]['opcoes'][0]['destino'] = 'pdf';  // ops (fallback da lista) agora pula a escolha
 ok(in_array(13, bloqueios($fx, $c), true), 'regra 13: um caminho que pula a lista basta para bloquear');
 
+// regra 14: variavel valida repetida passa (depois da escolha do roteiro)
+$c = $base; $c[0]['opcoes'][0]['destino'] = 'lst'; $c[] = $lst2; $c[] = $pdf2; $c[count($c) - 1]['texto'] = 'Segue a {roteiro}. Sim, a {roteiro} de novo.';
+ok(!in_array(14, bloqueios($fx, $c), true), 'regra 14: {roteiro} repetido passa');
 // regra 14: variaveis validas passam; lembrete desligado nao e conferido
 $c = $base; $c[0]['texto'] = 'Oi {nome}, como ajudo?';
 ok(in_array(14, bloqueios($fx, $c), true), 'regra 14: {nome} deixou de ser variavel valida');

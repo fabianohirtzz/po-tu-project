@@ -18,7 +18,7 @@ function fx_card($id, $tipo, $extra = []) {
 function fx_grafo_triagem() {
     return ['id' => 'f-triagem', 'nome' => 'Triagem', 'inicial' => 'boas', 'humano' => 'hum',
         'porta' => 'mensagem_nova', 'porta_valor' => null, 'cards' => [
-        'boas'  => fx_card('boas', 'botoes', ['texto' => 'Oi! Sobre o que quer falar?', 'fallback' => 'outra',
+        'boas'  => fx_card('boas', 'botoes', ['texto' => 'Oi, {nome}! Sobre o que quer falar?', 'fallback' => 'outra',
                      'opcoes' => [['id' => 'rot', 'rotulo' => 'Um roteiro', 'destino' => 'lista'],
                                   ['id' => 'hum', 'rotulo' => 'Falar com a equipe', 'destino' => 'hum']]]),
         'lista' => fx_card('lista', 'lista', ['texto' => 'Sobre qual viagem?', 'config' => ['fonte' => 'roteiros'],
@@ -33,7 +33,7 @@ function fx_grafo_triagem() {
                      'opcoes' => [['id' => 'ja', 'rotulo' => 'Ja viajei', 'destino' => 'hum'],
                                   ['id' => 'prim', 'rotulo' => 'Primeira vez', 'destino' => 'hum']]]),
         'semdata' => fx_card('semdata', 'marca', ['config' => ['status' => 'perdido', 'qualif_data' => false], 'proximo' => 'adeus']),
-        'adeus' => fx_card('adeus', 'fim', ['texto' => 'Entendo. Quando houver outra data, avisamos.']),
+        'adeus' => fx_card('adeus', 'fim', ['texto' => 'Entendo, {nome}. Quando houver outra data, avisamos.']),
         'outra' => fx_card('outra', 'botoes', ['texto' => 'Nao entendi. Escolha uma opcao.',
                      'opcoes' => [['id' => 'rot', 'rotulo' => 'Um roteiro', 'destino' => 'lista'],
                                   ['id' => 'hum', 'rotulo' => 'Falar com a equipe', 'destino' => 'hum']]]),

@@ -212,12 +212,12 @@ $ENVIADAS = [];
 wa_processar(ev('mensagem', 'oi de novo'));
 ok(tipos() === ['buttons'], 'a proxima mensagem NAO repete saudacao nem PDF');
 
-// Recusa permanente (texto vazio depois da interpolacao: o nome do perfil
-// do WhatsApp chega vazio) nao pode deixar a conversa muda para sempre.
+// Recusa permanente (texto vazio depois da interpolacao: {roteiro} sem
+// roteiro no contexto expande para nada) nao pode deixar a conversa muda para sempre.
 zera();
 add_fluxo('f-vazio', 'palavra', 'vazio', mini('v1', ['v1' => fx_card('v1', 'texto', ['texto' => '{roteiro}'])]));
 $ENVIADAS = [];
-ok(wa_processar(ev('mensagem', 'vazio', ['nome' => ''])) === 'fluxo', 'card que expande para vazio e tratado');
+ok(wa_processar(ev('mensagem', 'vazio')) === 'fluxo', 'card que expande para vazio e tratado');
 ok(conv()['estado'] === 'humano' && $ENVIADAS === [], 'vai para a humana, nada enviado');
 ok(count($DB['po_leads'][0]['notas'] ?? []) === 1, 'e a ficha diz por que');
 

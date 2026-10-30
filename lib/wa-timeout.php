@@ -197,8 +197,8 @@ function wa_varre_timeouts($agora = null) {
             continue;
         }
 
-        // Nome de verdade, vindo do lead - sem isto {nome} some do texto e
-        // sobra pontuacao orfa ("Oi , tudo bem?") na mensagem do cliente.
+        // O nome do lead segue sendo passado por compatibilidade de assinatura,
+        // mas {nome} deixou de ser variavel: wa_fluxo_vars_do_roteiro o ignora.
         $lead = wa_to_call('select', 'po_leads', 'wa_id=eq.' . rawurlencode($wa));
         $nome = $lead[0]['nome'] ?? '';
 
