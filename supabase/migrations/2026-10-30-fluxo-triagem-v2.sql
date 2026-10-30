@@ -35,11 +35,20 @@
 --   - os dois `update` de `versao_atual` sao de RODADA UNICA. Eles existem para
 --     apontar os fluxos para a versao 2; rodar esta migration depois de a cliente
 --     publicar uma versao 3 pelo painel jogaria os fluxos de volta para a 2;
---   - TUDO OU NADA: os passos 2 e 4 carregam a mesma guarda `exists`, entao se o
---     passo 1 nao gravar a versao 2 (ver o passo 2) nenhum dos dois roda, e o
---     passo 3 nao casa nenhuma linha. Ou a migration aplica inteira, ou nao
---     aplica nada. A guarda do passo 2 e a que importa, porque e o unico comando
---     irreversivel do arquivo; a do passo 4 so evita um ponteiro pendurado;
+--   - TUDO OU NADA, POR FLUXO: cada fluxo aplica inteiro ou nao aplica nada. Os
+--     passos 2 e 4 carregam a guarda `exists` da versao do SEU fluxo, entao se a
+--     versao 2 da triagem nao gravar, a exclusao dos 5 cards nao roda, o ponteiro
+--     da triagem nao anda e o passo 3 nao deriva card nenhum dela. A guarda do
+--     passo 2 e a que importa, porque e o unico comando irreversivel do arquivo;
+--     a do passo 4 so evita um ponteiro pendurado;
+--   - e a garantia e POR FLUXO DE PROPOSITO, nao por acoplamento esquecido: uma
+--     colisao na triagem nao pode impedir a "Lista de espera" de publicar. Sem a
+--     versao 2 dela o `{nome}` segue nos textos, a regra 14 a torna impublicavel,
+--     e a regra 11 exige a espera publicada e LIGADA antes de a triagem poder ser
+--     ligada (a triagem salta para dentro dela). Acoplar os dois faria uma colisao
+--     num lado deixar a cliente sem conseguir ligar o robo, que e o objetivo de
+--     tudo isto. No caso em que so um lado aplica, o rascunho de cada fluxo segue
+--     casado com a versao publicada DELE, entao nada diverge;
 --   - o redesenho SOBRESCREVE os 17 cards semeados, que e o proposito: retrato e
 --     rascunho tem de casar, senao o painel desenha uma conversa e o motor executa
 --     outra. Edicao que a cliente tenha feito nesses 17 cards se perde. ISSO E

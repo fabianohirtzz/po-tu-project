@@ -400,6 +400,7 @@ $cmds2 = preg_replace('/^\s*--.*$/m', '', $sql2);
 $cid = function ($nn) { return 'c1000000-0000-4000-8000-0000000000' . $nn; };
 $V2  = 'b1000000-0000-4000-8000-000000000003';   // versao 2 de "Boas-vindas e triagem"
 $V2E = 'b1000000-0000-4000-8000-000000000004';   // versao 2 de "Lista de espera"
+$RE_UUID = '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/';
 
 // Os dois retratos, na ordem em que a migration os publica.
 preg_match_all('/\$grafo\$(.*?)\$grafo\$/s', $sql2, $m2);
@@ -425,6 +426,34 @@ ok(preg_match_all('/on conflict \(id\) do update/i', $cmds2) === 1,
 ok(preg_match('/ativo\s*=\s*true/i', $cmds2) === 0, 'a migration da versao 2 nao liga fluxo nenhum (publicar e ligar sao atos separados)');
 ok(preg_match('/\+55(?!48900000)\d{10,11}/', $cmds2) === 0, 'nenhum telefone real na migration (repositorio publico)');
 
+/* CADA FLUXO DEPENDE SO DE SI, e isto e decisao, nao descuido. A migration e tudo ou
+   nada POR FLUXO: o comando que move o ponteiro de um fluxo e guardado pela versao DELE,
+   nunca pela do outro. Acoplar os dois seria pior, nao melhor: se uma colisao na triagem
+   bloqueasse a espera, a espera ficaria sem a versao 2, seguiria com o `{nome}` que a
+   regra 14 recusa, e a regra 11 exige a espera publicada e ligada ANTES de a triagem
+   poder ser ligada. Ou seja, uma colisao de um lado deixaria a cliente sem conseguir
+   ligar o robo. No caso em que so um lado aplica, o rascunho de cada fluxo segue casado
+   com a versao publicada dele, entao nada diverge. */
+preg_match_all('/\bupdate\s+public\.po_wa_fluxos([^;]*);/is', $cmds2, $ups, PREG_SET_ORDER);
+ok(count($ups) === 2, 'dois comandos movem ponteiro, um por fluxo: ' . count($ups));
+foreach ([[$V2, $bv['id'], $V2E, 'triagem'], [$V2E, $esp['id'], $V2, 'lista de espera']] as [$vid, $fid, $alheio, $qual]) {
+    // Acha o comando pelo id do FLUXO, nao pelo da versao: se alguem acoplar os dois, o
+    // uuid de versao aparece nos dois comandos e a busca por ele apontaria para o errado,
+    // fazendo a assercao acusar com o nome do fluxo trocado.
+    $meu = null;
+    foreach ($ups as $u) if (strpos($u[1], $fid) !== false) $meu = $u[1];
+    ok($meu !== null, 'existe o comando que aponta a ' . $qual . ' para a versao 2 dela');
+    preg_match_all($RE_UUID, $meu, $us);
+    ok(array_values(array_unique($us[0])) === [$vid, $fid],
+       'e ele cita so a versao e o fluxo da ' . $qual . ': ' . implode(', ', array_unique($us[0])));
+    ok(strpos($meu, $alheio) === false,
+       'nunca a versao do outro fluxo: acoplar os dois faria uma colisao num impedir o outro de publicar (' . $qual . ')');
+}
+// E o redesenho do rascunho le as DUAS versoes 2, para o fluxo que gravou ter o rascunho
+// derivado mesmo quando o outro nao gravou.
+ok(preg_match("/where v\.id in \(\s*'$V2',\s*'$V2E'\s*\)/", $cmds2) === 1,
+   'o redesenho do rascunho le as duas versoes 2, nao so a da triagem');
+
 /* O comando de exclusao e o unico desta migration que nao se desfaz: um uuid errado
    apagaria um card que a cliente pode ter editado a mao. Ele tem de alcancar EXATAMENTE
    os 5 cards que saem, nomeados um a um, e nada mais.
@@ -436,7 +465,6 @@ ok(preg_match('/\+55(?!48900000)\d{10,11}/', $cmds2) === 0, 'nenhum telefone rea
    executa outra" que o cabecalho da migration promete evitar. Por isso ele carrega o
    mesmo `exists` dos updates, e a migration passa a ser tudo ou nada. */
 $mortos = array_map($cid, ['03', '09', '10', '11', '19']);
-$RE_UUID = '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/';
 preg_match_all('/\bdelete\s+from\s+public\.(\w+)([^;]*);/is', $cmds2, $dels, PREG_SET_ORDER);
 ok(count($dels) === 1, 'ha um unico comando de exclusao na migration: ' . count($dels));
 ok($dels[0][1] === 'po_wa_cards', 'e ele exclui card do rascunho, nunca fluxo nem versao publicada: ' . $dels[0][1]);
