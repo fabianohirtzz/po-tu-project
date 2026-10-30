@@ -38,7 +38,8 @@
 --     guarda `exists` so impede o pior (apontar para versao que nao existe);
 --   - o redesenho SOBRESCREVE os 17 cards semeados, que e o proposito: retrato e
 --     rascunho tem de casar, senao o painel desenha uma conversa e o motor executa
---     outra. Edicao que a cliente tenha feito nesses 17 cards se perde;
+--     outra. Edicao que a cliente tenha feito nesses 17 cards se perde. ISSO E
+--     MEDIVEL ANTES: rode a consulta de conferencia logo abaixo do cabecalho;
 --   - a exclusao e por ID, um a um, e por isso NUNCA alcanca card que a cliente
 --     tenha criado no painel. Os 5 ids sao os cards da programacao e da pergunta
 --     do grupo, conferidos contra 2026-10-27-fluxo-semeado.sql.
@@ -49,6 +50,64 @@
 -- texto e passa os dois retratos pelo validador e pelo roteador de verdade.
 -- Plano: docs/superpowers/plans/2026-10-30-fluxo-ajustes-reuniao.md
 -- ============================================================
+
+
+-- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+-- >>>  CONSULTA DE CONFERENCIA. NAO E PARTE DA MIGRATION.                <<<
+-- >>>  Toda linha deste bloco esta comentada e NADA aqui e executado ao  <<<
+-- >>>  rodar o arquivo. Para usar, copie as linhas da consulta sem os    <<<
+-- >>>  `--` e rode ANTES da migration. A migration comeca depois do      <<<
+-- >>>  marcador de fim deste bloco.                                      <<<
+-- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+--
+-- O QUE ELA RESPONDE: "a cliente editou a mao algum card que esta migration vai
+-- sobrescrever ou apagar?" O retrato da VERSAO 1 ainda guarda, palavra por
+-- palavra, o texto que a semente escreveu (`versao = 1` de cada fluxo, que sao
+-- as versoes b1000000-...-000000000001 e b1000000-...-000000000002), entao basta
+-- comparar o rascunho de hoje com ele. Confere os DOIS campos de texto (`texto` e
+-- `lembrete_texto`) e os DOIS fluxos.
+--
+-- COMO LER O RESULTADO:
+--   - NENHUMA LINHA: ninguem mexeu nos textos semeados. Pode rodar a migration.
+--   - UMA OU MAIS LINHAS: aqueles cards foram editados DEPOIS da semente, e rodar
+--     a migration vai sobrescrever (ou, nos 5 que saem, apagar) o que esta la. As
+--     colunas `*_do_seed` e `*_agora` mostram lado a lado o que se perde. Decida
+--     com a cliente antes de rodar.
+--
+-- Card que a CLIENTE criou no painel nao aparece aqui, e esta correto: ele nao
+-- existe no retrato da versao 1, e a migration tambem nao o toca.
+--
+-- select f.nome as fluxo,
+--        c.ordem,
+--        c.titulo,
+--        c.texto          is distinct from v.grafo->'cards'->(c.id::text)->>'texto'          as texto_mudou,
+--        c.lembrete_texto is distinct from v.grafo->'cards'->(c.id::text)->>'lembrete_texto' as lembrete_mudou,
+--        v.grafo->'cards'->(c.id::text)->>'texto'          as texto_do_seed,
+--        c.texto                                           as texto_agora,
+--        v.grafo->'cards'->(c.id::text)->>'lembrete_texto' as lembrete_do_seed,
+--        c.lembrete_texto                                  as lembrete_agora
+--   from public.po_wa_cards c
+--   join public.po_wa_fluxos f        on f.id = c.fluxo_id
+--   join public.po_wa_fluxo_versoes v on v.fluxo_id = c.fluxo_id and v.versao = 1
+--  where c.fluxo_id in ('a1000000-0000-4000-8000-000000000001',
+--                       'a1000000-0000-4000-8000-000000000002')
+--    and v.grafo->'cards'->(c.id::text) is not null
+--    and (c.texto          is distinct from v.grafo->'cards'->(c.id::text)->>'texto'
+--      or c.lembrete_texto is distinct from v.grafo->'cards'->(c.id::text)->>'lembrete_texto')
+--  order by f.nome, c.ordem;
+--
+-- `is distinct from` e nao `<>` de proposito: a maioria dos cards tem `texto`
+-- nulo (marca, ir_para_fluxo) e `<>` com nulo devolve nulo, nunca verdadeiro,
+-- entao esses cards jamais apareceriam, editados ou nao.
+--
+-- E PARA NAO CONFIAR NUM "NENHUMA LINHA" QUE NAO COMPAROU NADA: troque as duas
+-- ultimas linhas do `where` (o `and (... or ...)`) por `and true` e rode de novo.
+-- Devem sair 22 linhas, que sao todos os cards semeados: os 20 da triagem e os 2
+-- da lista de espera. Se sairem menos, a semente nao rodou como este arquivo
+-- supoe, e o "nenhuma linha" da consulta de cima nao queria dizer "nada mudou".
+-- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+-- >>>  fim da consulta de conferencia. A MIGRATION COMECA AQUI.          <<<
+-- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 -- 1. Os retratos da versao 2. Imutaveis depois de gravados.
 -- Fluxo 1: Boas-vindas e triagem
