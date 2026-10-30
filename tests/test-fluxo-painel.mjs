@@ -28,7 +28,7 @@ const ESC = 'function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,' +
 
 const PURAS_NOMES = ['poFluxoTipos', 'poFluxoTipo', 'poFluxoOpcoes', 'poFluxoPrevia',
                      'poFluxoCard', 'poFluxoLista', 'poFluxoSeletor', 'poFluxoCanvas',
-                     'poFluxoLimite', 'poFluxoTemTexto', 'poFluxoMaxOpcoes', 'poFluxoPiorCaso', 'poFluxoContador',
+                     'poFluxoLimite', 'poFluxoTemTexto', 'poFluxoMaxOpcoes', 'poFluxoVariaveis', 'poFluxoVarFrase', 'poFluxoPiorCaso', 'poFluxoContador',
                      'poFluxoOpcoesComRotulos', 'poFluxoPatch', 'poFluxoQuem', 'poFluxoBloqueio', 'poFluxoProblemas',
                      'poFluxoEditavel', 'poFluxoGaveta',
                      'poFluxoPodePublicar', 'poFluxoOrdemLigar', 'poFluxoSemRepetido', 'poFluxoPainelProblemas',
@@ -679,9 +679,9 @@ assert.ok(/ta\.addEventListener\('input'/.test(semComentario), 'cada textarea ou
 assert.ok(/poFluxoContador\(ta\.value, Number\(ta\.getAttribute\('data-limite'\)\)\)/.test(semComentario), 'e recalcula o pior caso com o limite do PROPRIO campo');
 assert.ok(/classList\.toggle\('fl-cont--estouro', ct\.estoura\)/.test(semComentario) && /el\.textContent = ct\.texto/.test(semComentario), 'e atualiza texto e aviso');
 
-/* (7) variavel: so no pior caso e na dica. Fora disso, nenhum nome de variavel no fonte */
-const fora7 = semComentario.replace(pega('poFluxoPiorCaso'), '').split('\n').filter(l => !l.includes('class="fl-dica">Use {roteiro}')).join('\n');
-assert.ok(!/\{(nome|roteiro|data)\}/.test(fora7), 'nenhum {variavel} fora do pior caso e da dica');
+/* (7) variavel: so na lista unica poFluxoVariaveis. Fora disso, nenhum nome de variavel no fonte */
+const fora7 = semComentario.replace(pega('poFluxoVariaveis'), '');
+assert.ok(!/\{(nome|roteiro|data)\}/.test(fora7), 'nenhum {variavel} escrito a mao fora da lista unica');
 assert.ok(!/['"](nome|roteiro|data)['"]/.test(fora7), 'nenhuma lista propria de variaveis conhecidas');
 assert.ok(!/\b(nome|roteiro)\s*:\s*\d/.test(fora7), 'nenhuma tabela propria de tamanhos de variavel');
 
@@ -1975,6 +1975,30 @@ assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', op
   assert.ok(/\.fl-seta--volta\{[^}]*stroke-dasharray/.test(dentro), 'o retorno e tracejado');
   assert.ok(/\.fl-seta--volta\{[^}]*stroke:/.test(dentro), 'e tem cor propria');
   assert.ok(!/stroke-dasharray/.test(dentro.slice(base, volta)), 'o avanco segue solido (a base nao tem traco)');
+}
+
+/* O contador e a dica descrevem a MESMA lista de variaveis. Uma frase escrita a mao
+   num dos dois ficava dizendo "nome" depois de {nome} sair do sistema. Agora os dois
+   saem de poFluxoVariaveis(), e esta lista e amarrada ao servidor (WA_FLUXO_VAR_MAX). */
+{
+  const vars = F.poFluxoVariaveis();
+  const php = readFileSync(new URL('../lib/wa-fluxo.php', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+  const m = php.match(/const WA_FLUXO_VAR_MAX\s*=\s*\[([^\]]*)\]/);
+  assert.ok(m, 'guarda: a tabela do servidor foi encontrada');
+  const srv = {};
+  for (const x of m[1].matchAll(/'(\w+)'\s*=>\s*(\d+)/g)) srv[x[1]] = Number(x[2]);
+  assert.ok(Object.keys(srv).length >= 1, 'guarda: a tabela do servidor nao esta vazia');
+  assert.deepEqual(Object.fromEntries(vars.map(v => [v.nome, v.max])), srv, 'o painel conhece exatamente as variaveis (e tamanhos) do servidor');
+  const contador = F.poFluxoContador('', 100).texto;
+  const gav = F.poFluxoGaveta({ id: 'x', tipo: 'texto', titulo: 'T', texto: '' });
+  const dica = (gav.match(/<p class="fl-dica">Use [^<]*<\/p>/) || [''])[0];
+  assert.ok(dica, 'guarda: a dica das variaveis aparece na gaveta');
+  vars.forEach(v => {
+    assert.ok(dica.includes('{' + v.nome + '}'), 'a dica cita {' + v.nome + '}');
+    assert.ok(contador.includes(v.nome), 'o contador cita ' + v.nome);
+  });
+  assert.deepEqual([...dica.matchAll(/\{(\w+)\}/g)].map(x => x[1]), vars.map(v => v.nome), 'a dica cita so as variaveis vivas, na ordem');
+  assert.ok(!/\bnome\b/.test(contador + dica) || vars.some(v => v.nome === 'nome'), 'nenhuma das duas fala de uma variavel que nao existe mais (nome)');
 }
 
 console.log('test-fluxo-painel OK');

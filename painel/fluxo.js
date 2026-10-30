@@ -418,8 +418,23 @@ function poFluxoMaxOpcoes(tipo) {
    uma frase que estoura o limite so quando o titulo do roteiro e comprido, e ai a
    Meta devolve 400 e o cliente nao recebe nada, em silencio. Variavel que o robo
    nao conhece e removida no envio, entao vale 0. Conta caracteres, nao bytes. */
+/* A UNICA lista de variaveis que o painel conhece (espelho de WA_FLUXO_VAR_MAX,
+   que o teste confere). O pior caso, a dica e o contador saem todos daqui: frase
+   escrita a mao ficava falando de {nome} depois dele sair do sistema. `art` e o
+   artigo de cada nome, para a frase sair em portugues. */
+function poFluxoVariaveis() {
+  return [{ nome: 'roteiro', max: 60, art: 'o' }, { nome: 'data', max: 40, art: 'a' }];
+}
+
+// "a, b e c" a partir da lista viva: fn recebe a variavel e devolve o pedaco.
+function poFluxoVarFrase(fn) {
+  const l = poFluxoVariaveis().map(fn);
+  return l.length > 1 ? l.slice(0, -1).join(', ') + ' e ' + l[l.length - 1] : l.join('');
+}
+
 function poFluxoPiorCaso(texto) {
-  const max = { roteiro: 60, data: 40 };
+  const max = {};
+  poFluxoVariaveis().forEach(function (v) { max[v.nome] = v.max; });
   const pedacos = String(texto == null ? '' : texto).split(/(\{[a-z_]+\})/);
   let total = 0;
   pedacos.forEach(function (p) {
@@ -436,7 +451,7 @@ function poFluxoContador(texto, limite) {
   const estoura = typeof limite === 'number' && n > limite;
   return {
     n: n, limite: limite, estoura: estoura,
-    texto: n + ' de ' + limite + ' caracteres, contando o maior nome e roteiro possíveis' +
+    texto: n + ' de ' + limite + ' caracteres, contando ' + poFluxoVarFrase(function (v) { return v.art + ' maior ' + v.nome; }) + ' possíveis' +
       (estoura ? '. Encurte: o WhatsApp recusa a mensagem inteira e o cliente não recebe nada, e o fluxo não pode ser publicado assim.' : '.'),
   };
 }
@@ -844,7 +859,7 @@ function poFluxoGaveta(card) {
     '<button type="button" class="fl-gaveta__x" data-acao="fechar" aria-label="Fechar">×</button></div>' +
     '<div class="fl-gaveta__corpo">';
   h += campoTexto('texto', def.tipo === 'pdf' ? 'Legenda do PDF' : 'Mensagem', c.texto, limite, 7);
-  h += '<p class="fl-dica">Use {roteiro} e {data} onde quiser que apareçam o roteiro e a data.</p>';
+  h += '<p class="fl-dica">Use ' + poFluxoVarFrase(function (v) { return '{' + v.nome + '}'; }) + ' onde quiser que apareçam ' + poFluxoVarFrase(function (v) { return v.art + ' ' + v.nome; }) + '.</p>';
   if (opcoes.length) {
     h += '<fieldset class="fl-opcoes"><legend>' + (def.tipo === 'botoes' ? 'Botões (no máximo ' + max + ')' : 'Linhas da lista') + '</legend>';
     if (max !== null) h += '<div data-contagem>' + poFluxoContagem(opcoes.length, max) + '</div>';
