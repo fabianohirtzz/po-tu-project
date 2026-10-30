@@ -34,8 +34,12 @@
 --     recria card seed que tenha sido apagado;
 --   - os dois `update` de `versao_atual` sao de RODADA UNICA. Eles existem para
 --     apontar os fluxos para a versao 2; rodar esta migration depois de a cliente
---     publicar uma versao 3 pelo painel jogaria os fluxos de volta para a 2. A
---     guarda `exists` so impede o pior (apontar para versao que nao existe);
+--     publicar uma versao 3 pelo painel jogaria os fluxos de volta para a 2;
+--   - TUDO OU NADA: os passos 2 e 4 carregam a mesma guarda `exists`, entao se o
+--     passo 1 nao gravar a versao 2 (ver o passo 2) nenhum dos dois roda, e o
+--     passo 3 nao casa nenhuma linha. Ou a migration aplica inteira, ou nao
+--     aplica nada. A guarda do passo 2 e a que importa, porque e o unico comando
+--     irreversivel do arquivo; a do passo 4 so evita um ponteiro pendurado;
 --   - o redesenho SOBRESCREVE os 17 cards semeados, que e o proposito: retrato e
 --     rascunho tem de casar, senao o painel desenha uma conversa e o motor executa
 --     outra. Edicao que a cliente tenha feito nesses 17 cards se perde. ISSO E
@@ -61,50 +65,69 @@
 -- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 --
 -- O QUE ELA RESPONDE: "a cliente editou a mao algum card que esta migration vai
--- sobrescrever ou apagar?" O retrato da VERSAO 1 ainda guarda, palavra por
--- palavra, o texto que a semente escreveu (`versao = 1` de cada fluxo, que sao
--- as versoes b1000000-...-000000000001 e b1000000-...-000000000002), entao basta
--- comparar o rascunho de hoje com ele. Confere os DOIS campos de texto (`texto` e
--- `lembrete_texto`) e os DOIS fluxos.
+-- sobrescrever ou apagar?" O retrato da VERSAO 1 ainda guarda, campo por campo,
+-- o card que a semente escreveu (`versao = 1` de cada fluxo, que sao as versoes
+-- b1000000-...-000000000001 e b1000000-...-000000000002), entao basta comparar o
+-- rascunho de hoje com ele.
+--
+-- ELA COMPARA TUDO QUE O PASSO 3 SOBRESCREVE, nao so o texto: `tipo`, `titulo`,
+-- `texto`, `opcoes`, `config`, `proximo`, `fallback`, `sem_resposta`,
+-- `lembrete_ativo` e `lembrete_texto`, nos DOIS fluxos. Conferir so os dois
+-- campos de texto daria all-clear a quem renomeou um card, mexeu no rotulo de um
+-- botao ou trocou um destino, e essas edicoes se perderiam caladas.
+--
+-- DE FORA, de proposito: `ordem`, `x` e `y`. O passo 3 TAMBEM reseta a posicao
+-- dos cards no canvas, e a cliente arrasta card, entao isso vai mudar mesmo. Mas
+-- e cosmetico, e 22 linhas de "posicao mudou" enterrariam o que importa. Fica
+-- dito aqui para ninguem se surpreender: o desenho do canvas volta ao padrao.
 --
 -- COMO LER O RESULTADO:
---   - NENHUMA LINHA: ninguem mexeu nos textos semeados. Pode rodar a migration.
+--   - NENHUMA LINHA: ninguem mexeu nos cards semeados. Pode rodar a migration.
 --   - UMA OU MAIS LINHAS: aqueles cards foram editados DEPOIS da semente, e rodar
---     a migration vai sobrescrever (ou, nos 5 que saem, apagar) o que esta la. As
---     colunas `*_do_seed` e `*_agora` mostram lado a lado o que se perde. Decida
+--     a migration vai sobrescrever (ou, nos 5 que saem, apagar) o que esta la. A
+--     coluna `campos_editados` diz exatamente o que se perde em cada um. Decida
 --     com a cliente antes de rodar.
 --
 -- Card que a CLIENTE criou no painel nao aparece aqui, e esta correto: ele nao
 -- existe no retrato da versao 1, e a migration tambem nao o toca.
 --
--- select f.nome as fluxo,
---        c.ordem,
---        c.titulo,
---        c.texto          is distinct from v.grafo->'cards'->(c.id::text)->>'texto'          as texto_mudou,
---        c.lembrete_texto is distinct from v.grafo->'cards'->(c.id::text)->>'lembrete_texto' as lembrete_mudou,
---        v.grafo->'cards'->(c.id::text)->>'texto'          as texto_do_seed,
---        c.texto                                           as texto_agora,
---        v.grafo->'cards'->(c.id::text)->>'lembrete_texto' as lembrete_do_seed,
---        c.lembrete_texto                                  as lembrete_agora
---   from public.po_wa_cards c
---   join public.po_wa_fluxos f        on f.id = c.fluxo_id
---   join public.po_wa_fluxo_versoes v on v.fluxo_id = c.fluxo_id and v.versao = 1
---  where c.fluxo_id in ('a1000000-0000-4000-8000-000000000001',
---                       'a1000000-0000-4000-8000-000000000002')
---    and v.grafo->'cards'->(c.id::text) is not null
---    and (c.texto          is distinct from v.grafo->'cards'->(c.id::text)->>'texto'
---      or c.lembrete_texto is distinct from v.grafo->'cards'->(c.id::text)->>'lembrete_texto')
---  order by f.nome, c.ordem;
+-- with semeado as (
+--   select c.*, v.grafo->'cards'->(c.id::text) as s
+--     from public.po_wa_cards c
+--     join public.po_wa_fluxo_versoes v on v.fluxo_id = c.fluxo_id and v.versao = 1
+--    where c.fluxo_id in ('a1000000-0000-4000-8000-000000000001',
+--                         'a1000000-0000-4000-8000-000000000002')
+-- ), diferenca as (
+--   select f.nome as fluxo, k.ordem, k.titulo, k.id,
+--          array_remove(array[
+--            case when k.tipo             is distinct from k.s->>'tipo'                      then 'tipo'           end,
+--            case when k.titulo           is distinct from k.s->>'titulo'                    then 'titulo'         end,
+--            case when k.texto            is distinct from k.s->>'texto'                     then 'texto'          end,
+--            case when k.opcoes           is distinct from k.s->'opcoes'                     then 'opcoes'         end,
+--            case when k.config           is distinct from k.s->'config'                     then 'config'         end,
+--            case when k.proximo::text    is distinct from k.s->>'proximo'                   then 'proximo'        end,
+--            case when k.fallback::text   is distinct from k.s->>'fallback'                  then 'fallback'       end,
+--            case when k.sem_resposta::text is distinct from k.s->>'sem_resposta'            then 'sem_resposta'   end,
+--            case when k.lembrete_ativo   is distinct from (k.s->>'lembrete_ativo')::boolean then 'lembrete_ativo' end,
+--            case when k.lembrete_texto   is distinct from k.s->>'lembrete_texto'            then 'lembrete_texto' end
+--          ], null) as campos_editados
+--     from semeado k
+--     join public.po_wa_fluxos f on f.id = k.fluxo_id
+--    where k.s is not null
+-- )
+-- select * from diferenca where cardinality(campos_editados) > 0 order by fluxo, ordem;
 --
--- `is distinct from` e nao `<>` de proposito: a maioria dos cards tem `texto`
--- nulo (marca, ir_para_fluxo) e `<>` com nulo devolve nulo, nunca verdadeiro,
--- entao esses cards jamais apareceriam, editados ou nao.
+-- `is distinct from` e nao `<>` de proposito, e vale para todos os dez campos: a
+-- maioria dos cards tem `texto`, `proximo` ou `fallback` nulo (marca,
+-- ir_para_fluxo, humano) e `<>` com nulo devolve nulo, nunca verdadeiro, entao
+-- esses campos jamais acusariam edicao. `opcoes` e `config` sao jsonb e comparam
+-- direto, ignorando a ordem das chaves, que e o que se quer.
 --
--- E PARA NAO CONFIAR NUM "NENHUMA LINHA" QUE NAO COMPAROU NADA: troque as duas
--- ultimas linhas do `where` (o `and (... or ...)`) por `and true` e rode de novo.
--- Devem sair 22 linhas, que sao todos os cards semeados: os 20 da triagem e os 2
--- da lista de espera. Se sairem menos, a semente nao rodou como este arquivo
--- supoe, e o "nenhuma linha" da consulta de cima nao queria dizer "nada mudou".
+-- E PARA NAO CONFIAR NUM "NENHUMA LINHA" QUE NAO COMPAROU NADA: troque, na ultima
+-- linha, o `> 0` por `>= 0` e rode de novo. Devem sair 22 linhas, que sao todos os
+-- cards semeados: os 20 da triagem e os 2 da lista de espera. Se sairem menos, a
+-- semente nao rodou como este arquivo supoe, e o "nenhuma linha" da consulta de
+-- cima nao queria dizer "nada mudou".
 -- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 -- >>>  fim da consulta de conferencia. A MIGRATION COMECA AQUI.          <<<
 -- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -444,6 +467,13 @@ on conflict do nothing;
 -- 2. Os cards que saem do rascunho, nomeados um a um. Por ID, entao nao alcanca
 -- card que a cliente tenha criado. Sao a lista da programacao (003) e a pergunta
 -- "ja viajou em grupo" com as duas marcas dela e o repete (009, 010, 011, 019).
+--
+-- O `exists` NAO E ENFEITE, e e o mesmo do passo 4. Este e o unico comando do
+-- arquivo que nao se desfaz, e por isso e o unico que nao pode rodar sozinho: se
+-- o passo 1 nao gravou (a cliente publicou uma versao 2 pelo painel e o
+-- `unique (fluxo_id, versao)` recusou a nossa), o passo 3 nao casa nada e o passo
+-- 4 se barra, mas sem esta guarda os 5 cards JA FORAM, e sobra um rascunho sem
+-- cards que o grafo publicado ainda aponta. Com ela a migration e tudo ou nada.
 delete from public.po_wa_cards
  where id in (
    'c1000000-0000-4000-8000-000000000003',
@@ -451,7 +481,8 @@ delete from public.po_wa_cards
    'c1000000-0000-4000-8000-000000000010',
    'c1000000-0000-4000-8000-000000000011',
    'c1000000-0000-4000-8000-000000000019'
- );
+ )
+   and exists (select 1 from public.po_wa_fluxo_versoes where id = 'b1000000-0000-4000-8000-000000000003');
 
 -- 3. Os cards do rascunho, derivados do retrato da versao 2. (ordem, x, y) e so
 -- o desenho na tela; o retrato nao o guarda. O `do update` e o que mantem o

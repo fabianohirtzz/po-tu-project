@@ -427,14 +427,28 @@ ok(preg_match('/\+55(?!48900000)\d{10,11}/', $cmds2) === 0, 'nenhum telefone rea
 
 /* O comando de exclusao e o unico desta migration que nao se desfaz: um uuid errado
    apagaria um card que a cliente pode ter editado a mao. Ele tem de alcancar EXATAMENTE
-   os 5 cards que saem, nomeados um a um, e nada mais. */
+   os 5 cards que saem, nomeados um a um, e nada mais.
+   E ele e tambem o unico que nao pode rodar SOZINHO. Se o insert da versao 2 nao gravar
+   (a cliente publicou uma versao 2 pelo painel e o `unique (fluxo_id, versao)` recusou a
+   nossa), o redesenho do rascunho nao casa nada e os `exists` barram os dois ponteiros,
+   mas sem guarda aqui os 5 cards JA FORAM: sobra um rascunho sem cards que o grafo
+   publicado ainda aponta, que e exatamente o "painel desenha uma conversa e o motor
+   executa outra" que o cabecalho da migration promete evitar. Por isso ele carrega o
+   mesmo `exists` dos updates, e a migration passa a ser tudo ou nada. */
 $mortos = array_map($cid, ['03', '09', '10', '11', '19']);
+$RE_UUID = '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/';
 preg_match_all('/\bdelete\s+from\s+public\.(\w+)([^;]*);/is', $cmds2, $dels, PREG_SET_ORDER);
 ok(count($dels) === 1, 'ha um unico comando de exclusao na migration: ' . count($dels));
 ok($dels[0][1] === 'po_wa_cards', 'e ele exclui card do rascunho, nunca fluxo nem versao publicada: ' . $dels[0][1]);
 ok(preg_match('/\bwhere\b/i', $dels[0][2]) === 1, 'com where (sem ele, iria o fluxo inteiro)');
-preg_match_all('/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/', $dels[0][2], $apagados);
-ok($apagados[0] === $mortos, 'e nomeia os 5 ids que saem, um a um, e so eles: ' . implode(', ', $apagados[0]));
+// A guarda e o resto do comando sao conferidos separados, senao o uuid da versao que
+// entra no `exists` contaria como um sexto id apagado.
+$pedacos = preg_split('/\band\s+exists\b/i', $dels[0][2], 2);
+ok(count($pedacos) === 2, 'e com a guarda `and exists`: sem ela a exclusao roda mesmo quando a versao 2 nao foi gravada');
+preg_match_all($RE_UUID, $pedacos[0], $apagados);
+ok($apagados[0] === $mortos, 'nomeia os 5 ids que saem, um a um, e so eles: ' . implode(', ', $apagados[0]));
+preg_match_all($RE_UUID, $pedacos[1], $guarda);
+ok($guarda[0] === [$V2], 'e a guarda olha a versao 2 da triagem, so ela: ' . implode(', ', $guarda[0]));
 foreach ($mortos as $morto) {
     ok(isset($bv['cards'][$morto]), 'o card ' . substr($morto, -2) . ' existe na versao 1 (senao o delete apagaria outra coisa)');
     ok(!isset($g2['cards'][$morto]), 'e saiu da versao 2');
@@ -455,7 +469,19 @@ foreach ([$g2, $e2] as $g) {
     $usados = array_intersect_key($lugar, $g['cards']);
     ok(count(array_unique($usados)) === count($usados), 'nenhum card do fluxo "' . $g['nome'] . '" ocupa a posicao de outro');
 }
-$confere_derivacao($sql2, 'versao 2');
+// Sobre os COMANDOS, nao sobre o arquivo: o cabecalho da versao 2 leva uma consulta de
+// conferencia comentada que tambem fala de po_wa_cards, e ela nao pode entrar nesta regex.
+$confere_derivacao($cmds2, 'versao 2');
+
+/* Quantos comandos o arquivo roda. Todas as travas acima olham UM comando por vez e
+   nenhuma olha o total: um setimo comando nao previsto (um `update public.po_wa_cards
+   set texto = ...`, digamos) passaria por todas elas. Os retratos saem da conta antes do
+   corte porque um `;` no texto de um card mudaria a contagem sem mudar comando nenhum. */
+$sem_retrato = preg_replace('/\$grafo\$.*?\$grafo\$/s', "'<retrato>'", $cmds2);
+$comandos = array_values(array_filter(array_map('trim', explode(';', $sem_retrato)), 'strlen'));
+$verbos = array_map(function ($s) { return strtolower(preg_split('/\s+/', $s)[0]); }, $comandos);
+ok($verbos === ['insert', 'insert', 'delete', 'insert', 'update', 'update'],
+   'a migration roda 6 comandos, nesta ordem (as duas versoes, a exclusao, o redesenho do rascunho e os dois ponteiros): ' . implode(',', $verbos));
 
 /* O validador, no estado em que a cliente publica: o irmao ja publicado e ligado (a ordem
    que o painel manda seguir). Zero bloqueio, porque e esta versao que vai ao ar. */
@@ -499,9 +525,12 @@ ok(strpos($j1, '{nome}') !== false, 'e a versao 1 usava (senao as duas assercoes
    preencher nao pode ser gravado por marca nenhuma, e a pergunta nao pode sobrar em texto.
    Nao se confere a ausencia de "em grupo": "viagens em grupo desde 1967" e o posicionamento
    da casa e e justamente o que a boas-vindas diz. */
+// Cada assercao de ausencia com a sua guarda na linha de baixo: ausencia que nunca
+// esteve presente nao prova nada, e e o jeito que este plano mais pagou para aprender.
 ok(strpos($j2, 'qualif_grupo') === false, 'nenhuma marca da versao 2 grava qualif_grupo');
-ok(!preg_match('/j[aá]\s+viaj/iu', $j2), 'e nenhum texto pergunta se a pessoa ja viajou');
-ok(strpos($j1, 'qualif_grupo') !== false, 'a versao 1 gravava qualif_grupo (senao a assercao acima nao prova nada)');
+ok(strpos($j1, 'qualif_grupo') !== false, 'e a versao 1 gravava (senao a assercao acima nao prova nada)');
+ok(!preg_match('/j[aá]\s+viaj/iu', $j2), 'nenhum texto da versao 2 pergunta se a pessoa ja viajou');
+ok(preg_match('/j[aá]\s+viaj/iu', $j1), 'e a versao 1 perguntava (senao a assercao acima nao prova nada)');
 
 // ---- 1. o menu perde a porta "Ver a programacao"
 $menu2 = $g2['cards'][$cid('01')];
