@@ -73,7 +73,7 @@ function zera() {
 $acao = wa_processar(ev('mensagem', 'oi queria saber da Turquia'));
 ok($acao === 'fluxo', "primeira mensagem entra no fluxo (deu: $acao)");
 ok($ENVIADAS[0][0] === 'buttons', 'as boas-vindas saem em botoes');
-ok(strpos($ENVIADAS[0][2], 'Maria') !== false, 'com o nome da pessoa');
+ok(strpos($ENVIADAS[0][2], 'Maria') === false && strpos($ENVIADAS[0][2], '{') === false, 'nao usa o nome do perfil e nao vaza chave');
 ok($DB['po_wa_conversas'][0]['estado'] === 'aguardando', 'a conversa espera');
 ok($DB['po_wa_conversas'][0]['card_atual'] === 'boas', 'no card de boas-vindas');
 ok($DB['po_wa_conversas'][0]['fluxo_versao_id'] === 'v-triagem', 'na versao publicada do fluxo');
@@ -153,7 +153,7 @@ wa_processar(clica('nao'));
 ok($DB['po_leads'][0]['status'] === 'perdido', 'lead vai para perdido');
 ok($DB['po_leads'][0]['qualif_data'] === false, 'com a data marcada como nao serve (e o que alimenta "perdeu por data")');
 ok($DB['po_wa_conversas'][0]['estado'] === 'encerrado', 'e a conversa encerra');
-ok(strpos($ENVIADAS[0][2], 'Maria') !== false, 'depois de se despedir pelo nome');
+ok(strpos($ENVIADAS[0][2], 'Maria') === false && strpos($ENVIADAS[0][2], '{') === false, 'a despedida nao usa o nome do perfil e nao vaza chave');
 
 // --- 10. anuncio mapeado define o roteiro do contexto
 zera();

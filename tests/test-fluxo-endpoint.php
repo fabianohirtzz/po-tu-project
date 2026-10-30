@@ -29,10 +29,10 @@ function fx_dados($caso) {
     $f2 = ['id' => 'f2', 'nome' => 'Lista de espera', 'gatilho' => 'chamado', 'gatilho_valor' => null,
            'ativo' => true, 'card_inicial' => 'mk', 'versao_atual' => null];
     $c1 = [
-        fx_card('bv', 'f1', 'botoes', 'Boas-vindas', 'Oi {nome}, como ajudo?', [
+        fx_card('bv', 'f1', 'botoes', 'Boas-vindas', 'Oi, como ajudo?', [
             'opcoes' => [['id' => 'b1', 'rotulo' => 'Falar com a equipe', 'destino' => 'hum']],
             'fallback' => 'ops', 'sem_resposta' => 'fim', 'lembrete_ativo' => true,
-            'lembrete_texto' => 'Oi {nome}?', 'ordem' => 1]),
+            'lembrete_texto' => 'Oi?', 'ordem' => 1]),
         fx_card('ops', 'f1', 'botoes', 'Nao entendi', 'Nao entendi. Quer falar com a equipe?', [
             'opcoes' => [['id' => 'v', 'rotulo' => 'Falar com a equipe', 'destino' => 'hum']],
             'fallback' => 'hum', 'lembrete_ativo' => true, 'lembrete_texto' => 'Oi?', 'ordem' => 2]),

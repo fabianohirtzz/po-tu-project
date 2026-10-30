@@ -18,9 +18,9 @@ $fx = ['id' => 'f1', 'nome' => 'Boas-vindas', 'gatilho' => 'mensagem_nova', 'gat
        'ativo' => false, 'card_inicial' => 'bv'];
 // fluxo valido minimo: botoes -> humano, com fallback e fim
 $base = [
-  ['id'=>'bv','fluxo_id'=>'f1','tipo'=>'botoes','titulo'=>'Boas-vindas','texto'=>'Oi {nome}, como ajudo?',
+  ['id'=>'bv','fluxo_id'=>'f1','tipo'=>'botoes','titulo'=>'Boas-vindas','texto'=>'Oi, como ajudo?',
    'opcoes'=>[['id'=>'b1','rotulo'=>'Falar com a Lais','destino'=>'hum']],'config'=>[],
-   'proximo'=>null,'fallback'=>'ops','sem_resposta'=>'fim','lembrete_ativo'=>true,'lembrete_texto'=>'Oi {nome}?'],
+   'proximo'=>null,'fallback'=>'ops','sem_resposta'=>'fim','lembrete_ativo'=>true,'lembrete_texto'=>'Oi?'],
   ['id'=>'ops','fluxo_id'=>'f1','tipo'=>'botoes','titulo'=>'Nao entendi','texto'=>'Nao entendi. Quer falar com a Lais?',
    'opcoes'=>[['id'=>'v','rotulo'=>'Falar com a Lais','destino'=>'hum']],'config'=>[],
    'proximo'=>null,'fallback'=>'hum','sem_resposta'=>null,'lembrete_ativo'=>true,'lembrete_texto'=>'Oi?'],
@@ -249,8 +249,8 @@ $c[1]['opcoes'][0]['destino'] = 'pdf';  // ops (fallback da lista) agora pula a 
 ok(in_array(13, bloqueios($fx, $c), true), 'regra 13: um caminho que pula a lista basta para bloquear');
 
 // regra 14: variaveis validas passam; lembrete desligado nao e conferido
-$c = $base; $c[0]['texto'] = 'Oi {nome}, {nome} de novo.';
-ok(!in_array(14, bloqueios($fx, $c), true), 'regra 14: {nome} repetido passa');
+$c = $base; $c[0]['texto'] = 'Oi {nome}, como ajudo?';
+ok(in_array(14, bloqueios($fx, $c), true), 'regra 14: {nome} deixou de ser variavel valida');
 $c = $base; $c[0]['texto'] = 'Oi {nome';
 ok(in_array(14, bloqueios($fx, $c), true), 'regra 14: chave sem par');
 $c = $base; $c[0]['lembrete_ativo'] = false; $c[0]['lembrete_texto'] = 'Oi {Nome}'; $c[0]['sem_resposta'] = 'fim';

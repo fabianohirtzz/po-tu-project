@@ -14,7 +14,7 @@ function card($id, $tipo, $extra = []) {
 }
 
 $g = ['id' => 'f1', 'nome' => 'T', 'inicial' => 'txt', 'humano' => 'hum', 'porta' => 'mensagem_nova', 'porta_valor' => null, 'cards' => [
-  'txt'      => card('txt', 'texto', ['texto' => 'Ola, {nome}!', 'proximo' => 'hum']),
+  'txt'      => card('txt', 'texto', ['texto' => 'Ola, tudo bem?', 'proximo' => 'hum']),
   'dt'       => card('dt', 'botoes', ['texto' => 'A {roteiro} sai em {data}. Funciona?', 'opcoes' => [
                   ['id' => 's', 'rotulo' => 'Sim, funciona', 'destino' => 'hum'],
                   ['id' => 'n', 'rotulo' => 'Nao nessa data', 'destino' => 'hum']]]),
@@ -62,7 +62,7 @@ ok($ENVIADAS[0][2][0]['rotulo'] === 'Sim, funciona' && $ENVIADAS[0][2][1]['id'] 
 zera();
 $r = wa_fluxo_executa($g, 'txt', $fone, $c0, 'Marta');
 ok($r['ok'] === true && $r['espera'] === false && $r['terminal'] === null, 'card texto nao espera');
-ok($ENVIADAS[0] === ['text', 'Ola, Marta!'], 'card texto usa send_text com o nome');
+ok($ENVIADAS[0] === ['text', 'Ola, tudo bem?'], 'card texto usa send_text');
 
 // 3. pdf: manda o documento com legenda, nao espera
 zera();

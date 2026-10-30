@@ -59,11 +59,11 @@ const WA_CARD_TERMINAL = ['humano','fim'];            // cards sem saida
 const WA_SEM_RESPOSTA_TIPOS = ['texto','marca','humano','fim'];
 
 /* ---------- variaveis de texto ---------- */
-const WA_FLUXO_VARS         = ['nome','roteiro','data'];
+const WA_FLUXO_VARS         = ['roteiro','data'];
 const WA_FLUXO_VARS_ROTEIRO = ['roteiro','data'];     // as que dependem de haver roteiro no contexto
 // Maximo de caracteres de cada variavel. Vale nos dois lados: o valor real e
 // cortado nele, e a validacao conta o texto pelo pior caso com ele.
-const WA_FLUXO_VAR_MAX      = ['nome' => 40, 'roteiro' => 60, 'data' => 40];
+const WA_FLUXO_VAR_MAX      = ['roteiro' => 60, 'data' => 40];
 
 /* Limite de caracteres por tipo de card, contado na expansao de pior caso.
    Corpo interativo e legenda de documento: 1024. Texto simples: 4096. */
@@ -88,7 +88,6 @@ function wa_fluxo_vars_do_roteiro($r, $nome) {
         $data = (string) ($r['data_label'] ?? '') ?: (string) ($r['periodo'] ?? '') ?: 'na data prevista';
     }
     $vars = [
-        'nome'    => (string) $nome,
         'roteiro' => is_array($r) ? (string) ($r['titulo'] ?? '') : '',
         'data'    => $data,
     ];
@@ -112,7 +111,7 @@ function wa_fluxo_corta($v, $max) {
     return rtrim($corte) . '…';
 }
 
-/* Substitui {nome}, {roteiro} e {data}. Qualquer outro {buraco} e REMOVIDO:
+/* Substitui {roteiro} e {data}. Qualquer outro {buraco} e REMOVIDO:
    texto montado no painel nao pode vazar chave crua para o cliente. */
 function wa_fluxo_texto($texto, $vars) {
     // O teto e aplicado AQUI, no ponto de uso, e nao so em quem monta $vars:

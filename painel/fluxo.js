@@ -410,13 +410,13 @@ function poFluxoMaxOpcoes(tipo) {
   return tipo === 'botoes' ? 3 : null;
 }
 
-/* Tamanho do texto DEPOIS da expansao de pior caso: {roteiro} vale 60, {nome} 40,
+/* Tamanho do texto DEPOIS da expansao de pior caso: {roteiro} vale 60,
    {data} 40 (espelho de WA_FLUXO_VAR_MAX). Conferir o texto cru deixaria passar
    uma frase que estoura o limite so quando o titulo do roteiro e comprido, e ai a
    Meta devolve 400 e o cliente nao recebe nada, em silencio. Variavel que o robo
    nao conhece e removida no envio, entao vale 0. Conta caracteres, nao bytes. */
 function poFluxoPiorCaso(texto) {
-  const max = { nome: 40, roteiro: 60, data: 40 };
+  const max = { roteiro: 60, data: 40 };
   const pedacos = String(texto == null ? '' : texto).split(/(\{[a-z_]+\})/);
   let total = 0;
   pedacos.forEach(function (p) {
@@ -738,7 +738,7 @@ function poFluxoGaveta(card) {
     '<button type="button" class="fl-gaveta__x" data-acao="fechar" aria-label="Fechar">×</button></div>' +
     '<div class="fl-gaveta__corpo">';
   h += campoTexto('texto', def.tipo === 'pdf' ? 'Legenda do PDF' : 'Mensagem', c.texto, limite, 7);
-  h += '<p class="fl-dica">Use {nome}, {roteiro} e {data} onde quiser que apareçam o nome da pessoa, o roteiro e a data.</p>';
+  h += '<p class="fl-dica">Use {roteiro} e {data} onde quiser que apareçam o roteiro e a data.</p>';
   if (opcoes.length) {
     h += '<fieldset class="fl-opcoes"><legend>' + (def.tipo === 'botoes' ? 'Botões (no máximo ' + max + ')' : 'Linhas da lista') + '</legend>';
     if (max !== null) h += '<p class="fl-dica">' + opcoes.length + ' de ' + max + ' botões.</p>';

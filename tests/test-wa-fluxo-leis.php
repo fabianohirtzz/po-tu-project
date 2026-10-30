@@ -215,7 +215,7 @@ ok(tipos() === ['buttons'], 'a proxima mensagem NAO repete saudacao nem PDF');
 // Recusa permanente (texto vazio depois da interpolacao: o nome do perfil
 // do WhatsApp chega vazio) nao pode deixar a conversa muda para sempre.
 zera();
-add_fluxo('f-vazio', 'palavra', 'vazio', mini('v1', ['v1' => fx_card('v1', 'texto', ['texto' => '{nome}'])]));
+add_fluxo('f-vazio', 'palavra', 'vazio', mini('v1', ['v1' => fx_card('v1', 'texto', ['texto' => '{roteiro}'])]));
 $ENVIADAS = [];
 ok(wa_processar(ev('mensagem', 'vazio', ['nome' => ''])) === 'fluxo', 'card que expande para vazio e tratado');
 ok(conv()['estado'] === 'humano' && $ENVIADAS === [], 'vai para a humana, nada enviado');

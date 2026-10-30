@@ -474,10 +474,10 @@ for (const t of ['marca', 'ir_para_fluxo', 'inventado', null, undefined, 'toStri
 /* pior caso: a expansao, nao o texto cru */
 assert.equal(F.poFluxoPiorCaso('abc'), 3, 'texto sem variavel vale o proprio tamanho');
 assert.equal(F.poFluxoPiorCaso('{roteiro}'), 60, '{roteiro} vale 60');
-assert.equal(F.poFluxoPiorCaso('{nome}'), 40, '{nome} vale 40');
+assert.equal(F.poFluxoPiorCaso('{nome}'), 0, '{nome} deixou de ser variavel: e removida no envio, vale 0');
 assert.equal(F.poFluxoPiorCaso('{data}'), 40, '{data} vale 40');
-assert.equal(F.poFluxoPiorCaso('oi {nome}, {roteiro} em {data}'), 3 + 40 + 2 + 60 + 4 + 40, 'mistura soma cada uma');
-assert.equal(F.poFluxoPiorCaso('{nome}{nome}'), 80, 'repetida conta cada vez');
+assert.equal(F.poFluxoPiorCaso('oi, {roteiro} em {data}'), 4 + 60 + 4 + 40, 'mistura soma cada uma');
+assert.equal(F.poFluxoPiorCaso('{data}{data}'), 80, 'repetida conta cada vez');
 assert.equal(F.poFluxoPiorCaso('a {inventada} b'), 4, 'variavel desconhecida e removida no envio: vale 0');
 assert.equal(F.poFluxoPiorCaso(null), 0);
 assert.equal(F.poFluxoPiorCaso('ção ✈'), 5, 'conta caracteres, nao bytes');
@@ -664,7 +664,7 @@ assert.ok(Object.keys(lim).length >= 6, 'WA_FLUXO_LIMITE lido do PHP');
 for (const [t, n] of Object.entries(lim)) assert.equal(F.poFluxoLimite(t), n, 'limite de ' + t + ' igual ao do PHP');
 for (const t of F.poFluxoTipos ? ['marca', 'ir_para_fluxo'] : []) assert.ok(!(t in lim) && F.poFluxoLimite(t) === null, t + ' sem limite nos dois lados');
 const vmax = Object.fromEntries([...php.match(/const WA_FLUXO_VAR_MAX\s*=\s*\[([^\]]*)\]/)[1].matchAll(/'(\w+)'\s*=>\s*(\d+)/g)].map(m => [m[1], Number(m[2])]));
-assert.deepEqual(Object.keys(vmax).sort(), ['data', 'nome', 'roteiro'], 'as tres variaveis do PHP');
+assert.deepEqual(Object.keys(vmax).sort(), ['data', 'roteiro'], 'as duas variaveis do PHP');
 for (const [k, n] of Object.entries(vmax)) assert.equal(F.poFluxoPiorCaso('{' + k + '}'), n, '{' + k + '} vale o mesmo no PHP e no JS');
 const limLemb = Number(php.match(/wa_fluxo_tam_pior_caso\(\$c\['lembrete_texto'\]\)\) > (\d+)/)[1]);
 assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', opcoes: op(1) }).includes('data-campo="lembrete_texto" data-limite="' + limLemb + '"'),
@@ -679,7 +679,7 @@ assert.ok(/poFluxoContador\(ta\.value, Number\(ta\.getAttribute\('data-limite'\)
 assert.ok(/classList\.toggle\('fl-cont--estouro', ct\.estoura\)/.test(semComentario) && /el\.textContent = ct\.texto/.test(semComentario), 'e atualiza texto e aviso');
 
 /* (7) variavel: so no pior caso e na dica. Fora disso, nenhum nome de variavel no fonte */
-const fora7 = semComentario.replace(pega('poFluxoPiorCaso'), '').split('\n').filter(l => !l.includes('class="fl-dica">Use {nome}')).join('\n');
+const fora7 = semComentario.replace(pega('poFluxoPiorCaso'), '').split('\n').filter(l => !l.includes('class="fl-dica">Use {roteiro}')).join('\n');
 assert.ok(!/\{(nome|roteiro|data)\}/.test(fora7), 'nenhum {variavel} fora do pior caso e da dica');
 assert.ok(!/['"](nome|roteiro|data)['"]/.test(fora7), 'nenhuma lista propria de variaveis conhecidas');
 assert.ok(!/\b(nome|roteiro)\s*:\s*\d/.test(fora7), 'nenhuma tabela propria de tamanhos de variavel');

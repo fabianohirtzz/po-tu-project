@@ -11,7 +11,7 @@ function card($id, $tipo, $extra = []) {
 }
 function cards_ok($fluxo_id, $destino_b2 = 'fim') {
     return [
-        card('bv', 'botoes', ['fluxo_id' => $fluxo_id, 'texto' => 'Oi {nome}',
+        card('bv', 'botoes', ['fluxo_id' => $fluxo_id, 'texto' => 'Oi, tudo bem?',
             'opcoes' => [['id' => 'b1', 'rotulo' => 'Falar com a Lais', 'destino' => 'hum'],
                          ['id' => 'b2', 'rotulo' => 'Encerrar', 'destino' => $destino_b2]],
             'fallback' => 'hum']),
@@ -90,7 +90,7 @@ ok(wa_fluxo_grafo('v1')['inicial'] === 'bv', 'grafo que o banco devolve como tex
 $DB['po_wa_fluxo_versoes'][0]['grafo'] = '{lixo';
 ok(wa_fluxo_grafo('v1') === null, 'grafo corrompido devolve null');
 $DB['po_wa_fluxo_versoes'] = [];
-$DB['po_wa_cards'][0]['texto'] = 'Oi {nome}';
+$DB['po_wa_cards'][0]['texto'] = 'Oi, tudo bem?';
 
 // 2. publicar com problema NAO grava versao nenhuma
 $r = wa_fluxo_publica('f-quebrado');
@@ -126,20 +126,20 @@ foreach ($ESCRITAS as $e) {
 ok($DB['po_wa_fluxos'][0]['ativo'] === false, 'o fluxo continua desligado depois de publicar');
 $v1 = $DB['po_wa_fluxos'][0]['versao_atual'];
 ok($v1 !== null && wa_fluxo_grafo($v1)['inicial'] === 'bv', 'versao_atual aponta o retrato gravado');
-ok(wa_fluxo_grafo($v1)['cards']['bv']['texto'] === 'Oi {nome}', 'o retrato leva o texto da edicao');
+ok(wa_fluxo_grafo($v1)['cards']['bv']['texto'] === 'Oi, tudo bem?', 'o retrato leva o texto da edicao');
 
 // 3b. fluxo ja ligado continua ligado ao republicar (publicar nunca desliga tambem)
 $DB['po_wa_fluxos'][0]['ativo'] = true;
 
 // 4. publicar de novo cria a versao 2, a 1 continua la, e a conversa antiga segue na dela
-$DB['po_wa_cards'][0]['texto'] = 'Ola {nome}, versao nova';
+$DB['po_wa_cards'][0]['texto'] = 'Ola, versao nova';
 $r = wa_fluxo_publica('f1');
 ok($r['ok'] === true && $r['versao'] === 2, 'a segunda publicacao e a versao 2');
 ok($DB['po_wa_fluxos'][0]['ativo'] === true, 'republicar nao desliga o fluxo');
 $v2 = $DB['po_wa_fluxos'][0]['versao_atual'];
 ok($v2 !== $v1, 'versao_atual andou para a nova');
-ok(wa_fluxo_grafo($v1)['cards']['bv']['texto'] === 'Oi {nome}', 'conversa presa na versao 1 continua lendo a 1');
-ok(wa_fluxo_grafo($v2)['cards']['bv']['texto'] === 'Ola {nome}, versao nova', 'a versao 2 leva a edicao');
+ok(wa_fluxo_grafo($v1)['cards']['bv']['texto'] === 'Oi, tudo bem?', 'conversa presa na versao 1 continua lendo a 1');
+ok(wa_fluxo_grafo($v2)['cards']['bv']['texto'] === 'Ola, versao nova', 'a versao 2 leva a edicao');
 
 // 5. a validacao roda DENTRO de wa_fluxo_publica, nao so no endpoint
 /* Normaliza o fim de linha: `core.autocrlf=true` neste repo, entao o mesmo

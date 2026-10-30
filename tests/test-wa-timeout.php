@@ -17,7 +17,7 @@ ok(WA_HORAS_ENCERRA === 24, 'o encerramento vem 24h depois do lembrete');
 $GRAFO = ['id' => 'f1', 'nome' => 'Teste', 'inicial' => 'c_bot', 'humano' => 'c_hum', 'cards' => [
     // espera, lembra, sem destino de "sem resposta"
     'c_bot'  => ['id'=>'c_bot','tipo'=>'botoes','texto'=>'Quer ver?','opcoes'=>[],'config'=>[],'proximo'=>null,'fallback'=>null,
-                 'sem_resposta'=>null,'lembrete_ativo'=>true,'lembrete_texto'=>'Oi {nome}, viu o roteiro da {roteiro}?'],
+                 'sem_resposta'=>null,'lembrete_ativo'=>true,'lembrete_texto'=>'Oi, viu o roteiro da {roteiro}?'],
     // espera, lembrete desligado, sem_resposta para um card `fim`
     'c_off'  => ['id'=>'c_off','tipo'=>'botoes','texto'=>'Quer ver?','opcoes'=>[],'config'=>[],'proximo'=>null,'fallback'=>null,
                  'sem_resposta'=>'c_txt','lembrete_ativo'=>false,'lembrete_texto'=>null],
@@ -37,13 +37,13 @@ $GRAFO = ['id' => 'f1', 'nome' => 'Teste', 'inicial' => 'c_bot', 'humano' => 'c_
                  'sem_resposta'=>null,'lembrete_ativo'=>false,'lembrete_texto'=>null],
     // espera, lembrete LIGADO e sem_resposta definido: e o padrao do banco (lembrete_ativo default true)
     'c_both' => ['id'=>'c_both','tipo'=>'botoes','texto'=>'Quer ver?','opcoes'=>[],'config'=>[],'proximo'=>null,'fallback'=>null,
-                 'sem_resposta'=>'c_aviso','lembrete_ativo'=>true,'lembrete_texto'=>'Oi {nome}, ainda por ai?'],
+                 'sem_resposta'=>'c_aviso','lembrete_ativo'=>true,'lembrete_texto'=>'Oi, ainda por ai?'],
     // sem_resposta para um `marca` que grava status (a spec 6.4 deixa o marca vencer o perdido)
     'c_off_m'=> ['id'=>'c_off_m','tipo'=>'botoes','texto'=>'Quer ver?','opcoes'=>[],'config'=>[],'proximo'=>null,'fallback'=>null,
                  'sem_resposta'=>'c_marca','lembrete_ativo'=>false,'lembrete_texto'=>null],
     'c_marca'=> ['id'=>'c_marca','tipo'=>'marca','texto'=>null,'opcoes'=>[],'config'=>['status'=>'atendimento'],'proximo'=>null,'fallback'=>null,
                  'sem_resposta'=>null,'lembrete_ativo'=>false,'lembrete_texto'=>null],
-    'c_txt'  => ['id'=>'c_txt','tipo'=>'fim','texto'=>'Vou encerrar por aqui, {nome}.','opcoes'=>[],'config'=>[],'proximo'=>null,'fallback'=>null,
+    'c_txt'  => ['id'=>'c_txt','tipo'=>'fim','texto'=>'Vou encerrar por aqui.','opcoes'=>[],'config'=>[],'proximo'=>null,'fallback'=>null,
                  'sem_resposta'=>null,'lembrete_ativo'=>false,'lembrete_texto'=>null],
     'c_hum'  => ['id'=>'c_hum','tipo'=>'humano','texto'=>'Vou passar para a equipe.','opcoes'=>[],'config'=>[],'proximo'=>null,'fallback'=>null,
                  'sem_resposta'=>null,'lembrete_ativo'=>false,'lembrete_texto'=>null],
@@ -126,8 +126,8 @@ ok($M['r'] === ['lembretes' => 0, 'encerrados' => 0, 'fora_da_janela' => 0], 're
 /* 2. O texto do lembrete vem do CARD, com as variaveis substituidas */
 $M = varre([conv($W, 'aguardando', 'c_bot', 21)], $agora);
 ok($M['r']['lembretes'] === 1, 'lembrete as 21h (deu: ' . $M['r']['lembretes'] . ')');
-ok($M['envios'] === [[$W, 'lembrete', 'Oi Marta, viu o roteiro da Turquia com Antalia?']],
-    'lembrete_texto do card, com nome e roteiro (veio: ' . json_encode($M['envios']) . ')');
+ok($M['envios'] === [[$W, 'lembrete', 'Oi, viu o roteiro da Turquia com Antalia?']],
+    'lembrete_texto do card, com o roteiro (veio: ' . json_encode($M['envios']) . ')');
 ok(count($M['conv'][$W]) === 1 && !empty($M['conv'][$W][0]['lembrete_at']), 'grava lembrete_at quando o envio saiu');
 ok(count($M['log']) === 1 && $M['log'][0][0] === 'po_wa_mensagens' && $M['log'][0][1]['autor'] === 'robo' && $M['log'][0][1]['direcao'] === 'out',
     'o lembrete entra no log de saida do robo (senao o eco virava handoff)');
@@ -207,7 +207,7 @@ ok(($M['lead'][$W][0]['status'] ?? '') === 'perdido', 'tipo proibido: carimba pe
 /* 10. sem_resposta: executa o card em vez de encerrar seco */
 $M = varre([conv($W, 'aguardando', 'c_off', 21)], $agora);
 ok($M['executa'] === ['c_txt'], 'o card de sem_resposta e executado');
-ok($M['envios'] === [[$W, 'executa', 'Vou encerrar por aqui, Marta.']], 'e a mensagem sai com o nome (veio: ' . json_encode($M['envios']) . ')');
+ok($M['envios'] === [[$W, 'executa', 'Vou encerrar por aqui.']], 'e a mensagem sai (veio: ' . json_encode($M['envios']) . ')');
 ok(($M['conv'][$W][0]['card_atual'] ?? '') === 'c_txt' && ($M['conv'][$W][0]['estado'] ?? '') === 'encerrado', 'a conversa segue para ele e encerra');
 ok($M['r']['encerrados'] === 1 && $M['r']['lembretes'] === 0, 'conta como encerrada');
 
