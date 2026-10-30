@@ -30,6 +30,7 @@ function poFluxoTipos() {
     {tipo:'texto', rotulo:'Mensagem de texto', manda:'Manda um texto e segue para o próximo card.', espera:false},
     {tipo:'botoes', rotulo:'Botões', manda:'Pergunta com até 3 botões e espera a pessoa escolher.', espera:true},
     {tipo:'lista', rotulo:'Lista de opções', manda:'Mostra uma lista para a pessoa escolher e espera a resposta.', espera:true},
+    {tipo:'roteiros', rotulo:'Lista de roteiros', manda:'Lista as viagens à venda numeradas e espera a pessoa responder o número ou o nome.', espera:true},
     {tipo:'pdf', rotulo:'Envio do PDF', manda:'Manda o PDF do roteiro e segue para o próximo card.', espera:false},
     {tipo:'marca', rotulo:'Anotar no cadastro', manda:'Não manda nada: anota uma informação na ficha da pessoa.', espera:false},
     {tipo:'ir_para_fluxo', rotulo:'Passar para outro fluxo', manda:'Entrega a conversa para outro fluxo.', espera:false},
@@ -397,7 +398,7 @@ function poFluxoZoomRoda(ev) {
 
 // Limite de caracteres do texto do card (espelho de WA_FLUXO_LIMITE). null = o tipo nao tem texto.
 function poFluxoLimite(tipo) {
-  const m = { texto: 4096, botoes: 1024, lista: 1024, pdf: 1024, humano: 4096, fim: 4096 };
+  const m = { texto: 4096, botoes: 1024, lista: 1024, roteiros: 4096, pdf: 1024, humano: 4096, fim: 4096 };
   return Object.prototype.hasOwnProperty.call(m, tipo) ? m[tipo] : null;
 }
 

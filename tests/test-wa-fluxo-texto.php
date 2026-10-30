@@ -3,8 +3,8 @@ require __DIR__ . '/../lib/wa-fluxo.php';
 function ok($cond, $msg) { if (!$cond) { fwrite(STDERR, "ASSERT: $msg\n"); exit(1); } }
 
 // 1. as listas fechadas existem e tem exatamente o conteudo esperado, na ordem
-ok(WA_CARD_TIPOS === ['texto','botoes','lista','pdf','marca','ir_para_fluxo','humano','fim'], 'WA_CARD_TIPOS');
-ok(WA_CARD_ESPERA === ['botoes','lista'], 'WA_CARD_ESPERA');
+ok(WA_CARD_TIPOS === ['texto','botoes','lista','roteiros','pdf','marca','ir_para_fluxo','humano','fim'], 'WA_CARD_TIPOS');
+ok(WA_CARD_ESPERA === ['botoes','lista','roteiros'], 'WA_CARD_ESPERA');
 ok(WA_CARD_TERMINAL === ['humano','fim'], 'WA_CARD_TERMINAL');
 ok(WA_SEM_RESPOSTA_TIPOS === ['texto','marca','humano','fim'], 'sem_resposta so aceita card que nao espera');
 ok(WA_FLUXO_VARS === ['roteiro','data'], 'WA_FLUXO_VARS');

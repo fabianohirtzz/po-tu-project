@@ -51,8 +51,8 @@ function wa_fl_dep($nome) {
 function wa_fl_call($nome, ...$args) { return call_user_func_array(wa_fl_dep($nome), $args); }
 
 /* ---------- listas fechadas ---------- */
-const WA_CARD_TIPOS    = ['texto','botoes','lista','pdf','marca','ir_para_fluxo','humano','fim'];
-const WA_CARD_ESPERA   = ['botoes','lista'];          // cards que param e esperam o cliente
+const WA_CARD_TIPOS    = ['texto','botoes','lista','roteiros','pdf','marca','ir_para_fluxo','humano','fim'];
+const WA_CARD_ESPERA   = ['botoes','lista','roteiros'];          // cards que param e esperam o cliente
 const WA_CARD_TERMINAL = ['humano','fim'];            // cards sem saida
 // Destino de "sem resposta": so card que nao espera, senao o cron de timeout
 // agendaria uma espera dentro de outra.
@@ -68,7 +68,7 @@ const WA_FLUXO_VAR_MAX      = ['roteiro' => 60, 'data' => 40];
 /* Limite de caracteres por tipo de card, contado na expansao de pior caso.
    Corpo interativo e legenda de documento: 1024. Texto simples: 4096. */
 const WA_FLUXO_LIMITE = [
-    'texto' => 4096, 'botoes' => 1024, 'lista' => 1024,
+    'texto' => 4096, 'botoes' => 1024, 'lista' => 1024, 'roteiros' => 4096,
     'pdf' => 1024, 'humano' => 4096, 'fim' => 4096,
 ];
 
@@ -461,7 +461,7 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
             $lim = WA_FLUXO_LIMITE[$c['tipo']];
             // Vazio so bloqueia onde a Cloud API exige corpo. Fim, humano e pdf
             // (legenda) podem ser silenciosos; o tamanho vale para todos.
-            if (in_array($c['tipo'], ['texto', 'botoes', 'lista'], true) && trim((string) $c['texto']) === '') {
+            if (in_array($c['tipo'], ['texto', 'botoes', 'lista', 'roteiros'], true) && trim((string) $c['texto']) === '') {
                 $acha(6, $id, 'O card ' . $nome($id) . ' não tem mensagem escrita. O WhatsApp não envia esse tipo de card sem texto.');
             } elseif (($n = wa_fluxo_tam_pior_caso($c['texto'])) > $lim) {
                 $acha(6, $id, 'A mensagem do card ' . $nome($id) . ' pode chegar a ' . $n . ' caracteres (contando o maior nome e roteiro possíveis), e o limite é ' . $lim . '. Encurte o texto.');
@@ -474,6 +474,19 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
             } elseif (($n = wa_fluxo_tam_pior_caso($c['lembrete_texto'])) > 4096) {
                 $acha(6, $id, 'O lembrete do card ' . $nome($id) . ' pode chegar a ' . $n . ' caracteres, e o limite é 4096. Encurte o texto.');
             }
+        }
+    }
+
+    // 7. Card `roteiros`: a lista numerada vem do banco, entao nao tem opcoes
+    //    proprias (quem as escreveu esta enganado, mas nada quebra: avisa), e sem
+    //    `proximo` a escolha nao leva a lugar nenhum (bloqueia).
+    foreach ($C as $id => $c) {
+        if ($c['tipo'] !== 'roteiros') continue;
+        if ($c['proximo'] === null) {
+            $acha(7, $id, 'O card ' . $nome($id) . ' mostra os roteiros, mas não diz para qual card ir depois que o cliente escolher um.');
+        }
+        if (count($c['opcoes']) > 0) {
+            $acha(7, $id, 'O card ' . $nome($id) . ' lista os roteiros que estão à venda, direto do banco. As opções escritas à mão nele não são usadas.', false);
         }
     }
 

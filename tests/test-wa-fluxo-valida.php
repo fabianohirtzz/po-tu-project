@@ -390,6 +390,26 @@ ok(!in_array(6, bloqueios($fx, $c), true), "regra 6: lembrete desligado sem text
 $c = $base; $c[0]["texto"] = "";
 ok(in_array(6, bloqueios($fx, $c), true), "regra 6: botoes sem texto segue bloqueando");
 
+// card `roteiros`: lista as viagens por texto numerado
+ok(in_array('roteiros', WA_CARD_TIPOS, true), 'o tipo roteiros existe');
+ok(in_array('roteiros', WA_CARD_ESPERA, true), 'e espera resposta');
+ok(WA_FLUXO_LIMITE['roteiros'] === 4096, 'limite de texto simples, nao de corpo interativo');
+$rot_ok = ['id'=>'rot','fluxo_id'=>'f1','tipo'=>'roteiros','titulo'=>'Qual viagem?','texto'=>'Escolha:',
+   'opcoes'=>[],'config'=>[],'proximo'=>'hum','fallback'=>null,'sem_resposta'=>'fim','lembrete_ativo'=>true,'lembrete_texto'=>'Oi?'];
+$c = $base; $c[0]['opcoes'][0]['destino'] = 'rot'; $c[] = $rot_ok;
+ok(bloqueios($fx, $c) === [] && avisos($fx, $c) === [], 'roteiros bem montado nao bloqueia nem avisa');
+// as opcoes vem do banco: quem as escreve esta enganado (problema, mas nao bloqueia)
+$c2 = $c; $c2[4]['opcoes'] = [['id'=>'x','rotulo'=>'X','destino'=>'hum']];
+$pr = array_values(array_filter(wa_fluxo_valida($fx, $c2), fn($x) => $x['card'] === 'rot'));
+ok(count($pr) === 1 && $pr[0]['bloqueia'] === false, 'roteiros com opcoes vira problema que nao bloqueia');
+// sem proximo a escolha nao leva a lugar nenhum: bloqueia
+$c3 = $c; $c3[4]['proximo'] = null;
+ok(in_array(7, bloqueios($fx, $c3), true), 'roteiros sem proximo bloqueia (regra 7)');
+ok(!in_array(7, bloqueios($fx, $c), true), 'e com proximo a regra 7 cala');
+// sem texto, a mensagem nao sai
+$c4 = $c; $c4[4]['texto'] = '';
+ok(in_array(6, bloqueios($fx, $c4), true), 'roteiros sem texto bloqueia (regra 6)');
+
 // a funcao e PURA
 $antes = $base; wa_fluxo_valida($fx, $base); ok($base === $antes, 'wa_fluxo_valida nao modifica a entrada');
 
