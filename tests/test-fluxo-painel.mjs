@@ -1937,4 +1937,20 @@ assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', op
   }
 }
 
+/* Task 6: o campo de mensagem da gaveta nasceu com uma linha em alguns aparelhos.
+   A gaveta emite rows="7", mas o corpo dela e uma coluna flex com overflow:auto, onde
+   o textarea encolhe; a altura inicial tem de vir do CSS. A altura minima vale so para
+   o textarea: o rotulo da opcao e um <input class="fl-campo"> e nao pode ficar alto. */
+{
+  const todas = regrasTodas(css);
+  const area = todas.find(r => r.sel === 'textarea.fl-campo');
+  assert.ok(area, 'existe a regra textarea.fl-campo');
+  assert.ok(/min-height:\s*\d+px/.test(area.corpo), 'o textarea da gaveta tem altura minima, senao nasce com uma linha');
+  assert.ok(/resize:\s*vertical/.test(todas.find(r => r.sel === '.fl-campo').corpo), 'e segue redimensionavel na vertical');
+  assert.ok(!todas.some(r => r.sel === '.fl-campo' && /min-height/.test(r.corpo)),
+    'a altura minima nao vaza para o <input class="fl-campo"> do rotulo da opcao');
+  // guarda: o <input class="fl-campo"> existe de fato no JS, senao a assercao acima prova nada
+  assert.ok(/<input type="text" class="fl-campo"/.test(src), 'o input com .fl-campo existe no fluxo.js');
+}
+
 console.log('test-fluxo-painel OK');

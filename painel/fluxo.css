@@ -76,6 +76,9 @@
 .fl-gaveta__status{flex-basis:100%;font-size:.85rem;color:var(--text);max-height:30vh;overflow:auto}
 .fl-rot{font-weight:600;font-size:.85rem;color:var(--ink)}
 .fl-campo{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border2);border-radius:8px;background:var(--surface);color:var(--text);font:inherit;resize:vertical}
+/* So o textarea: o corpo da gaveta e coluna flex com overflow, onde ele encolhia a uma linha.
+   O rotulo da opcao tambem e .fl-campo, mas e <input> e nao pode ficar alto. */
+textarea.fl-campo{min-height:150px;line-height:1.5}
 .fl-cont{font-size:.78rem;color:var(--muted)}
 .fl-cont--estouro{color:var(--st-perdido);font-weight:600}
 .fl-dica{font-size:.78rem;color:var(--muted);margin:0}
