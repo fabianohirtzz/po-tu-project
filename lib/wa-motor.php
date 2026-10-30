@@ -557,11 +557,16 @@ function wa_processar($ev) {
         if ($estado === 'novo' || !in_array($grafo['cards'][$atual]['tipo'] ?? '', WA_CARD_ESPERA, true)) {
             return wa_fluxo_percorre($wa_id, $nome, $grafo, $versao_id, $atual, $ctx, false);
         }
-        // So o clique (botao ou linha de lista) carrega o id de uma opcao.
-        // Texto digitado nao e escolha: se "turquia" valesse como slug, quem
-        // escreve em vez de tocar na lista escolheria um roteiro sem querer.
+        // Botao e lista: so o clique carrega o id de uma opcao. Texto digitado
+        // nao e escolha: se "turquia" valesse como slug, quem escreve em vez de
+        // tocar na lista escolheria um roteiro sem querer.
+        // Card `roteiros`: a excecao. Os roteiros saem como texto numerado, nao
+        // ha o que tocar, entao o texto digitado e a unica forma de escolher
+        // (o publico e 60+ e digita). Quem decide se ele casa e o proprio
+        // wa_fluxo_proximo, que ali nao olha as opcoes do card.
+        $digita   = ($grafo['cards'][$atual]['tipo'] ?? '') === 'roteiros';
         $clique   = in_array($ev['tipo_msg'] ?? '', ['list_reply', 'button_reply', 'button'], true);
-        $resposta = $clique ? $texto : '';
+        $resposta = ($clique || $digita) ? $texto : '';
         $p = wa_fluxo_proximo($grafo, $atual, $resposta, $ctx);
         if ($p['card'] === null) {
             error_log('wa_processar: card ' . $atual . ' sem saida (' . $p['motivo'] . ') | ' . $wa_id);

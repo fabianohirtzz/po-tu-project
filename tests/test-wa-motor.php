@@ -407,4 +407,58 @@ ok($acao === 'opt_out', 'SAIR vale mesmo com o robo silenciado');
 ok(!empty($DB['po_leads'][0]['opt_out_at']), 'o carimbo acontece mesmo silenciado');
 ok(count($ENVIADAS) === 0, 'mas o robo NAO responde por cima da humana');
 
+/* --- 20. digitar vale como escolha SO no card `roteiros`. Nele os roteiros
+   saem como texto numerado, nao ha o que tocar, e o publico 60+ digita. Em
+   `botoes` e `lista` o texto segue descartado: o cliente que escreve "sim"
+   em vez de tocar nao pode escolher o botao Sim sem querer. */
+function fx_com_card_roteiros() {
+    zera();
+    $g =& $GLOBALS['DB']['po_wa_fluxo_versoes'][0]['grafo'];
+    $g['cards']['boas'] = fx_card('boas', 'roteiros', ['texto' => 'Qual viagem?', 'proximo' => 'pdf', 'fallback' => 'outra']);
+    unset($g);
+    // O catalogo do fixture nao traz `ativo`, que o card roteiros exige (so lista o que esta a venda).
+    wa_motor_set_deps(['roteiros' => function () {
+        return array_map(function ($r) { return $r + ['ativo' => true, 'status_viagem' => null]; }, fx_roteiros());
+    }]);
+}
+
+// 20a. card roteiros: "2" digitado escolhe o segundo da lista enviada
+fx_com_card_roteiros();
+wa_processar(ev('mensagem', 'oi'));
+ok($DB['po_wa_conversas'][0]['card_atual'] === 'boas', '20a: a conversa espera no card roteiros');
+$ENVIADAS = [];
+wa_processar(ev('mensagem', '2'));
+ok($DB['po_wa_conversas'][0]['roteiro_slug'] === 'escandinavia', '20a: no card roteiros, digitar "2" escolhe o segundo roteiro (veio: ' . var_export($DB['po_wa_conversas'][0]['roteiro_slug'] ?? null, true) . ')');
+ok($ENVIADAS && $ENVIADAS[0][0] === 'doc' && strpos($ENVIADAS[0][2], 'e.pdf') !== false, '20a: e o PDF do roteiro escolhido sai');
+
+// 20b. o clique segue escolhendo no card roteiros
+fx_com_card_roteiros();
+wa_processar(ev('mensagem', 'oi'));
+wa_processar(clica('1'));
+ok($DB['po_wa_conversas'][0]['roteiro_slug'] === 'turquia', '20b: o clique continua escolhendo no card roteiros');
+
+// 20c. texto que nao casa nada no card roteiros cai no fallback
+fx_com_card_roteiros();
+wa_processar(ev('mensagem', 'oi'));
+wa_processar(ev('mensagem', 'quanto custa?'));
+ok($DB['po_wa_conversas'][0]['card_atual'] === 'outra', '20c: texto que nao casa roteiro nenhum cai no fallback');
+ok(empty($DB['po_wa_conversas'][0]['roteiro_slug']), '20c: e nenhum roteiro fica escolhido');
+
+// 20d. card botoes: digitar o id da opcao NAO escolhe (esta e a trava do produto)
+zera();
+wa_processar(ev('mensagem', 'oi'));
+wa_processar(clica('rot')); wa_processar(clica('turquia', 'list_reply'));
+ok($DB['po_wa_conversas'][0]['card_atual'] === 'data', '20d: a conversa espera no card de botoes da data');
+wa_processar(ev('mensagem', 'sim'));
+ok($DB['po_wa_conversas'][0]['card_atual'] === 'outra', '20d: no card de botoes, digitar "sim" NAO vale como o botao Sim (cai no fallback)');
+ok(($DB['po_leads'][0]['qualif_data'] ?? null) !== true, '20d: e o lead nao e qualificado por texto digitado');
+
+// 20e. card lista: digitar o slug NAO escolhe; o clique na linha escolhe (coberto no cenario 2)
+zera();
+wa_processar(ev('mensagem', 'oi'));
+wa_processar(clica('rot'));
+wa_processar(ev('mensagem', 'turquia'));
+ok(empty($DB['po_wa_conversas'][0]['roteiro_slug']), '20e: no card lista, digitar o slug NAO escolhe o roteiro');
+ok($DB['po_wa_conversas'][0]['card_atual'] === 'outra', '20e: e cai no fallback');
+
 echo "test-wa-motor OK\n";
