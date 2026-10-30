@@ -67,6 +67,11 @@ const WA_FLUXO_VAR_MAX      = ['roteiro' => 60, 'data' => 40];
 
 /* Limite de caracteres por tipo de card, contado na expansao de pior caso.
    Corpo interativo e legenda de documento: 1024. Texto simples: 4096. */
+/* Teto de texto simples da Cloud API, em caracteres. NAO e o WA_FLUXO_LIMITE
+   (teto do texto que a cliente escreve no card): a lista do card `roteiros`
+   e montada na hora do envio e so este limite a alcanca. */
+const WA_ROTEIROS_TEXTO_MAX = 4096;
+
 const WA_FLUXO_LIMITE = [
     'texto' => 4096, 'botoes' => 1024, 'lista' => 1024, 'roteiros' => 4096,
     'pdf' => 1024, 'humano' => 4096, 'fim' => 4096,
@@ -167,7 +172,7 @@ function wa_fluxo_campos_marca($config, $ctx) {
 /* ---------- roteamento puro ----------
    Dada a resposta do cliente, qual card vem agora. Nenhuma rede, nenhum
    banco, nenhum relogio: grafo, resposta e contexto entram, o proximo card
-   sai. Quem envia e quem grava e a execucao, nao esta secao.
+   sai. Uma excecao, so no card `roteiros` (le o catalogo para casar nome). Quem envia e quem grava e a execucao, nao esta secao.
 
    Teto de respostas fora do esperado (texto, audio, botao antigo) antes de
    o robo desistir e chamar a dona. Com 2, a terceira vai para o humano. */
@@ -196,10 +201,9 @@ function wa_fluxo_lista_roteiros($venda) {
     $linhas = [];
     foreach (array_values($venda) as $i => $r) {
         $quando = trim((string) ($r['data_label'] ?? '') ?: (string) ($r['periodo'] ?? ''));
-        $linhas[] = ($i + 1) . '. ' . trim((string) $r['titulo']) . ($quando !== '' ? ' (' . $quando . ')' : '');
+        $linhas[] = ($i + 1) . '. ' . trim((string) ($r['titulo'] ?? '')) . ($quando !== '' ? ' (' . $quando . ')' : '');
     }
-    return implode("
-", $linhas);
+    return implode("\n", $linhas);
 }
 
 /* Slug escolhido pela resposta, ou null. Numero resolve em $slugs_enviados;
@@ -264,14 +268,20 @@ function wa_fluxo_proximo($grafo, $card_id, $resposta, $ctx) {
     $resposta = (string) $resposta;
     $certo = ['roteiro_slug' => $ctx['roteiro_slug'] ?? null, 'tentativas' => 0];
 
-    // Lista dinamica: a resposta e o slug e o destino e um so (proximo). Esta
-    // funcao e pura e nao sabe quais roteiros existem; conferir o slug contra
-    // o catalogo e da execucao. Resposta vazia nao e escolha.
+    // Card `roteiros`: UNICO ramo desta funcao que le o catalogo (o contexto
+    // guarda slugs, nao titulos, e casar por nome precisa dos titulos). O
+    // numero nao depende dele. SO o casamento de roteiro: as `opcoes` largadas
+    // neste card nao valem (o validador as ignora), nem como segunda tentativa.
+    // Lista dinamica (`lista`): a resposta e o slug e o destino e um so
+    // (proximo); conferir o slug contra o catalogo e da execucao. Resposta
+    // vazia nao e escolha.
     if ($tipo === 'roteiros') {
-        // SO o casamento de roteiro: as `opcoes` largadas neste card nao valem
-        // (o validador as ignora), nem como segunda tentativa.
-        $slug = wa_fluxo_casa_roteiro($resposta, (array) ($ctx['roteiros_enviados'] ?? []),
-                                      wa_fluxo_roteiros_venda(wa_fl_call('roteiros')));
+        $enviados = (array) ($ctx['roteiros_enviados'] ?? []);
+        $venda = wa_fluxo_roteiros_venda(wa_fl_call('roteiros'));
+        if ($enviados && !$venda) {
+            error_log('wa_fluxo_proximo: card roteiros com o catalogo vazio (indisponivel?), a resposta nao pode ser casada por nome, transitorio');
+        }
+        $slug = wa_fluxo_casa_roteiro($resposta, $enviados, $venda);
         if ($slug !== null && $existe($card['proximo'] ?? null)) {
             $certo['roteiro_slug'] = $slug;
             return ['card' => $card['proximo'], 'ctx' => $certo, 'motivo' => 'escolheu'];
@@ -1009,27 +1019,23 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
             error_log('wa_fluxo_executa: roteiros sem nada a venda (catalogo vazio ou indisponivel), transitorio | ' . $wa_id);
             return $res(false, ['erro' => 'catalogo indisponivel']);
         }
-        /* Teto da Cloud API (4096, em caracteres). Esta e a unica mensagem cujo
+        /* Teto da Cloud API (WA_ROTEIROS_TEXTO_MAX, em caracteres). Esta e a unica mensagem cujo
            tamanho nenhum validador ve: a lista e montada aqui, do banco. Estourar
            = 400 e o cliente nao recebe nada, calado. Corta ITEM INTEIRO do fim
            (nunca no meio) e tira o item de roteiros_enviados junto, senao o
            numero que a pessoa le deixa de casar com o slug. */
-        $texto = trim($corpo . "
-
-" . wa_fluxo_lista_roteiros($venda));
+        $texto = trim($corpo . "\n\n" . wa_fluxo_lista_roteiros($venda));
         $total = count($venda);
-        while ($venda && mb_strlen($texto, 'UTF-8') > 4096) {
+        while ($venda && mb_strlen($texto, 'UTF-8') > WA_ROTEIROS_TEXTO_MAX) {
             array_pop($venda);
-            $texto = trim($corpo . "
-
-" . wa_fluxo_lista_roteiros($venda));
+            $texto = trim($corpo . "\n\n" . wa_fluxo_lista_roteiros($venda));
         }
         if (!$venda) {
-            error_log('wa_fluxo_executa: roteiros, nem um item cabe em 4096 caracteres com o corpo do card | ' . $wa_id);
-            return $res(false, ['erro' => 'texto acima do limite']);
+            // Depende so do texto do card: repetir recusa igual, para sempre.
+            return $recusa('texto do card nao deixa espaco para nenhum roteiro em ' . WA_ROTEIROS_TEXTO_MAX . ' caracteres');
         }
         if (count($venda) < $total) {
-            error_log('wa_fluxo_executa: roteiros, lista cortada para caber em 4096: ' . ($total - count($venda)) . ' item(ns) fora | ' . $wa_id);
+            error_log('wa_fluxo_executa: roteiros, lista cortada para caber em ' . WA_ROTEIROS_TEXTO_MAX . ': ' . ($total - count($venda)) . ' item(ns) fora | ' . $wa_id);
         }
         $ctx['roteiros_enviados'] = array_map(function ($r) { return (string) $r['slug']; }, $venda);
         return $saiu(wa_fl_call('send_text', $wa_id, $texto), 'text', $texto, true);

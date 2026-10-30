@@ -46,6 +46,23 @@ ok(wa_fluxo_casa_roteiro('1', ['vietna','chile','peru'], $agora) === 'vietna',
 // nome so casa com o que foi enviado: roteiro que a pessoa nunca viu nao vale
 ok(wa_fluxo_casa_roteiro('peru', ['vietna','chile'], $v) === null, 'nome de roteiro que nao estava na lista enviada nao escolhe');
 
+// exato antes de contem: "Peru" e "Peru e Bolivia"
+$pb = [['slug'=>'p1','titulo'=>'Peru','periodo'=>'','ativo'=>true,'status_viagem'=>null],
+       ['slug'=>'p2','titulo'=>'Peru e Bolívia','periodo'=>'','ativo'=>true,'status_viagem'=>null]];
+ok(wa_fluxo_casa_roteiro('peru', ['p1','p2'], $pb) === 'p1', 'titulo igual vence o que so contem');
+ok(wa_fluxo_casa_roteiro('bolivia', ['p1','p2'], $pb) === 'p2', 'trecho do titulo maior ainda casa');
+// linha de catalogo sem titulo nao gera warning
+$av = []; set_error_handler(function ($n, $m) use (&$av) { $av[] = $m; return true; });
+wa_fluxo_lista_roteiros([['slug' => 'x']]);
+restore_error_handler();
+ok($av === [], 'linha sem titulo nao gera warning: ' . implode('|', $av));
+
+// quebras de linha escritas como escape, nunca como quebra literal no fonte (autocrlf)
+$fonte = str_replace("\r\n", "\n", file_get_contents(__DIR__ . '/../lib/wa-fluxo.php'));
+ok(strpos($fonte, 'implode("\n", $linhas)') !== false, 'a lista junta com \n escapado');
+ok(substr_count($fonte, '"\n\n" . wa_fluxo_lista_roteiros(') === 2, 'corpo e lista separados por \n\n escapado, nos dois pontos');
+ok(strpos($fonte, 'WA_ROTEIROS_TEXTO_MAX') !== false && strpos($fonte, "mb_strlen(\$texto, 'UTF-8') > 4096") === false, 'o teto do envio tem nome, sem numero magico');
+
 /* ---------- execucao e roteamento ---------- */
 function card($id, $tipo, $extra = []) {
     return array_merge(['id' => $id, 'tipo' => $tipo, 'titulo' => $id, 'texto' => 'Qual viagem?',
@@ -91,7 +108,7 @@ $r = wa_fluxo_executa($g, 'rot', $fone, $c0, 'Marta');
 $env = $ENV[0] ?? '';
 ok($r['ok'] === true && mb_strlen($env, 'UTF-8') <= 4096, 'catalogo enorme cabe em 4096: ' . mb_strlen($env, 'UTF-8'));
 $n = count($r['ctx']['roteiros_enviados']);
-ok($n > 10 && $n < 200, 'cortou alguns itens: ' . $n);
+ok($n >= 50 && $n <= 52,'cortou ate caber, nem mais nem menos: ' . $n);
 $linhas = explode("\n", $env);
 ok(end($linhas) === $item($n), 'termina num item inteiro, o ultimo de roteiros_enviados: ' . end($linhas));
 ok($r['ctx']['roteiros_enviados'] === array_map(function ($i) { return "r$i"; }, range(1, $n)), 'os cortados saem de roteiros_enviados, numeros e slugs alinhados');
@@ -99,6 +116,12 @@ ok(mb_strlen($env . "\n" . $item($n + 1), 'UTF-8') > 4096, 'cortou so o necessar
 $CAT = $cat; $ENV = [];
 $r = wa_fluxo_executa($g, 'rot', $fone, $c0, 'Marta');
 ok(count($r['ctx']['roteiros_enviados']) === 3, 'catalogo normal nao perde nenhum item');
+
+// corpo do card que sozinho nao deixa espaco: permanente, vai para a humana
+$gg = $g; $gg['cards']['rot']['texto'] = str_repeat('x', 4090);
+$ENV = [];
+$r = wa_fluxo_executa($gg, 'rot', $fone, $c0, 'Marta');
+ok($r['ok'] === false && $r['terminal'] === 'humano' && $ENV === [], 'nem um item cabe: recusa permanente, humana, nada enviado');
 
 // catalogo vazio: erro transitorio, nunca lista vazia
 $ENV = []; $CAT = [];
@@ -109,6 +132,14 @@ ok($ENV === [], 'catalogo vazio nao manda mensagem nenhuma');
 $CAT = [$cat[1], $cat[4]];
 $r = wa_fluxo_executa($g, 'rot', $fone, $c0, 'Marta');
 ok($r['ok'] === false && $ENV === [], 'nada a venda nao manda lista vazia');
+$CAT = $cat;
+
+// catalogo vazio no roteamento com lista ja enviada: loga, nao e erro da pessoa
+@unlink(sys_get_temp_dir() . '/po-test-wa-fluxo-roteiros.log');
+$CAT = [];
+$p = wa_fluxo_proximo($g, 'rot', 'chile', ['roteiro_slug' => null, 'tentativas' => 0, 'roteiros_enviados' => ['vietna','chile']]);
+ok($p['motivo'] === 'fallback', 'catalogo fora do ar: cai no fallback');
+ok(strpos((string) @file_get_contents(sys_get_temp_dir() . '/po-test-wa-fluxo-roteiros.log'), 'catalogo vazio') !== false, 'e registra que foi o catalogo, nao a pessoa');
 $CAT = $cat;
 
 // roteamento: o numero vale pela ordem enviada que esta no contexto
