@@ -80,6 +80,15 @@
 .fl-cont--estouro{color:var(--st-perdido);font-weight:600}
 .fl-dica{font-size:.78rem;color:var(--muted);margin:0}
 .fl-opcoes{border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+/* excluir opcao: o [hidden] precisa de regra propria, o display:flex da linha o venceria */
+.fl-opcao{display:flex;gap:8px;align-items:center}
+.fl-opcao[hidden]{display:none}
+.fl-opcao .fl-campo{flex:1;min-width:0}
+.fl-opcao__x,.fl-desfazer{flex:none;border:1px solid var(--border2);background:var(--surface);color:var(--text);border-radius:8px;padding:8px 12px;font:inherit;font-size:.85rem;cursor:pointer}
+.fl-opcao__x:hover,.fl-desfazer:hover{border-color:var(--st-perdido);color:var(--st-perdido)}
+.fl-remocao:empty{display:none}
+.fl-removida{margin:0;font-size:.85rem;color:var(--muted)}
+.fl-desfazer{margin-left:6px;padding:4px 10px}
 .fl-check{display:flex;gap:8px;align-items:center;font-size:.9rem;margin-top:8px}
 .fl-problemas{margin:6px 0 0;padding-left:18px}
 .fl-problema--bloqueia{color:var(--st-perdido)}

@@ -33,6 +33,7 @@ const PURAS_NOMES = ['poFluxoTipos', 'poFluxoTipo', 'poFluxoOpcoes', 'poFluxoPre
                      'poFluxoEditavel', 'poFluxoGaveta',
                      'poFluxoPodePublicar', 'poFluxoOrdemLigar', 'poFluxoSemRepetido', 'poFluxoPainelProblemas',
                      'poFluxoEstado', 'poFluxoPorqueNao', 'poFluxoBarra', 'poFluxoResultado', 'poFluxoCardCulpado', 'poFluxoPodeLigar', 'poFluxoTextoLigar',
+                     'poFluxoRemoveOpcao', 'poFluxoOpcoesSem', 'poFluxoOrfaos', 'poFluxoAvisoRemocao', 'poFluxoCardFinal',
                      'poFluxoZoomNum', 'poFluxoZoomEscada', 'poFluxoZoomPasso', 'poFluxoZoomAjuste', 'poFluxoZoomPalco', 'poFluxoZoomBarra'];
 const F = new Function(ESC + PURAS_NOMES.map(pega).join('\n') +
   '; return {' + PURAS_NOMES.join(',') + '};')();
@@ -567,7 +568,7 @@ assert.deepEqual([...corpoPatch.matchAll(/patch\.(\w+)\s*=/g)].map(m => m[1]).so
   'poFluxoPatch atribui exatamente essas quatro chaves');
 assert.ok(/\.from\('po_wa_cards'\)\.update\(patch\)\.match\(poFluxoQuem\(card\)\)\.select\(\)/.test(corpoSalva),
   'o PATCH grava SO o patch, na linha de poFluxoQuem(card), e confere a linha devolvida');
-assert.ok(/poFluxoPatch\(card, v\)/.test(corpoSalva) && /poFluxoBloqueio\(card\)/.test(corpoSalva), 'e passa pelo bloqueio e pelo patch');
+assert.ok(/poFluxoPatch\(card, v\)/.test(corpoSalva) && /poFluxoBloqueio\(poFluxoCardFinal\(card, v\)\)/.test(corpoSalva), 'e passa pelo bloqueio (do card COMO FICARA, sem as opcoes removidas) e pelo patch');
 assert.ok(/if \(bloqueio\) throw new Error\(bloqueio\);/.test(corpoSalva), 'e o bloqueio (mais de 3 botoes) INTERROMPE o salvar');
 assert.ok(/!r\.data \|\| !r\.data\.length/.test(corpoSalva), 'RLS que nega (zero linhas) vira erro, nao "salvo"');
 assert.ok(!/\.(insert|upsert|delete)\(/.test(semComentario), 'o fluxo.js nunca insere, apaga nem faz upsert');
@@ -1662,6 +1663,173 @@ assert.equal(tagZoom('<button data-bar="mais">', 'mais'), '', 'e nao confunde da
     api.poFluxoZoomAplica(null);
     assert.equal(api.z(), null, 'sem canvas a escala segue indefinida, e nada quebra');
   }
+}
+
+/* ====================== TASK 7: excluir opcao, desfazer e aviso de orfao ====================== */
+
+// remover devolve a lista sem a opcao, sem mexer nas outras
+const opsT7 = [{ id: 'a', rotulo: 'A', destino: 'x' }, { id: 'b', rotulo: 'B', destino: 'y' }];
+assert.deepEqual(F.poFluxoRemoveOpcao(opsT7, 0), [opsT7[1]], 'remove a primeira');
+assert.deepEqual(F.poFluxoRemoveOpcao(opsT7, 1), [opsT7[0]], 'remove a ultima');
+assert.deepEqual(F.poFluxoRemoveOpcao(opsT7, 9), opsT7, 'indice fora nao muda nada');
+assert.deepEqual(F.poFluxoRemoveOpcao(opsT7, -1), opsT7, 'indice negativo nao muda nada');
+assert.deepEqual(F.poFluxoRemoveOpcao(opsT7, 'x'), opsT7, 'indice que nao e numero nao muda nada');
+assert.equal(opsT7.length, 2, 'e nao muta a lista original');
+// o indice e o da gaveta: conta so as entradas VALIDAS, e o lixo passa intacto
+const sujaT7 = ['lixo', { id: 'o1', rotulo: 'A' }, null, { id: 'o2', rotulo: 'B' }];
+assert.deepEqual(F.poFluxoRemoveOpcao(sujaT7, 1), ['lixo', sujaT7[1], null], 'indice 1 e a SEGUNDA opcao valida (o2), nao a posicao crua');
+assert.deepEqual(F.poFluxoRemoveOpcao(JSON.stringify(opsT7), 0), [opsT7[1]], 'opcoes como texto JSON');
+assert.deepEqual(F.poFluxoRemoveOpcao(null, 0), [], 'null vira lista vazia');
+assert.deepEqual(F.poFluxoOpcoesSem(opsT7.concat([{ id: 'c', rotulo: 'C' }]), [2, 0, 0, 'x', -3, 77]), [opsT7[1]],
+  'varios indices, repetido e lixo ignorados');
+assert.deepEqual(F.poFluxoOpcoesSem(opsT7.concat([{ id: 'c', rotulo: 'C' }]), [0, 2]), [opsT7[1]], 'e na ordem crescente tambem (tirar a 0 nao desloca a 2)');
+assert.deepEqual(F.poFluxoOpcoesSem(opsT7, undefined), opsT7, 'sem indices nada sai');
+
+// orfao: o destino que ninguem mais alcanca
+const cardsT7 = { m: { id: 'm', tipo: 'botoes', opcoes: opsT7 }, x: { id: 'x', tipo: 'fim' }, y: { id: 'y', tipo: 'fim' } };
+assert.deepEqual(F.poFluxoOrfaos('m', [opsT7[1]], cardsT7), ['x'], 'x ficou sem ninguem apontando');
+assert.deepEqual(F.poFluxoOrfaos('m', [], cardsT7), ['x', 'y'], 'tirando as duas, os dois ficam');
+assert.deepEqual(F.poFluxoOrfaos('m', opsT7, cardsT7), [], 'sem remover nada, ninguem fica orfao');
+// destino que OUTRO card tambem alcanca nao e orfao (por proximo, fallback, sem_resposta ou opcao)
+for (const campoT7 of ['proximo', 'fallback', 'sem_resposta']) {
+  const c2 = Object.assign({}, cardsT7, { n: { id: 'n', tipo: 'texto', [campoT7]: 'x' } });
+  assert.deepEqual(F.poFluxoOrfaos('m', [opsT7[1]], c2), [], 'x segue alcancavel por ' + campoT7 + ' de n');
+}
+assert.deepEqual(F.poFluxoOrfaos('m', [opsT7[1]], Object.assign({}, cardsT7, { n: { id: 'n', tipo: 'botoes', opcoes: [{ id: 'q', rotulo: 'Q', destino: 'x' }] } })), [],
+  'e por opcao de outro card');
+// o proprio card tambem pode manter o destino por outra seta, ou por outra opcao
+assert.deepEqual(F.poFluxoOrfaos('m', [opsT7[1]], Object.assign({}, cardsT7, { m: { id: 'm', tipo: 'botoes', opcoes: opsT7, fallback: 'x' } })), [],
+  'o fallback do proprio card segura o destino');
+assert.deepEqual(F.poFluxoOrfaos('m', [opsT7[1], { id: 'c', rotulo: 'C', destino: 'x' }], cardsT7), [],
+  'outra opcao do proprio card para o mesmo destino segura');
+// o card de entrada do fluxo nunca fica "sem entrada"
+assert.deepEqual(F.poFluxoOrfaos('m', [opsT7[1]], cardsT7, 'x'), [], 'o card inicial e a porta do fluxo');
+// lista de cards (a forma que a tela tem) funciona igual ao mapa
+assert.deepEqual(F.poFluxoOrfaos('m', [opsT7[1]], Object.values(cardsT7)), ['x'], 'aceita a lista de cards');
+// degenerados nao lancam
+for (const ruim of [null, undefined, {}, 'x', 5]) assert.deepEqual(F.poFluxoOrfaos('m', [], ruim), [], 'cards degenerado: ' + JSON.stringify(ruim));
+assert.deepEqual(F.poFluxoOrfaos('nao-existe', [], cardsT7), [], 'card que nao existe');
+assert.deepEqual(F.poFluxoOrfaos('m', [opsT7[1]], { m: cardsT7.m, y: cardsT7.y }), [], 'destino que nem existe no fluxo nao e citado');
+
+// a trava de seguranca continua: a tela nunca escreve o id da opcao
+assert.ok(!/\bid\s*:/.test(semCom(pega('poFluxoRemoveOpcao'))), 'remover nao escreve id de opcao');
+assert.ok(!/\bid\s*:/.test(semCom(pega('poFluxoOpcoesSem'))), 'nem a que remove varias');
+assert.ok(!/\bid\s*:/.test(semCom(pega('poFluxoCardFinal'))), 'nem a que monta o card final');
+assert.ok(/\bid\s*:/.test(pega('poFluxoOpcoes')), 'GUARDA: o padrao `id:` casa onde existe (o teste acima pode falhar)');
+
+// o aviso: o que a gaveta diz depois de excluir
+const cardsAv = { m: { id: 'm', tipo: 'botoes', opcoes: opsT7 }, x: { id: 'x', tipo: 'fim', titulo: XSS }, y: { id: 'y', tipo: 'fim', titulo: 'Fim Y' } };
+assert.equal(F.poFluxoAvisoRemocao(cardsAv.m, [], cardsAv), '', 'nada removido, nada a dizer');
+const av = F.poFluxoAvisoRemocao(cardsAv.m, [0], cardsAv);
+assert.ok(av.includes('Opção removida') && av.includes('data-acao="desfazer"'), 'diz que removeu e oferece Desfazer');
+assert.ok(av.includes('ficará sem entrada') && av.includes(ESCAPADO) && !av.includes('<script'), 'nomeia o card que fica sem entrada, escapado');
+assert.ok(!av.includes('Fim Y'), 'e so o que ficou sem entrada');
+assert.ok(av.includes('Nenhum card foi apagado'), 'avisa e NAO apaga');
+const av2 = F.poFluxoAvisoRemocao(cardsAv.m, [0], Object.assign({}, cardsAv, { n: { id: 'n', proximo: 'x' } }));
+assert.ok(av2.includes('Opção removida') && !av2.includes('sem entrada'), 'sem orfao, so a remocao e o Desfazer');
+assert.ok(av2.includes('data-acao="desfazer"'), 'o Desfazer vem mesmo sem orfao');
+assert.ok(F.poFluxoAvisoRemocao(cardsAv.m, [0, 1], cardsAv).includes('Opções removidas'), 'no plural, quando sao varias');
+
+// o patch: remover entra pelo MESMO poFluxoPatch, e so mexe em `opcoes`
+const cardR = { id: 'a', tipo: 'botoes', opcoes: [{ id: 'sair', rotulo: 'Velho', destino: 'b', descricao: 'd' }, { id: 'o2', rotulo: 'Dois', destino: 'c' }] };
+const ptR = F.poFluxoPatch(cardR, { remover: [0] });
+assert.deepEqual(Object.keys(ptR), ['opcoes'], 'remover sozinho grava so opcoes');
+assert.deepEqual(ptR.opcoes, [cardR.opcoes[1]], 'a outra opcao passa intacta, com id, destino e tudo');
+const ptR2 = F.poFluxoPatch(cardR, { rotulos: ['X', 'Y'], remover: [0] });
+assert.deepEqual(ptR2.opcoes, [{ id: 'o2', rotulo: 'Y', destino: 'c' }], 'o rotulo digitado vai para a opcao CERTA mesmo com a outra removida');
+assert.equal(cardR.opcoes.length, 2, 'o card original nao e mutado');
+assert.deepEqual(F.poFluxoPatch(cardR, { remover: [] }).opcoes, cardR.opcoes, 'lista vazia de remocoes nao remove nada');
+assert.deepEqual(Object.keys(F.poFluxoPatch(cardR, { remover: 'tudo' })), [], 'remover que nao e lista e ignorado');
+assert.deepEqual(Object.keys(F.poFluxoPatch(cardR, Object.assign({}, lixo, { remover: [0] }))).sort(), ['lembrete_ativo', 'lembrete_texto', 'opcoes', 'texto'],
+  'com lixo em v, as chaves seguem as mesmas quatro');
+// poFluxoCardFinal: o card COMO FICARA, para o bloqueio dos 3 botoes
+assert.equal(F.poFluxoOpcoes(F.poFluxoCardFinal(cardR, { remover: [0] }).opcoes).length, 1, 'o card final tem 1 opcao');
+assert.equal(F.poFluxoCardFinal(cardR, { texto: 'x' }), cardR, 'sem mexer em opcoes, e o proprio card');
+assert.equal(cardR.opcoes.length, 2, 'e nunca muta o original');
+
+// o que VAI AO BANCO, com o fonte inteiro e o sb duble
+{
+  const reg = await salvaCom(cardR, Object.assign({}, lixo, { remover: [0] }));
+  assert.deepEqual(Object.keys(reg.enviado).sort(), QUATRO, 'excluir NAO abre chave nova no que vai ao banco');
+  assert.deepEqual(reg.enviado.opcoes, [{ id: 'o2', rotulo: 'Dois', destino: 'c' }], 'e a opcao removida nao vai (o unico rotulo do lixo era da removida)');
+  for (const proibida of ['tipo', 'proximo', 'fallback', 'sem_resposta', 'x', 'y', 'id', 'titulo', 'ordem', 'fluxo_id']) {
+    assert.ok(!(proibida in reg.enviado), 'o banco nao recebe ' + proibida);
+  }
+  const so = await salvaCom(cardR, { remover: [1] });
+  assert.deepEqual(Object.keys(so.enviado), ['opcoes'], 'so a remocao: so opcoes');
+  assert.deepEqual(so.enviado.opcoes, [cardR.opcoes[0]], 'e o id da que ficou segue como estava');
+  assert.deepEqual(so.filtro, { id: 'a' }, 'na linha do card');
+  // 4 botoes: o bloqueio olha o card COMO FICARA. Excluir um resolve; nao excluir segue recusado.
+  const quatro = { id: 'q', tipo: 'botoes', opcoes: op(4) };
+  await assert.rejects(() => salvaCom(quatro, { texto: 'x' }), /no máximo 3/, 'continua recusando 4 botoes');
+  assert.ok((await salvaCom(quatro, { remover: [3] })).enviado, 'excluir um dos 4 deixa salvar');
+  await assert.rejects(() => salvaCom(quatro, { remover: [9] }), /no máximo 3/, 'indice que nao remove nada nao libera');
+}
+
+// a leitura do DOM: remover entra por UM lugar, e nenhuma outra chave nasce
+assert.deepEqual([...semCom(pega('poFluxoLeGaveta')).matchAll(/\bv\.(\w+)\s*=/g)].map(m => m[1]).sort(),
+  ['lembrete_ativo', 'lembrete_texto', 'remover', 'rotulos', 'texto'], 'a leitura da gaveta preenche so estas cinco chaves');
+assert.deepEqual(leGaveta(mk({}, {})), {}, 'sem nada removido, `remover` nem aparece');
+
+// a gaveta: um botao de excluir por opcao (e so onde ha opcao)
+{
+  const gv = F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', opcoes: [{ id: 'o1', rotulo: 'A', destino: 'p' }, { id: 'o2', rotulo: 'B', destino: 'q' }] });
+  assert.equal(conta(gv, 'data-acao="excluir-opcao"'), 2, 'um botao de excluir por opcao');
+  assert.ok(gv.includes('data-i="0"') && gv.includes('data-i="1"'), 'cada um sabe a sua posicao');
+  assert.ok(gv.includes('data-aviso-remocao'), 'e ha o lugar do aviso e do Desfazer');
+  assert.ok(gv.includes('type="button"'), 'botao de excluir nao envia nada');
+  const sem = F.poFluxoGaveta({ id: 'a', tipo: 'texto', titulo: 'T', texto: 'x' });
+  assert.ok(!sem.includes('excluir-opcao'), 'card sem opcao nao tem botao de excluir');
+  // o rotulo segue no mesmo formato que o teste de alinhamento le
+  assert.deepEqual([...gv.matchAll(/data-campo="rotulo" value="([^"]*)"/g)].map(m => m[1]), ['A', 'B'], 'os campos de rotulo seguem iguais');
+}
+
+// o Desfazer so existe enquanto ha o que desfazer: zera ao abrir e ao fechar (o salvar reabre)
+assert.ok(/PO_FLUXO_REMOV = \[\]/.test(corpo('poFluxoFecha')), 'fechar a gaveta zera as remocoes e some o Desfazer');
+assert.ok(/PO_FLUXO_REMOV = \[\]/.test(corpo('poFluxoAbre')), 'abrir (e o salvar reabre) zera de novo');
+assert.ok(!/PO_FLUXO_REMOV = \[\]/.test(corpo('poFluxoMarca')), 'GUARDA: o padrao nao casa em qualquer funcao');
+assert.ok(/poFluxoAbre\(id\)/.test(corpo('poFluxoGavetaSalva')), 'e o salvar reabre a gaveta, de onde o Desfazer sai');
+{
+  const gs = corpo('poFluxoGavetaSalva');
+  assert.ok(gs.indexOf('PO_FLUXO_SALVANDO = true') < gs.indexOf('await poFluxoSalva('), 'o Desfazer para ANTES de ir ao servidor');
+  assert.equal(conta(gs, 'PO_FLUXO_SALVANDO = false'), 2, 'e volta no erro (nada foi salvo) e depois de reabrir a gaveta');
+  assert.ok(gs.lastIndexOf('PO_FLUXO_SALVANDO = false') > gs.lastIndexOf('poFluxoAbre(id)'), 'mas so DEPOIS de reabrir, sem janela para desfazer o que ja foi salvo');
+}
+assert.ok(/PO_FLUXO_REMOV/.test(corpo('poFluxoLeGaveta')), 'o que foi excluido chega ao salvar pela leitura da gaveta');
+assert.ok(!/\.(delete|insert|upsert)\(/.test(semComentario), 'excluir opcao nunca apaga linha: so edita o card');
+
+// COMPORTAMENTO do excluir e do desfazer, com a gaveta duble (sem rede)
+{
+  const cardsB = [{ id: 'm', tipo: 'botoes', opcoes: opsT7 }, { id: 'x', tipo: 'fim', titulo: 'Card X' }, { id: 'y', tipo: 'fim', titulo: 'Card Y' }];
+  const linhas = [{ hidden: false }, { hidden: false }];
+  const alvo = { innerHTML: '' };
+  const g = { querySelector: s => (s === '[data-aviso-remocao]' ? alvo : (/^\[data-opcao="(\d)"\]$/.test(s) ? linhas[Number(RegExp.$1)] : null)) };
+  const api = new Function('document', 'CARDS', ESC + src + '; PO_FLUXOS=[{id:"f",cards:CARDS}]; PO_FLUXO_SEL="f"; PO_FLUXO_CARD="m";' +
+    ' return {poFluxoOpcaoExclui, poFluxoOpcaoDesfaz, poFluxoFecha, poFluxoLeGaveta, rem(){return PO_FLUXO_REMOV}, salvando(v){PO_FLUXO_SALVANDO=v}};'
+  )({ querySelector: () => null, querySelectorAll: () => [] }, cardsB);
+  api.poFluxoOpcaoExclui(g, 0);
+  assert.equal(linhas[0].hidden, true, 'excluir esconde a linha');
+  assert.deepEqual(api.rem(), [0]);
+  assert.deepEqual(api.poFluxoLeGaveta(mk({}, {})), { remover: [0] }, 'e o que foi excluido chega ao salvar pela leitura da gaveta');
+  assert.ok(alvo.innerHTML.includes('Opção removida') && alvo.innerHTML.includes('Card X'), 'e mostra o aviso do orfao');
+  api.poFluxoOpcaoExclui(g, 0);
+  assert.deepEqual(api.rem(), [0], 'excluir a mesma duas vezes nao duplica');
+  api.poFluxoOpcaoDesfaz(g);
+  assert.equal(linhas[0].hidden, false, 'desfazer devolve a linha');
+  assert.deepEqual(api.rem(), []); assert.equal(alvo.innerHTML, '', 'e o aviso some junto');
+  api.poFluxoOpcaoDesfaz(g);
+  assert.deepEqual(api.rem(), [], 'desfazer sem nada excluido nao lanca nem inventa');
+  api.poFluxoOpcaoExclui(g, 1);
+  api.salvando(true);
+  api.poFluxoOpcaoDesfaz(g);
+  assert.equal(linhas[1].hidden, true, 'durante o salvar o Desfazer nao desfaz (ja foi para o servidor)');
+  api.poFluxoOpcaoExclui(g, 0);
+  assert.equal(linhas[0].hidden, false, 'e excluir tambem para');
+  api.salvando(false);
+  api.poFluxoFecha();
+  assert.deepEqual(api.rem(), [], 'fechar a gaveta zera as remocoes');
+  api.poFluxoOpcaoExclui(g, 9);
+  assert.deepEqual(api.rem(), [], 'linha que nao existe nao entra');
 }
 
 console.log('test-fluxo-painel OK');

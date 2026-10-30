@@ -459,6 +459,96 @@ function poFluxoOpcoesComRotulos(opcoes, rotulos) {
   });
 }
 
+/* A lista SEM a opcao de posicao `indice`, contada so entre as entradas VALIDAS
+   (e o mesmo indice que a gaveta desenha: entrada de lixo nao tem linha la, e
+   passa intacta). Remove por POSICAO e devolve as outras opcoes como vieram:
+   nunca escreve identificacao de opcao. Indice fora da lista nao muda nada. */
+function poFluxoRemoveOpcao(opcoes, indice) {
+  let l = opcoes;
+  if (typeof l === 'string') { try { l = JSON.parse(l); } catch (e) { l = []; } }
+  if (!Array.isArray(l)) return [];
+  let k = -1;
+  return l.filter(function (o) {
+    if (!o || typeof o !== 'object') return true;
+    k += 1;
+    return k !== indice;
+  });
+}
+
+// Varias posicoes de uma vez. Do maior para o menor, senao tirar a primeira desloca as outras.
+function poFluxoOpcoesSem(opcoes, indices) {
+  const l = Array.isArray(indices) ? indices : [];
+  const unicos = l.filter(function (n, i) { return Number.isInteger(n) && l.indexOf(n) === i; });
+  unicos.sort(function (a, b) { return b - a; });
+  let saida = poFluxoRemoveOpcao(opcoes, -1);
+  unicos.forEach(function (n) { saida = poFluxoRemoveOpcao(saida, n); });
+  return saida;
+}
+
+/* O card como ficara depois do salvar, SO no que o bloqueio dos 3 botoes olha:
+   as opcoes. Sem isso a cliente nao conseguiria consertar um card com 4 botoes
+   excluindo um. Devolve o proprio card quando o patch nao mexe em opcoes. */
+function poFluxoCardFinal(card, v) {
+  const p = poFluxoPatch(card, v);
+  if (!('opcoes' in p)) return card;
+  return Object.assign({}, card, { opcoes: p.opcoes });
+}
+
+/* Os cards que, tiradas estas opcoes, ficam sem NINGUEM apontando para eles.
+   So se olha para quem ESTE card apontava (os candidatos): o resto do fluxo ja
+   era como era. Conta como entrada toda seta (proximo, fallback, sem_resposta,
+   opcao) de qualquer card, as do proprio card pelas opcoes que SOBRAM, e o card
+   inicial. So AVISA: quem chama nunca apaga nem bloqueia por causa disto. */
+function poFluxoOrfaos(card_id, opcoes_depois, cards, inicial) {
+  let todos = [];
+  if (Array.isArray(cards)) todos = cards;
+  else if (cards && typeof cards === 'object') todos = Object.keys(cards).map(function (k) { return cards[k]; });
+  todos = todos.filter(function (c) { return c && typeof c === 'object'; });
+  const este = todos.find(function (c) { return String(c.id) === String(card_id); });
+  if (!este) return [];
+  const existe = Object.create(null);
+  todos.forEach(function (c) { if (c.id != null) existe[String(c.id)] = true; });
+  const alcancado = Object.create(null);
+  const marca = function (d) { if (d != null && d !== '') alcancado[String(d)] = true; };
+  marca(inicial);
+  todos.forEach(function (c) {
+    const dele = String(c.id) === String(card_id);
+    poFluxoOpcoes(dele ? opcoes_depois : c.opcoes).forEach(function (o) { marca(o.destino); });
+    marca(c.proximo); marca(c.fallback); marca(c.sem_resposta);
+  });
+  const vistos = Object.create(null);
+  const saida = [];
+  poFluxoOpcoes(este.opcoes).forEach(function (o) {
+    const d = o.destino;
+    if (d === null || vistos[d] || d === String(card_id) || !existe[d] || alcancado[d]) return;
+    vistos[d] = true;
+    saida.push(d);
+  });
+  return saida;
+}
+
+/* O que a gaveta diz depois de excluir: "Opcao removida", o Desfazer e, se for o
+   caso, quais cards ficam sem entrada. Texto de aviso, nunca de acao: nada e
+   apagado e o salvar nao e bloqueado por isto. `removidas` sao posicoes da gaveta. */
+function poFluxoAvisoRemocao(card, removidas, cards, inicial) {
+  const r = Array.isArray(removidas) ? removidas : [];
+  if (!r.length || !card || typeof card !== 'object') return '';
+  const depois = poFluxoOpcoesSem(card.opcoes, r);
+  const orfaos = poFluxoOrfaos(card.id, depois, cards, inicial);
+  const todos = Array.isArray(cards) ? cards : (cards && typeof cards === 'object' ? Object.keys(cards).map(function (k) { return cards[k]; }) : []);
+  const nomes = orfaos.map(function (d) {
+    const c = todos.find(function (x) { return x && String(x.id) === d; });
+    return '<strong>' + esc((c && c.titulo) || d) + '</strong>';
+  });
+  let h = '<p class="fl-removida">' + (r.length > 1 ? 'Opções removidas' : 'Opção removida') + '. Ainda não foi salvo. ' +
+    '<button type="button" class="fl-desfazer" data-acao="desfazer">Desfazer</button></p>';
+  if (nomes.length) {
+    h += '<p class="fl-aviso">' + (nomes.length > 1 ? 'Estes cards ficarão sem entrada' : 'Este card ficará sem entrada') + ': ' + nomes.join(', ') +
+      '. Nenhum card foi apagado; ligue outra opção a ele se ainda for usá-lo.</p>';
+  }
+  return h;
+}
+
 /* O que vai ao banco: SO estas quatro chaves, e so as que a gaveta ofereceu (a
    chave presente em `v`). Qualquer outra coisa que venha em `v` e ignorada. */
 function poFluxoPatch(card, v) {
@@ -469,7 +559,7 @@ function poFluxoPatch(card, v) {
   if ('texto' in q) patch.texto = limpo(q.texto);
   if ('lembrete_ativo' in q) patch.lembrete_ativo = q.lembrete_ativo === true;
   if ('lembrete_texto' in q) patch.lembrete_texto = limpo(q.lembrete_texto);
-  if (Array.isArray(q.rotulos)) patch.opcoes = poFluxoOpcoesComRotulos(c.opcoes, q.rotulos);
+  if (Array.isArray(q.rotulos) || Array.isArray(q.remover)) patch.opcoes = poFluxoOpcoesSem(poFluxoOpcoesComRotulos(c.opcoes, q.rotulos), q.remover);
   return patch;
 }
 
@@ -494,7 +584,7 @@ function poFluxoBloqueio(card) {
    que nega nao da erro, so afeta zero linhas, e sem conferir isso a tela diria
    "salvo" sem ter salvo nada. */
 async function poFluxoSalva(card, v) {
-  const bloqueio = poFluxoBloqueio(card);
+  const bloqueio = poFluxoBloqueio(poFluxoCardFinal(card, v));
   if (bloqueio) throw new Error(bloqueio);
   const patch = poFluxoPatch(card, v);
   if (!Object.keys(patch).length) throw new Error('Não há nada para salvar neste card.');
@@ -747,9 +837,10 @@ function poFluxoGaveta(card) {
       h += '<p class="fl-aviso">Este card tem ' + opcoes.length + ' botões e o WhatsApp aceita no máximo ' + max + '. Não dá para salvar assim.</p>';
     }
     opcoes.forEach(function (o, i) {
-      h += '<input type="text" class="fl-campo" data-campo="rotulo" value="' + esc(o.rotulo) + '" aria-label="Texto da opção ' + (i + 1) + '">';
+      h += '<div class="fl-opcao" data-opcao="' + i + '"><input type="text" class="fl-campo" data-campo="rotulo" value="' + esc(o.rotulo) + '" aria-label="Texto da opção ' + (i + 1) + '">' +
+        '<button type="button" class="fl-opcao__x" data-acao="excluir-opcao" data-i="' + i + '" aria-label="Excluir a opção ' + (i + 1) + '">Excluir</button></div>';
     });
-    h += '</fieldset>';
+    h += '<div class="fl-remocao" data-aviso-remocao></div></fieldset>';
   }
   if (def.espera) {
     h += '<label class="fl-check"><input type="checkbox" data-campo="lembrete_ativo"' + (c.lembrete_ativo ? ' checked' : '') +
@@ -782,6 +873,8 @@ let PO_FLUXO_CONF = {};
 let PO_FLUXO_RES = '';
 let PO_FLUXO_OCUPADO = false;
 let PO_FLUXO_ZOOM = null;
+let PO_FLUXO_REMOV = [];
+let PO_FLUXO_SALVANDO = false;
 
 /* O token vem de sb.auth.getSession() na hora, como nos outros endpoints.
    Devolve {http, j, erro} e NUNCA lanca por causa da resposta: o 400 do publicar
@@ -973,6 +1066,7 @@ function poFluxoFecha() {
   const g = document.querySelector('#fl-gaveta');
   if (g) { g.hidden = true; g.innerHTML = ''; }
   PO_FLUXO_CARD = null;
+  PO_FLUXO_REMOV = [];
   poFluxoMarca(null);
 }
 
@@ -981,6 +1075,7 @@ function poFluxoAbre(id) {
   const g = document.querySelector('#fl-gaveta');
   if (!card || !g || !poFluxoEditavel(card)) return;
   PO_FLUXO_CARD = String(id);
+  PO_FLUXO_REMOV = [];
   g.innerHTML = poFluxoGaveta(card);
   g.hidden = false;
   poFluxoMarca(id);
@@ -997,9 +1092,42 @@ function poFluxoAbre(id) {
   g.onclick = function (ev) {
     const b = ev.target && ev.target.closest ? ev.target.closest('[data-acao]') : null;
     if (!b) return;
-    if (b.getAttribute('data-acao') === 'fechar') poFluxoFecha();
-    else if (b.getAttribute('data-acao') === 'salvar') poFluxoGavetaSalva();
+    const acao = b.getAttribute('data-acao');
+    if (acao === 'fechar') poFluxoFecha();
+    else if (acao === 'salvar') poFluxoGavetaSalva();
+    else if (acao === 'excluir-opcao') poFluxoOpcaoExclui(g, Number(b.getAttribute('data-i')));
+    else if (acao === 'desfazer') poFluxoOpcaoDesfaz(g);
   };
+}
+
+/* Excluir e desfazer so mexem na TELA (a linha some e volta). Nada vai ao banco
+   ate o Salvar. A linha escondida continua no DOM de proposito: o rotulo k da
+   gaveta tem que seguir sendo a k-esima opcao, senao os textos digitados caem
+   na opcao errada. Durante o salvar os dois ficam parados: o desfazer nao pode
+   prometer o que ja foi para o servidor. */
+function poFluxoAvisoRedesenha(g) {
+  const card = PO_FLUXO_CARD === null ? null : poFluxoCardAtual(PO_FLUXO_CARD);
+  const f = PO_FLUXOS.find(function (x) { return String(x.id) === String(PO_FLUXO_SEL); });
+  const alvo = g.querySelector('[data-aviso-remocao]');
+  if (!card || !f || !alvo) return;
+  alvo.innerHTML = poFluxoAvisoRemocao(card, PO_FLUXO_REMOV, f.cards, f.card_inicial);
+}
+
+function poFluxoOpcaoExclui(g, i) {
+  if (PO_FLUXO_SALVANDO || !Number.isInteger(i) || PO_FLUXO_REMOV.indexOf(i) >= 0) return;
+  const linha = g.querySelector('[data-opcao="' + i + '"]');
+  if (!linha) return;
+  linha.hidden = true;
+  PO_FLUXO_REMOV.push(i);
+  poFluxoAvisoRedesenha(g);
+}
+
+function poFluxoOpcaoDesfaz(g) {
+  if (PO_FLUXO_SALVANDO || !PO_FLUXO_REMOV.length) return;
+  const i = PO_FLUXO_REMOV.pop();
+  const linha = g.querySelector('[data-opcao="' + i + '"]');
+  if (linha) linha.hidden = false;
+  poFluxoAvisoRedesenha(g);
 }
 
 function poFluxoStatus(html) {
@@ -1018,6 +1146,7 @@ function poFluxoLeGaveta(g) {
   if (lt) v.lembrete_texto = lt.value;
   const rs = g.querySelectorAll('[data-campo="rotulo"]');
   if (rs.length) v.rotulos = Array.from(rs).map(function (i) { return i.value; });
+  if (PO_FLUXO_REMOV.length) v.remover = PO_FLUXO_REMOV.slice();
   return v;
 }
 
@@ -1029,11 +1158,13 @@ async function poFluxoGavetaSalva() {
   if (!card || !g || !f) return;
   const botao = g.querySelector('[data-acao="salvar"]');
   if (botao) botao.disabled = true;
+  PO_FLUXO_SALVANDO = true;
   poFluxoStatus('Salvando…');
   let patch;
   try {
     patch = await poFluxoSalva(card, poFluxoLeGaveta(g));
   } catch (e) {
+    PO_FLUXO_SALVANDO = false;
     if (botao) botao.disabled = false;
     poFluxoStatus('<span class="fl-aviso">' + esc(e.message) + '</span>');
     return;
@@ -1050,6 +1181,7 @@ async function poFluxoGavetaSalva() {
   try { await poFluxoRecarrega(); } catch (e) { const g2 = poFluxoAtual(); if (g2) g2.publicado_igual = null; }
   poFluxoRender();
   poFluxoAbre(id);
+  PO_FLUXO_SALVANDO = false;
   poFluxoStatus('Salvo. Conferindo o fluxo…');
   try {
     // quem julga (variavel desconhecida, limite, botoes) e o endpoint, nunca esta tela
