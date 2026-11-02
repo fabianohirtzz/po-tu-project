@@ -1139,6 +1139,14 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
   vermelho sem ter mudado o código, suspeite disto primeiro.
   **Suíte verde na branch não prova a árvore mesclada** — rodar depois do merge, antes de
   apagar a branch, é o que pegou isto.
+  **E a própria normalização em PHP estava um no-op até 02/11/2026.** Os bytes no
+  fonte eram `str_replace("<CR><LF>", "<CR><LF>", ...)` — os dois argumentos
+  **iguais**, newline literal em vez das escapes de duas letras. Nunca normalizou
+  nada; passava porque o arquivo lido era LF na branch. No merge os dois viraram
+  CRLF e a trava de `wa_fluxo_publica` caiu, com o `lib/wa-fluxo.php` idêntico.
+  **Escape em string PHP não se escreve apertando Enter**: conferir os bytes com
+  `cat -A`, e matar um mutante para provar que a trava morde. Um `str_replace`
+  cujos dois primeiros argumentos são iguais é sempre um no-op, nunca uma regra.
 - **Falta:** a conexão real com a Meta e a homologação. (O plano 4 saiu, e a
   conferência visual do painel logado foi feita em 08/10/2026 — ver abaixo.)
 

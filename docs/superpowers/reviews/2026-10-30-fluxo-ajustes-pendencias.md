@@ -1,14 +1,22 @@
 # Ajustes do fluxo (Plano C1) — pendências e heranças
 
-Branch `fluxo-ajustes`, 23 commits de `3c470b7` a `248ea21`. Plano:
+Mesclada em `main` por fast-forward em 02/11/2026 (24 commits de `3c470b7` a `7559aae`, mais o `99c9c13` abaixo). Plano:
 `docs/superpowers/plans/2026-10-30-fluxo-ajustes-reuniao.md`.
 
 **Nada está ligado.** O webhook segue não inscrito, os dois fluxos seguem `ativo = false`,
 nenhum cron foi cadastrado, e **nenhuma migration desta branch foi rodada**.
 
-Suíte: **72 passam, 1 falha**. A falha é `tests/test-wa-schema.php`, a sonda que procura a
-coluna `po_wa_conversas.roteiros_enviados` no banco. Ela é vermelha **de propósito** até a
-migration rodar no deploy: é assim que ela avisa que falta rodar.
+Suíte na árvore mesclada: **72 passam, 1 falha**. A falha é `tests/test-wa-schema.php`, a
+sonda que procura a coluna `po_wa_conversas.roteiros_enviados` no banco. Ela é vermelha
+**de propósito** até a migration rodar no deploy: é assim que ela avisa que falta rodar.
+
+O merge custou um vermelho a mais, consertado em `99c9c13`: a normalização de fim de linha
+de `tests/test-wa-fluxo-versao.php` era `str_replace` com os **dois primeiros argumentos
+iguais** (newline literal no fonte em vez das escapes de duas letras), ou seja um no-op.
+Passava na branch porque lá o `lib/wa-fluxo.php` era LF e o regex ancorado em nova linha
+casava sem normalização nenhuma; no merge os dois arquivos viraram CRLF e a trava de
+`wa_fluxo_publica` caiu com o código idêntico. Mutação depois do conserto: injetar
+`'ativo'` no corpo mata o teste. Varri a suíte inteira — era o único site.
 
 ---
 
