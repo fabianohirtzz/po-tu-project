@@ -4,7 +4,55 @@ Mesclada em `main` por fast-forward em 02/11/2026 (24 commits de `3c470b7` a `75
 `docs/superpowers/plans/2026-10-30-fluxo-ajustes-reuniao.md`.
 
 **Nada está ligado.** O webhook segue não inscrito, os dois fluxos seguem `ativo = false`,
-nenhum cron foi cadastrado, e **nenhuma migration desta branch foi rodada**.
+e nenhum cron foi cadastrado.
+
+## DEPLOY DE 02/11/2026: código no ar, migration PELA METADE
+
+Push feito (`3c470b7..0e1f44d` em `origin/main`). Os **6 arquivos** subiram por FTP
+(`lib/wa-{fluxo,motor,timeout}.php`, `painel/fluxo.{js,css}`, `painel/index.html`) e os
+**38 arquivos de `lib/` e `painel/` batem com o repo por hash**, conferidos depois do
+envio — a lista completa, não a lista do que eu lembrava de ter subido. Medido no ar:
+`painel/` 200, `fluxo.js?v=17` e `fluxo.css?v=8` 200 e com as funções novas dentro,
+`textos.js` 404, `lib/wa-fluxo.php` 200 com corpo vazio, `fluxo.php` 405 no GET e 401 no
+POST, webhook 403, cron 403, campanha 401, e o site público inteiro de pé.
+
+**Armadilha que apareceu e NÃO era o que o curl disse:** o upload do `painel/fluxo.js`
+devolveu `curl: (18) ... got 451` e o laço imprimiu FALHOU, mas **os bytes tinham
+passado** — o 451 vem na resposta final do servidor, depois da transferência. Três
+tentativas seguidas repetiram o 451 com o arquivo já correto lá. **Nesta hospedagem o
+código de saída do curl não decide se o arquivo subiu; quem decide é o hash.** Se isto
+tivesse sido tratado como falha de verdade, o `index.html` (que já pedia `?v=17`) ficaria
+carimbando o JS velho por um mês — que é exatamente o bug de 13/09/2026.
+
+### O que FALTA, e é uma coisa só
+
+A migration `2026-10-30-fluxo-triagem-v2.sql` rodou **até a metade**. Feito e conferido:
+a coluna `roteiros_enviados` existe (a suíte ficou **100% verde**, 73 arquivos), e as duas
+versões 2 estão gravadas. A fidelidade do grafo foi provada por **hash canônico**,
+calculado em Python a partir do arquivo e em SQL a partir do que foi gravado, com a mesma
+forma canônica: triagem `e5c23fa5983bfccff7fbaac50ab21af6` (15 cards) e espera
+`7785f40cdf65fd352c4a5d91e4e47e06` (2 cards). O instrumento foi **calibrado antes** na
+versão 1, que já existia nos dois lados (`444ded32…` e `e31223da…` bateram) — hash que
+nunca foi conferido contra dado conhecido não prova nada.
+
+Faltam os **4 últimos comandos** (delete dos 5 cards, derivação do rascunho, 2 ponteiros).
+Eles foram **recusados pelo portão do MCP**, nas duas ferramentas (`execute_sql` e
+`apply_migration`), por conterem `delete`. Não insisti: operação destrutiva recusada duas
+vezes não se contorna procurando uma terceira porta.
+
+**Como terminar:** colar o arquivo **inteiro** no SQL Editor do Supabase, como o próprio
+cabeçalho dele manda. **Rodar de novo é seguro e idempotente:** os dois inserts são
+`on conflict do nothing` (já gravados), o delete é por id, a derivação é
+`on conflict (id) do update` e os ponteiros não têm versão 3 para atropelar. As duas
+consultas de conferência do cabeçalho foram rodadas em 02/11 e vieram limpas: **22 cards
+comparados, zero editados, zero apagados** pela cliente.
+
+Estado do banco agora: ambos `ativo=false`, **2 versões publicadas** em cada fluxo,
+`versao_atual` ainda na **versão 1**, e a triagem com **20 cards de rascunho, 5 deles a
+remover**. É um estado consistente e inerte — o motor lê a versão 1 e nada está ligado —
+mas enquanto durar, a cliente **não consegue Publicar** o rascunho da triagem: ele ainda
+tem `{nome}`, que a regra 14 do validador agora recusa. É esse o sintoma de que falta
+rodar o resto.
 
 Suíte na árvore mesclada: **72 passam, 1 falha**. A falha é `tests/test-wa-schema.php`, a
 sonda que procura a coluna `po_wa_conversas.roteiros_enviados` no banco. Ela é vermelha
