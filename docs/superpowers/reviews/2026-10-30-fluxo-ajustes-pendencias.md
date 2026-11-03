@@ -6,7 +6,7 @@ Mesclada em `main` por fast-forward em 02/11/2026 (24 commits de `3c470b7` a `75
 **Nada está ligado.** O webhook segue não inscrito, os dois fluxos seguem `ativo = false`,
 e nenhum cron foi cadastrado.
 
-## DEPLOY DE 02/11/2026: código no ar, migration PELA METADE
+## DEPLOY DE 02/11/2026: COMPLETO E VERIFICADO
 
 Push feito (`3c470b7..0e1f44d` em `origin/main`). Os **6 arquivos** subiram por FTP
 (`lib/wa-{fluxo,motor,timeout}.php`, `painel/fluxo.{js,css}`, `painel/index.html`) e os
@@ -24,48 +24,54 @@ código de saída do curl não decide se o arquivo subiu; quem decide é o hash.
 tivesse sido tratado como falha de verdade, o `index.html` (que já pedia `?v=17`) ficaria
 carimbando o JS velho por um mês — que é exatamente o bug de 13/09/2026.
 
-### O que FALTA, e é uma coisa só
+### A migration rodou inteira
 
-A migration `2026-10-30-fluxo-triagem-v2.sql` rodou **até a metade**. Feito e conferido:
-a coluna `roteiros_enviados` existe (a suíte ficou **100% verde**, 73 arquivos), e as duas
-versões 2 estão gravadas. A fidelidade do grafo foi provada por **hash canônico**,
-calculado em Python a partir do arquivo e em SQL a partir do que foi gravado, com a mesma
-forma canônica: triagem `e5c23fa5983bfccff7fbaac50ab21af6` (15 cards) e espera
-`7785f40cdf65fd352c4a5d91e4e47e06` (2 cards). O instrumento foi **calibrado antes** na
-versão 1, que já existia nos dois lados (`444ded32…` e `e31223da…` bateram) — hash que
-nunca foi conferido contra dado conhecido não prova nada.
+A coluna `roteiros_enviados` foi aplicada por aqui; os **4 comandos finais** foram
+recusados pelo portão do MCP nas duas ferramentas (`execute_sql` e `apply_migration`),
+por conterem `delete`, e **o Fabiano os rodou no SQL Editor** em 02/11. Não insisti no
+portão: operação destrutiva recusada duas vezes não se contorna procurando a terceira
+porta.
 
-Faltam os **4 últimos comandos** (delete dos 5 cards, derivação do rascunho, 2 ponteiros).
-Eles foram **recusados pelo portão do MCP**, nas duas ferramentas (`execute_sql` e
-`apply_migration`), por conterem `delete`. Não insisti: operação destrutiva recusada duas
-vezes não se contorna procurando uma terceira porta.
+**Fidelidade do grafo, provada e não presumida.** O retrato foi transcrito pelo MCP, então
+a conferência é por **hash canônico** calculado dos dois lados — em Python a partir do
+arquivo e em SQL a partir do que foi gravado, na mesma forma canônica, usando só campos
+escalares para não depender de como cada lado serializa jsonb. Bateram: triagem
+`e5c23fa5983bfccff7fbaac50ab21af6` (15 cards) e espera `7785f40cdf65fd352c4a5d91e4e47e06`
+(2 cards).
 
-**Como terminar:** colar o arquivo **inteiro** no SQL Editor do Supabase, como o próprio
-cabeçalho dele manda. **Rodar de novo é seguro e idempotente:** os dois inserts são
-`on conflict do nothing` (já gravados), o delete é por id, a derivação é
-`on conflict (id) do update` e os ponteiros não têm versão 3 para atropelar. As duas
-consultas de conferência do cabeçalho foram rodadas em 02/11 e vieram limpas: **22 cards
-comparados, zero editados, zero apagados** pela cliente.
+**O instrumento foi calibrado ANTES de medir**, na versão 1, que já existia nos dois lados:
+`444ded3281d76ec186fbb1fdc049852c` e `e31223daf3400f1792f948c6145e6a84` bateram arquivo x
+banco. Hash que nunca foi conferido contra dado conhecido não prova nada — ele só mostra
+que os dois lados erram igual.
 
-Estado do banco agora: ambos `ativo=false`, **2 versões publicadas** em cada fluxo,
-`versao_atual` ainda na **versão 1**, e a triagem com **20 cards de rascunho, 5 deles a
-remover**. É um estado consistente e inerte — o motor lê a versão 1 e nada está ligado —
-mas enquanto durar, a cliente **não consegue Publicar** o rascunho da triagem: ele ainda
-tem `{nome}`, que a regra 14 do validador agora recusa. É esse o sintoma de que falta
-rodar o resto.
+Estado final medido no banco:
 
-Suíte na árvore mesclada: **72 passam, 1 falha**. A falha é `tests/test-wa-schema.php`, a
-sonda que procura a coluna `po_wa_conversas.roteiros_enviados` no banco. Ela é vermelha
-**de propósito** até a migration rodar no deploy: é assim que ela avisa que falta rodar.
+| | triagem | espera |
+|---|---|---|
+| `versao_atual` | **versão 2** | **versão 2** |
+| cards no retrato | 15 | 2 |
+| cards no rascunho | 15 | 2 |
+| rascunho casa o retrato | **sim** | **sim** |
+| cards antigos restantes | 0 | 0 |
+| `{nome}` em texto ou lembrete | 0 | 0 |
+| `ativo` | **false** | **false** |
 
-O merge custou um vermelho a mais, consertado em `99c9c13`: a normalização de fim de linha
-de `tests/test-wa-fluxo-versao.php` era `str_replace` com os **dois primeiros argumentos
-iguais** (newline literal no fonte em vez das escapes de duas letras), ou seja um no-op.
-Passava na branch porque lá o `lib/wa-fluxo.php` era LF e o regex ancorado em nova linha
-casava sem normalização nenhuma; no merge os dois arquivos viraram CRLF e a trava de
-`wa_fluxo_publica` caiu com o código idêntico. Mutação depois do conserto: injetar
-`'ativo'` no corpo mata o teste. Varri a suíte inteira — era o único site.
+O "rascunho casa o retrato" é comparação de hash campo a campo, e **ela discrimina**: o
+mesmo hash entre versão 1 e versão 2 dá diferente, então o "casa" não é vacuidade. O card
+`lista` virou `roteiros` (1 card do tipo novo, 0 do antigo).
 
+O validador de verdade aceita os dois grafos: `tests/test-wa-fluxo-semeado.php` lê o
+arquivo da migration e o passa pelo `wa_fluxo_valida` e pelo roteador reais, e o arquivo é
+hash-idêntico ao que está no banco. **Suíte 100% verde, 73 arquivos.**
+
+**Continua tudo desligado:** webhook não inscrito, nenhum cron no cPanel, os dois fluxos em
+`ativo = false`. Ao ligar, **"Lista de espera" antes de "Boas-vindas e triagem"** — a
+triagem salta para dentro da espera e a regra 11 bloqueia saltar para fluxo desligado.
+
+**O que ninguém viu ainda:** a aba Fluxo **logada**, com o grafo novo na tela. O painel só
+se abre com a sessão da cliente, e a regra da casa é não julgar tela do painel por
+screenshot imediato (ela pinta a moldura e preenche depois do fetch; esperar de 5 a 10
+segundos). Larguras abaixo de 980px também seguem sem verificação.
 ---
 
 ## 1. O que BLOQUEIA ligar o robô

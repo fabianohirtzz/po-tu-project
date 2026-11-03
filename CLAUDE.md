@@ -146,6 +146,28 @@ rm -f "$SCRATCH/.netrc"
 
 Depois do deploy, testar com **Ctrl+F5** (cache do navegador para JS/CSS).
 
+**O código de saída do `curl` NÃO decide se o arquivo subiu (medido em 02/11/2026).**
+O upload do `painel/fluxo.js` devolveu `curl: (18) server did not report OK, got 451`
+em três tentativas seguidas, e nas três **os bytes já tinham passado**: o 451 vem na
+resposta final do servidor, depois da transferência, e o arquivo estava lá com o
+tamanho e o hash certos. Quem decide é o **hash**, nunca o exit code nem o tamanho.
+Isto corta nos dois sentidos e o lado perigoso é este: tratar o falso negativo como
+falha de verdade teria deixado o `index.html` (já pedindo `?v=` novo) carimbando o JS
+velho por um mês, que é o bug de 13/09/2026 outra vez.
+
+**O portão do MCP do Supabase recusa `delete`.** Em 02/11/2026 o bloco final de uma
+migration (delete + insert + update, sem DDL) foi recusado nas DUAS ferramentas
+(`execute_sql` e `apply_migration`). Migration com comando destrutivo o dono roda no
+**SQL Editor**; não procurar uma terceira porta para passar o destrutivo.
+
+**Grafo transcrito pelo MCP se confere por HASH CANÔNICO, e o instrumento se calibra
+antes.** O JSON do fluxo não entra no MCP a partir do arquivo, então ele é retranscrito,
+e a fidelidade se prova depois: o mesmo hash calculado em Python a partir do arquivo e em
+SQL a partir do que foi gravado. Use **só campos escalares** (`->>`, `jsonb_each_text`,
+booleano como `true`/`false`, ausente como `''`), senão a conta depende de como cada lado
+serializa jsonb. E **calibre na versão que já existe nos dois lados** antes de confiar no
+resultado: hash nunca conferido contra dado conhecido não prova nada, só mostra que os
+dois lados erram igual.
 #### Conferir o deploy: `bash scripts/confere-deploy.sh`
 
 Compara o painel publicado com o repo **arquivo por arquivo**, montando a lista a
