@@ -621,11 +621,11 @@ function wa_processar($ev) {
 
 /* ---------- o interpretador, do lado do motor ---------- */
 
-/* Teto de cards executados por mensagem. Cards que nao esperam encadeiam
-   (texto, marca, pdf, salto de fluxo), e um grafo mal desenhado pode girar
-   para sempre: sem teto, uma unica mensagem do cliente viraria rajada de
-   mensagens ate o PHP estourar o tempo. Contam tambem os saltos de fluxo. */
-const WA_FLUXO_MAX_PASSOS = 10;
+/* WA_FLUXO_MAX_PASSOS mora em lib/wa-fluxo.php, que este arquivo ja requer. O
+   simulador (lib/wa-sim.php) tem o MESMO teto e nao pode requerer o motor (a
+   seta e db/send/po-data <- fluxo <- sim/motor <- timeout), entao a constante
+   mudou de casa para o arquivo que os dois alcancam. Dois numeros seriam dois
+   tetos que desandam separados. */
 
 /* Fluxos que podem atender: ligados e publicados. null = o banco nao
    respondeu (NAO e "nenhum fluxo"). O order= e FIXO de proposito: com dois

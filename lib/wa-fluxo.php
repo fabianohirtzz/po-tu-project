@@ -178,6 +178,15 @@ function wa_fluxo_campos_marca($config, $ctx) {
    o robo desistir e chamar a dona. Com 2, a terceira vai para o humano. */
 const WA_FLUXO_MAX_TENTATIVAS = 2;
 
+/* Teto de cards executados por mensagem. Cards que nao esperam encadeiam
+   (texto, marca, pdf, salto de fluxo), e um grafo mal desenhado pode girar
+   para sempre: sem teto, uma unica mensagem do cliente viraria rajada de
+   mensagens ate o PHP estourar o tempo. Contam tambem os saltos de fluxo.
+
+   Mora AQUI, e nao no motor, porque o simulador (lib/wa-sim.php) percorre o
+   mesmo grafo e precisa do mesmo teto sem requerer o wa-motor.php. */
+const WA_FLUXO_MAX_PASSOS = 10;
+
 /* ---------- card `roteiros`: lista numerada em texto puro ----------
    O publico digita, entao a escolha e "1", o nome inteiro ou um pedaco dele.
    O NUMERO vale pela lista que foi ENVIADA (roteiros_enviados, guardado na
