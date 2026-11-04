@@ -9,6 +9,7 @@
 $RAIZ = dirname(__DIR__);
 require_once $RAIZ . '/lib/po-auth.php';
 require_once $RAIZ . '/lib/wa-fluxo.php';
+require_once $RAIZ . '/lib/wa-sim.php';
 
 function ok($cond, $msg) { if (!$cond) { fwrite(STDERR, "ASSERT: $msg\n"); exit(1); } }
 
@@ -100,11 +101,11 @@ function fx_filho($caso) {
     $GLOBALS['SUPABASE_URL']      = 'https://teste.local';
     $GLOBALS['SUPABASE_ANON_KEY'] = 'anon-de-teste';
 
-    po_auth_set_verificador(fn($u, $a, $t) => $caso !== 'sem-auth' && $t === 'tok.valido');
+    po_auth_set_verificador(fn($u, $a, $t) => !in_array($caso, ['sem-auth', 'sim-sem-auth'], true) && $t === 'tok.valido');
 
     /* "fora-X" derruba a tabela X; "conf-fora-X" faz o mesmo no modo conferir. */
     $fora = null;
-    if (preg_match('/^(?:conf-|lig-|desl-)?fora-(fluxos|cards|versoes)$/', $caso, $mm)) {
+    if (preg_match('/^(?:conf-|lig-|desl-|sim-)?fora-(fluxos|cards|versoes)$/', $caso, $mm)) {
         $fora = ['fluxos' => 'po_wa_fluxos', 'cards' => 'po_wa_cards', 'versoes' => 'po_wa_fluxo_versoes'][$mm[1]];
     }
 
@@ -208,6 +209,19 @@ function fx_filho($caso) {
         case 'desl-falha':       $_POST = ['modo' => 'desligar'] + $conf; break;
         case 'desl-sem-id':      $_POST = ['modo' => 'desligar', 'fluxo_id' => ''] + $conf; break;
         case 'desl-inexistente': $_POST = ['modo' => 'desligar', 'fluxo_id' => 'nao-existe'] + $conf; break;
+        case 'sim-sem-auth':     $_POST = ['modo' => 'simular'] + $conf; break;
+        case 'sim-sem-id':       $_POST = ['modo' => 'simular', 'fluxo_id' => ''] + $conf; break;
+        case 'sim-inexistente':  $_POST = ['modo' => 'simular', 'fluxo_id' => 'nao-existe'] + $conf; break;
+        case 'sim-fora-fluxos':
+        case 'sim-fora-cards':
+        case 'sim-ok':           $_POST = ['modo' => 'simular'] + $conf; break;
+        case 'sim-clique':       $_POST = ['modo' => 'simular', 'card_id' => 'bv', 'resposta' => 'b1', 'clicou' => '1'] + $conf; break;
+        case 'sim-digitado':     $_POST = ['modo' => 'simular', 'card_id' => 'bv', 'resposta' => 'b1'] + $conf; break;
+        case 'sim-ctx-lista':    $_POST = ['modo' => 'simular', 'ctx' => '[1,2]'] + $conf; break;
+        case 'sim-ctx-lixo':     $_POST = ['modo' => 'simular', 'ctx' => 'nao e json'] + $conf; break;
+        case 'sim-ctx-vazio':    $_POST = ['modo' => 'simular', 'ctx' => ''] + $conf; break;
+        case 'sim-ctx-gigante':  $_POST = ['modo' => 'simular', 'ctx' => json_encode(['roteiros_enviados' => array_map(fn($i) => 'r' . $i, range(1, 51))])] + $conf; break;
+        case 'sim-card-fora':    $_POST = ['modo' => 'simular', 'card_id' => 'nao-existe'] + $conf; break;
     }
 
     /* O cache e o do site de verdade (po_cache_dir). Um arquivo-sentinela diz se
@@ -221,7 +235,8 @@ function fx_filho($caso) {
         @unlink($sentinela);
         echo "\n@@CODIGO@@" . ($c === false ? 0 : (int) $c)
            . "\n@@CHAMADAS@@" . json_encode($chamadas)
-           . "\n@@ESTADO@@" . json_encode(['fluxos' => $dados['fluxos'], 'versoes' => count($dados['versoes']), 'cache_limpo' => $limpou]);
+           . "\n@@ESTADO@@" . json_encode(['fluxos' => $dados['fluxos'], 'versoes' => count($dados['versoes']), 'cache_limpo' => $limpou,
+                'sim_rodou' => isset($GLOBALS['WA_SIM_COL'])]);
     });
 
     require $RAIZ . '/fluxo.php';
@@ -261,6 +276,9 @@ function fx_roda($caso) {
             'Publique o fluxo antes de ligar.',
             'Não consegui ligar o fluxo agora. Tente de novo em instantes.',
             'Não consegui desligar o fluxo agora. Tente de novo em instantes.',
+            'Não foi dito qual fluxo simular.',
+            'A conversa do simulador chegou num formato que eu não entendi. Comece de novo.',
+            'O simulador perdeu o ponto da conversa. Comece de novo.',
         ], true) || preg_match(FX_ERRO_PORTA, (string) ($json['error'] ?? '')) === 1,
            "caso $caso: erro fora do conjunto fechado (veio: " . json_encode($json['error'] ?? null) . ')');
     }
@@ -540,6 +558,98 @@ ok($r['codigo'] === 404 && fx_escritas($r) === [], 'desligar fluxo inexistente, 
 /* ============================================================
    ASSERCAO DE FONTE
 ============================================================ */
+/* ============================================================
+   SIMULAR
+   O simulador le o RASCUNHO (unica excecao a regra de o motor so ler o retrato
+   publicado, e e o pedido: testar antes de publicar), nao grava nada e nao
+   liga nada.
+============================================================ */
+
+/* wa_sim_ctx e pura: o contexto vem do NAVEGADOR e e alimentado no motor, entao
+   e conferido sem HTTP. So as 3 chaves que o motor le passam. */
+ok(wa_sim_ctx('') === [], 'ctx vazio vira contexto vazio (primeiro passo)');
+ok(wa_sim_ctx('{}') === [], 'objeto vazio tambem');
+ok(wa_sim_ctx('nao e json') === null, 'ctx que nao e json e recusado');
+ok(wa_sim_ctx('[1,2]') === null, 'ctx que e lista, nao objeto, e recusado');
+ok(wa_sim_ctx('"texto"') === null, 'ctx que e string json e recusado');
+ok(wa_sim_ctx('null') === null, 'ctx nulo e recusado');
+$c = wa_sim_ctx('{"roteiro_slug":"turquia","tentativas":2,"roteiros_enviados":["turquia","chile"]}');
+ok($c === ['roteiro_slug' => 'turquia', 'tentativas' => 2, 'roteiros_enviados' => ['turquia', 'chile']],
+   'as 3 chaves do motor passam: ' . json_encode($c));
+$c = wa_sim_ctx('{"tentativas":"3","estado":"humano","silenciado_at":"2026-11-03"}');
+ok($c === ['tentativas' => 3], 'o resto e descartado, e tentativas vira inteiro: ' . json_encode($c));
+ok(wa_sim_ctx('{"roteiros_enviados":"turquia"}') === null, 'roteiros_enviados que nao e lista e recusado');
+ok(wa_sim_ctx('{"roteiros_enviados":[1,2]}') === null, 'lista com o que nao e texto e recusada');
+$g = wa_sim_ctx('{"roteiros_enviados":' . json_encode(array_map(fn($i) => 'r' . $i, range(1, 50))) . '}');
+ok(count($g['roteiros_enviados']) === 50, '50 roteiros enviados passam');
+/* O numero que a pessoa le vale por POSICAO nesta lista. Uma lista enorme
+   vinda do navegador nao tem de onde ter nascido: o proprio card corta em
+   ~50 itens pelo teto de 4096 caracteres da Cloud API. */
+$g = wa_sim_ctx('{"roteiros_enviados":' . json_encode(array_map(fn($i) => 'r' . $i, range(1, 51))) . '}');
+ok($g === null, '51 e recusado: lista maior que a que o card consegue enviar');
+ok(wa_sim_ctx('{"roteiro_slug":123}') === null, 'roteiro_slug que nao e texto e recusado');
+
+$r = fx_roda('sim-sem-auth');
+ok($r['codigo'] === 401, 'simular sem login, 401 (deu: ' . $r['codigo'] . ')');
+ok($r['chamadas'] === [], 'e nao chega a ler o banco');
+ok($r['estado']['sim_rodou'] === false, 'e nao chega a simular passo nenhum');
+
+$r = fx_roda('sim-sem-id');
+ok($r['codigo'] === 400, 'simular sem fluxo_id, 400 (deu: ' . $r['codigo'] . ')');
+ok($r['json']['error'] === 'Não foi dito qual fluxo simular.', 'com a frase do modo: ' . (string) ($r['json']['error'] ?? ''));
+
+$r = fx_roda('sim-inexistente');
+ok($r['codigo'] === 404, 'fluxo que nao existe, 404 como nos outros modos (deu: ' . $r['codigo'] . ')');
+ok($r['estado']['sim_rodou'] === false, 'e nao simula');
+
+/* O caminho bom: f1 comeca no card `bv`, que e de botoes e espera. */
+$r = fx_roda('sim-ok');
+ok($r['codigo'] === 200, 'simular responde 200 (deu: ' . $r['codigo'] . ')');
+ok($r['json']['ok'] === true, 'a requisicao deu certo');
+$passo = $r['json']['passo'] ?? [];
+ok(($passo['ok'] ?? null) === true, 'e o passo tambem');
+ok(($passo['estado'] ?? '') === 'aguardando', 'para no card que espera: ' . (string) ($passo['estado'] ?? ''));
+ok(($passo['card_id'] ?? '') === 'bv', 'que e o card inicial do rascunho');
+ok(count($passo['mensagens'] ?? []) === 1, 'uma bolha');
+ok($passo['mensagens'][0]['tipo'] === 'buttons', 'com os botoes do card');
+ok($passo['mensagens'][0]['texto'] === 'Oi, como ajudo?', 'e o texto do RASCUNHO, nao do retrato publicado');
+ok(($r['json']['fluxo_nome'] ?? '') === 'Boas-vindas', 'e diz o nome do fluxo: ' . (string) ($r['json']['fluxo_nome'] ?? ''));
+/* O que nao pode acontecer de jeito nenhum. */
+ok(fx_escritas($r) === [], 'simular NAO escreve nada no banco');
+ok($r['estado']['cache_limpo'] === false, 'e nao limpa o cache do site');
+ok(fx_estado_fluxo($r, 'f1')['ativo'] === true && fx_estado_fluxo($r, 'f2')['ativo'] === true,
+   'e nao mexe em ativo');
+ok(fx_lidas($r, 'po_wa_fluxo_versoes') === [], 'nem le as versoes publicadas: o simulador e do rascunho');
+
+/* Clique anda pela opcao; o MESMO texto digitado nao escolhe (so o clique
+   carrega id de opcao, que e a regra do motor). */
+$r = fx_roda('sim-clique');
+ok(($r['json']['passo']['estado'] ?? '') === 'humano', 'clicar na opcao entrega para a humana: ' . (string) ($r['json']['passo']['estado'] ?? ''));
+$r = fx_roda('sim-digitado');
+ok(($r['json']['passo']['card_id'] ?? '') === 'ops', 'digitar o id do botao cai no fallback (card `ops`) e volta a esperar: ' . (string) ($r['json']['passo']['card_id'] ?? ''));
+ok(($r['json']['passo']['ctx']['tentativas'] ?? 0) === 1, 'contando a tentativa');
+
+/* Contexto que o navegador mandou torto: recusa ANTES de simular. */
+foreach (['sim-ctx-lista', 'sim-ctx-lixo', 'sim-ctx-gigante'] as $caso) {
+    $r = fx_roda($caso);
+    ok($r['codigo'] === 400, $caso . ' responde 400 (deu: ' . $r['codigo'] . ')');
+    ok($r['estado']['sim_rodou'] === false, $caso . ': e nao chama o simulador');
+    ok(fx_escritas($r) === [], $caso . ': e nao escreve nada');
+}
+$r = fx_roda('sim-ctx-vazio');
+ok($r['codigo'] === 200, 'ctx vazio e o primeiro passo, nao erro (deu: ' . $r['codigo'] . ')');
+
+$r = fx_roda('sim-card-fora');
+ok($r['codigo'] === 400, 'card_id fora do grafo, 400 (deu: ' . $r['codigo'] . ')');
+ok($r['json']['error'] === 'O simulador perdeu o ponto da conversa. Comece de novo.', 'com frase que diz o que fazer');
+ok($r['estado']['sim_rodou'] === false, 'e nao simula');
+
+/* Banco fora do ar e 502, nunca "o fluxo nao tem card nenhum". */
+foreach (['sim-fora-fluxos', 'sim-fora-cards'] as $caso) {
+    $r = fx_roda($caso);
+    ok($r['codigo'] === 502, $caso . ' responde 502 (deu: ' . $r['codigo'] . ')');
+}
+
 $src = file_get_contents(__DIR__ . '/../fluxo.php');
 ok(strpos($src, 'wa_fluxo_valida(') !== false, 'o conferir usa a funcao de julgamento do publicar');
 ok(strpos($src, 'wa_fluxo_grafo_de(') !== false, 'publicado_igual usa o mesmo retrato do publicar');
@@ -567,5 +677,22 @@ ok(preg_match('/in_array\(\$modo, \[[^\]]*\'publicar\'[^\]]*\'ligar\'[^\]]*\'des
 ok(substr_count($src, 'in_array($modo') === 1, 'e nao existe uma segunda lista de modo');
 ok(preg_match('/wa_fluxo_valida\([^)]*\$outros/', $src) === 1,
    'o conferir passa $outros para wa_fluxo_valida');
+
+/* O simulador nao publica, nao liga e nao limpa cache: o bloco dele no fonte
+   nao pode nem mencionar isso. */
+$i_sim = strpos($src, "modo === 'simular'");
+ok($i_sim !== false, 'o fluxo.php tem o bloco do modo simular');
+$resto_sim = substr($src, $i_sim);
+$fim_sim = strpos($resto_sim, '/* ------------');
+$bloco_sim = $fim_sim !== false ? substr($resto_sim, 0, $fim_sim) : $resto_sim;
+ok(strlen($bloco_sim) < strlen($resto_sim), 'e o bloco acaba antes do proximo modo');
+ok(strpos($bloco_sim, 'wa_fluxo_publica') === false, 'o bloco do simular nao publica');
+ok(strpos($bloco_sim, "'ativo'") === false, 'e nao escreve ativo');
+ok(strpos($bloco_sim, 'po_cache_limpa') === false, 'e nao limpa o cache do site');
+ok(substr_count($src, 'wa_sim_passo(') === 1, 'wa_sim_passo e chamada uma vez so');
+ok(preg_match('/in_array\(\$modo, \[[^\]]*\x27simular\x27/', $src) === 1,
+   'simular entra na MESMA lista fechada de modo, nao numa segunda');
+ok(preg_match('/wa_sim_ctx\(/', $src) === 1,
+   'a validacao do contexto vem do lib/wa-sim.php, que o teste alcanca sem HTTP (requerer o fluxo.php o EXECUTA)');
 
 echo "test-fluxo-endpoint OK\n";

@@ -23,6 +23,7 @@
 
 require_once __DIR__ . '/lib/po-auth.php';
 require_once __DIR__ . '/lib/wa-fluxo.php';   // ja carrega wa-db, wa-send -> wa-config
+require_once __DIR__ . '/lib/wa-sim.php';     // o simulador: motor real, transporte falso
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -72,7 +73,7 @@ if (!po_auth_ok($cfg['SUPABASE_URL'] ?? '', $cfg['SUPABASE_ANON_KEY'] ?? '')) {
 }
 
 $modo = fpost('modo');
-if (!in_array($modo, ['ler', 'conferir', 'publicar', 'ligar', 'desligar'], true)) {
+if (!in_array($modo, ['ler', 'conferir', 'publicar', 'ligar', 'desligar', 'simular'], true)) {
     ffail(400, 'Modo inválido.');
 }
 
@@ -131,6 +132,7 @@ $SEM_ID = [
     'publicar' => 'Não foi dito qual fluxo publicar.',
     'ligar'    => 'Não foi dito qual fluxo ligar.',
     'desligar' => 'Não foi dito qual fluxo desligar.',
+    'simular'  => 'Não foi dito qual fluxo simular.',
 ];
 $fluxo_id = fpost('fluxo_id');
 if ($fluxo_id === '') ffail(400, $SEM_ID[$modo]);
@@ -149,6 +151,48 @@ if ($modo === 'conferir') {
     if ($cards === null || $outros === null) ffail(502, $FALHA_LEITURA);
 
     fok(['problemas' => wa_fluxo_valida($linhas[0], $cards, $outros)]);
+}
+
+/* ------------------------------------------------------------
+   simular
+   Um passo da conversa de teste. Le o RASCUNHO (nao o retrato publicado: o
+   pedido e justamente experimentar antes de publicar), nao grava nada, nao
+   liga nada e nao limpa cache. Quem roda o grafo e lib/wa-sim.php, com o
+   motor de verdade atras de um transporte falso.
+
+   O estado da conversa vive no NAVEGADOR e volta inteiro em cada passo, por
+   isso tudo que vem dele e conferido antes: contexto torto ou card fora do
+   grafo recusa aqui, sem simular passo nenhum.
+
+   A resposta aninha o envelope em `passo` em vez de achata-lo: `fok()` faz
+   ['ok' => true] + $dados e o `+` mantem a chave da esquerda, entao achatar
+   esconderia o `ok:false` das recusas da Cloud API, que e o que a cliente
+   precisa ver.
+------------------------------------------------------------ */
+if ($modo === 'simular') {
+    $fluxos = wa_fl_ler('po_wa_fluxos', 'select=*&order=created_at.asc');
+    $cards  = wa_fl_ler('po_wa_cards', 'select=*&order=ordem.asc');
+    if ($fluxos === null || $cards === null) ffail(502, $FALHA_LEITURA);
+
+    // Todos os fluxos, nao so o pedido: o salto `ir_para_fluxo` precisa do
+    // grafo do destino para a cliente ver o caminho inteiro.
+    $grafos = wa_sim_grafos($fluxos, $cards);
+    if (!isset($grafos[$fluxo_id])) ffail(404, 'Este fluxo não existe.');
+
+    $ctx = wa_sim_ctx(fpost('ctx'));
+    if ($ctx === null) ffail(400, 'A conversa do simulador chegou num formato que eu não entendi. Comece de novo.');
+
+    $card_id = fpost('card_id');
+    if ($card_id !== '' && !isset($grafos[$fluxo_id]['cards'][$card_id])) {
+        ffail(400, 'O simulador perdeu o ponto da conversa. Comece de novo.');
+    }
+
+    $passo = wa_sim_passo($grafos, $fluxo_id, $card_id === '' ? null : $card_id,
+        fpost('resposta'), $ctx, fpost('clicou') === '1');
+
+    // O nome e do fluxo em que o passo PAROU (um salto pode ter trocado).
+    $nome = (string) ($grafos[$passo['fluxo_id']]['nome'] ?? $grafos[$fluxo_id]['nome'] ?? '');
+    fok(['passo' => $passo, 'fluxo_nome' => $nome]);
 }
 
 /* ------------------------------------------------------------

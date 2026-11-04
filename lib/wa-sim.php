@@ -94,6 +94,46 @@ function wa_sim_deps() {
     return $col;
 }
 
+/* Teto de roteiros numa lista enviada. O numero que a pessoa le vale por
+   POSICAO nesta lista, e o proprio card `roteiros` corta em torno de 50 itens
+   pelo teto de 4096 caracteres da Cloud API: uma lista maior vinda do navegador
+   nao tem de onde ter nascido. */
+const WA_SIM_CTX_MAX_ROTEIROS = 50;
+
+/* O contexto da conversa simulada vem do NAVEGADOR e e alimentado no motor,
+   entao passa por aqui antes. Pura: devolve o contexto limpo, ou null quando o
+   que chegou nao e contexto (e ai quem chama recusa, sem simular nada).
+
+   Lista FECHADA: so as 3 chaves que o motor le (`wa_fluxo_executa` e
+   `wa_fluxo_proximo`). Chave a mais e descartada em silencio - ela nao tem como
+   ser legitima, e o contexto nao e lugar de carregar estado de conversa
+   (`estado`, `silenciado_at` e o que mais houver sao do banco, que o simulador
+   nao toca). */
+function wa_sim_ctx($json) {
+    $json = trim((string) $json);
+    if ($json === '') return [];
+    $v = json_decode($json, true);
+    if (!is_array($v) || (count($v) && array_keys($v) === range(0, count($v) - 1))) return null;
+
+    $out = [];
+    if (array_key_exists('roteiro_slug', $v) && $v['roteiro_slug'] !== null) {
+        if (!is_string($v['roteiro_slug'])) return null;
+        $out['roteiro_slug'] = $v['roteiro_slug'];
+    }
+    if (array_key_exists('tentativas', $v)) {
+        if (!is_int($v['tentativas']) && !(is_string($v['tentativas']) && preg_match('/^[0-9]{1,3}$/', $v['tentativas']))) return null;
+        $out['tentativas'] = (int) $v['tentativas'];
+    }
+    if (array_key_exists('roteiros_enviados', $v)) {
+        $l = $v['roteiros_enviados'];
+        if (!is_array($l) || array_keys($l) !== range(0, count($l) - 1)) return null;
+        if (count($l) > WA_SIM_CTX_MAX_ROTEIROS) return null;
+        foreach ($l as $x) if (!is_string($x)) return null;
+        $out['roteiros_enviados'] = array_values($l);
+    }
+    return $out;
+}
+
 /* Um grafo por fluxo, montado do RASCUNHO pela mesma funcao do Publicar.
 
    Alem do que wa_fluxo_grafo_de devolve, cada grafo leva `sim_ativo`: o
