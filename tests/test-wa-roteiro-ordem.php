@@ -43,33 +43,67 @@ $vietna  = r('vietna',  'De 22/02/27 à 15/03/27');   // 2027-02-22
 $chile   = r('chile',   '25/11/26 a 02/12/26');      // 2026-11-25
 $turquia = r('turquia', 'De 27/10/26 à 12/11/26');   // 2026-10-27
 
+/* Dia de referencia FIXO e anterior as tres: esta secao testa a ordenacao por
+   data, e sem fixar o dia ela passaria a testar tambem a regra de data passada,
+   mudando de resultado sozinha com o calendario. A regra de data passada tem a
+   secao dela, logo abaixo. */
+$base = '2026-01-01';
+
 // A entrada vem na ordem de ordem.asc, que e o que o banco devolve hoje.
-ok(slugs(wa_fluxo_ordena_roteiros([$vietna, $chile])) === 'chile,vietna', 'a mais proxima vem primeiro');
-ok(slugs(wa_fluxo_ordena_roteiros([$vietna, $chile, $turquia])) === 'turquia,chile,vietna', 'tres em ordem crescente');
-ok(slugs(wa_fluxo_ordena_roteiros([$turquia, $chile, $vietna])) === 'turquia,chile,vietna', 'ja ordenada continua igual');
+ok(slugs(wa_fluxo_ordena_roteiros([$vietna, $chile], $base)) === 'chile,vietna', 'a mais proxima vem primeiro');
+ok(slugs(wa_fluxo_ordena_roteiros([$vietna, $chile, $turquia], $base)) === 'turquia,chile,vietna', 'tres em ordem crescente');
+ok(slugs(wa_fluxo_ordena_roteiros([$turquia, $chile, $vietna], $base)) === 'turquia,chile,vietna', 'ja ordenada continua igual');
 
 $a = r('a', 'Fevereiro de 2027');
 $c = r('c', '');
-ok(slugs(wa_fluxo_ordena_roteiros([$a, $chile, $c])) === 'chile,a,c', 'sem data vai para o fim, na ordem de origem');
-ok(slugs(wa_fluxo_ordena_roteiros([$c, $a])) === 'c,a', 'todos sem data mantem a ordem de origem');
+ok(slugs(wa_fluxo_ordena_roteiros([$a, $chile, $c], $base)) === 'chile,a,c', 'sem data vai para o fim, na ordem de origem');
+ok(slugs(wa_fluxo_ordena_roteiros([$c, $a], $base)) === 'c,a', 'todos sem data mantem a ordem de origem');
 
 /* Empate: a ordem entre dois roteiros da MESMA data tem que ser sempre a
    mesma, senao o numero que a pessoa leu muda de roteiro entre o envio e a
    resposta. Quem desfaz e a posicao de origem. */
 $x = r('x', '25/11/26 a 02/12/26');
 $y = r('y', '25/11/26 a 10/12/26');
-ok(slugs(wa_fluxo_ordena_roteiros([$x, $y])) === 'x,y', 'empate desfeito pela posicao de origem');
-ok(slugs(wa_fluxo_ordena_roteiros([$y, $x])) === 'y,x', 'e invertendo a entrada, inverte a saida (nao e alfabetica por acidente)');
+ok(slugs(wa_fluxo_ordena_roteiros([$x, $y], $base)) === 'x,y', 'empate desfeito pela posicao de origem');
+ok(slugs(wa_fluxo_ordena_roteiros([$y, $x], $base)) === 'y,x', 'e invertendo a entrada, inverte a saida (nao e alfabetica por acidente)');
+
+/* ---------- data que JA PASSOU nao fura a fila ----------
+   O publico responde por NUMERO. Oferecer como "1" uma viagem que ja partiu e
+   o efeito direto de ordenar por data sem piso: antes desta regra a posicao era
+   a `ordem` manual da cliente, e agora nao e mais. Data no passado conta como
+   SEM data - vai para o fim, junto com as que nao tem data nenhuma, na ordem de
+   origem. Nao some da lista: quem decide isso e o `status_viagem`/`ativo`, que
+   seguem sendo da cliente. */
+$hoje = '2026-11-03';
+$passado = r('passado', 'De 27/10/26 à 12/11/26');   // partiu em 27/10/26
+$futuro  = r('futuro',  '25/11/26 a 02/12/26');
+$semdata = r('semdata', 'Fevereiro de 2027');
+ok(slugs(wa_fluxo_ordena_roteiros([$passado, $futuro], $hoje)) === 'futuro,passado',
+   'a que ja partiu nao vem antes da que ainda vai partir');
+ok(slugs(wa_fluxo_ordena_roteiros([$passado, $semdata, $futuro], $hoje)) === 'futuro,passado,semdata',
+   'passada e sem data dividem o fim, na ordem de origem');
+ok(slugs(wa_fluxo_ordena_roteiros([$semdata, $passado, $futuro], $hoje)) === 'futuro,semdata,passado',
+   'e a ordem entre elas e mesmo a de origem, nao uma preferencia escondida');
+/* Parte HOJE ainda e futuro: so o que ficou estritamente para tras sai da fila. */
+$hojemesmo = r('hojemesmo', '03/11/26 a 20/11/26');
+ok(slugs(wa_fluxo_ordena_roteiros([$futuro, $hojemesmo], $hoje)) === 'hojemesmo,futuro',
+   'a que parte hoje continua valendo pela data');
+/* Sem o argumento, o dia e o de hoje: a chamada de producao nao muda. */
+ok(count(wa_fluxo_ordena_roteiros([$passado, $futuro])) === 2, 'sem o argumento continua funcionando');
 
 ok(wa_fluxo_ordena_roteiros([]) === [], 'lista vazia');
-ok(array_keys(wa_fluxo_ordena_roteiros([$vietna, $chile])) === [0, 1], 'devolve lista reindexada');
+ok(array_keys(wa_fluxo_ordena_roteiros([$vietna, $chile], $base)) === [0, 1], 'devolve lista reindexada');
 
 /* ---------- o invariante: numero e slug concordam ---------- */
 
+/* Datas BEM no futuro de proposito: wa_fluxo_roteiros_venda usa o dia de hoje,
+   e um fixture com data perto do presente faria este teste virar vermelho
+   sozinho quando a data passasse. Os quatro formatos REAIS do banco estao
+   testados na secao do parser, que nao depende do calendario. */
 $cat = [
-  ['slug'=>'vietna','titulo'=>'Vietnã Completo','periodo'=>'De 22/02/27 a 15/03/27','ativo'=>true,'status_viagem'=>null],
-  ['slug'=>'chile','titulo'=>'Chile e Deserto do Atacama','periodo'=>'25/11/26 a 02/12/26','ativo'=>true,'status_viagem'=>'ultimas_vagas'],
-  ['slug'=>'turquia','titulo'=>'Turquia com Antália','periodo'=>'De 27/10/26 a 12/11/26','ativo'=>true,'status_viagem'=>null],
+  ['slug'=>'vietna','titulo'=>'Vietnã Completo','periodo'=>'De 22/02/40 a 15/03/40','ativo'=>true,'status_viagem'=>null],
+  ['slug'=>'chile','titulo'=>'Chile e Deserto do Atacama','periodo'=>'25/11/39 a 02/12/39','ativo'=>true,'status_viagem'=>'ultimas_vagas'],
+  ['slug'=>'turquia','titulo'=>'Turquia com Antália','periodo'=>'De 27/10/39 a 12/11/39','ativo'=>true,'status_viagem'=>null],
   ['slug'=>'peru','titulo'=>'Peru','periodo'=>'','ativo'=>true,'status_viagem'=>'em_breve'],
 ];
 $venda = wa_fluxo_roteiros_venda($cat);

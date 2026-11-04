@@ -246,4 +246,10 @@ function poSimLiga() {
   if (!box) return;
   box.onclick = poSimClique;
   box.onsubmit = poSimEnvia;
+  /* O poFluxoRender recria esta caixa VAZIA e escondida, e ele roda depois de
+     salvar um card e depois de publicar. Religar o clique sem redesenhar deixa
+     o handler vivo num elemento vazio: a conversa continua em PO_SIM e a
+     cliente ve o simulador ter sumido sozinho, logo depois de ir corrigir o
+     card que ela viu aqui. */
+  if (PO_SIM) poSimDesenha();
 }

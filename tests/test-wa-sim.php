@@ -58,8 +58,9 @@ ok($GLOBALS['WA_SIM_COL'] === $d0, 'e fica alcancavel pelo nome, como o WA_DEPS 
    teste injeta o seu, depois, para nao tocar a rede. */
 wa_fluxo_set_deps(['roteiros' => function () {
     return [
-        ['slug'=>'vietna','titulo'=>'Vietnã Completo','periodo'=>'De 22/02/27 a 15/03/27','ativo'=>true,'status_viagem'=>null],
-        ['slug'=>'chile','titulo'=>'Chile e Deserto do Atacama','periodo'=>'25/11/26 a 02/12/26','ativo'=>true,'status_viagem'=>null],
+        /* Datas bem no futuro: a ordenacao usa o dia de hoje. */
+        ['slug'=>'vietna','titulo'=>'Vietnã Completo','periodo'=>'De 22/02/40 a 15/03/40','ativo'=>true,'status_viagem'=>null],
+        ['slug'=>'chile','titulo'=>'Chile e Deserto do Atacama','periodo'=>'25/11/39 a 02/12/39','ativo'=>true,'status_viagem'=>null,'pdf_url'=>'https://exemplo.invalido/r.pdf'],
     ];
 }]);
 
@@ -168,6 +169,37 @@ $glongo = ['fd' => grafo('fd', [
 ])];
 $r9 = wa_sim_passo($glongo, 'fd', null, '', []);
 ok($r9['ok'] === false && $r9['erro'] === 'corpo acima de 1024 caracteres', 'corpo interativo acima de 1024 e recusado: ' . (string) $r9['erro']);
+
+/* Texto acima de 4096: a Meta devolve 400 e o cliente nao recebe NADA, calado.
+   `wa_send_text` nao trunca nem recusa (decisao da casa, registrada no
+   CLAUDE.md), entao quem tem de recusar aqui e o transporte falso - ele faz o
+   papel da Meta. Sem isso o simulador diria SIM a um card que a Meta recusa,
+   que e a unica assimetria que ele nao pode ter. */
+$glongo_txt = ['fe' => grafo('fe', [
+    card('t', 'texto', ['texto' => str_repeat('a', 5000), 'proximo' => 'fim']),
+    card('fim', 'fim', ['texto' => 'Ate logo.']),
+])];
+$r9b = wa_sim_passo($glongo_txt, 'fe', null, '', []);
+ok($r9b['ok'] === false, 'texto de 5000 caracteres NAO passa');
+ok(strpos((string) $r9b['erro'], '4096') !== false, 'e o erro cita o limite: ' . (string) $r9b['erro']);
+ok($r9b['mensagens'] === [], 'e nenhuma bolha aparece: nada chegaria ao cliente');
+
+/* No limite ainda passa. */
+$gno_limite = ['fe' => grafo('fe', [
+    card('t', 'texto', ['texto' => str_repeat('a', 4096), 'proximo' => 'fim']),
+    card('fim', 'fim', ['texto' => 'Ate logo.']),
+])];
+$r9c = wa_sim_passo($gno_limite, 'fe', null, '', []);
+ok($r9c['ok'] === true, 'exatamente 4096 passa: ' . (string) $r9c['erro']);
+
+/* Legenda de documento tem outro teto (1024), e tambem e do transporte. */
+$gdoc = ['fe' => grafo('fe', [
+    card('p', 'pdf', ['texto' => str_repeat('b', 1100), 'proximo' => 'fim', 'config' => []]),
+    card('fim', 'fim', ['texto' => 'Ate logo.']),
+])];
+$r9d = wa_sim_passo($gdoc, 'fe', null, '', ['roteiro_slug' => 'chile']);
+ok($r9d['ok'] === false && strpos((string) $r9d['erro'], '1024') !== false,
+   'legenda de documento acima de 1024 e recusada: ' . (string) $r9d['erro']);
 
 /* ---------- ir_para_fluxo ---------- */
 

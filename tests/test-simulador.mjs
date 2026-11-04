@@ -192,12 +192,54 @@ for (const arq of ['simulador.js', 'fluxo.css', 'fluxo.js']) {
 }
 /* O sha do lock e calculado pelo tests/test-cache-buster.mjs sobre o conteudo
    normalizado; aqui so se confere que o arquivo novo entrou na trava. */
-assert.equal(lock['simulador.js'].v, 1, 'simulador.js nasce em ?v=1');
+/* Nada de pinar o NUMERO aqui: numero fixo na mao nao protege nada (e o que
+   deixou o bug de 13/09/2026 passar verde). Quem amarra versao ao CONTEUDO e
+   o tests/test-cache-buster.mjs; aqui basta o arquivo estar dentro da trava. */
 
 /* O botao que abre a tela mora na barra do fluxo. */
 const fjs = le('../painel/fluxo.js');
 assert.ok(/data-bar="simular"/.test(fjs), 'a barra do fluxo tem o botao Simular');
 assert.ok(/poSimAbre\(/.test(fjs), 'e o clique chama poSimAbre');
+
+/* ---------- a gaveta e o simulador nao podem dividir a tela ---------- */
+
+/* Os dois sao `position:fixed` na mesma faixa a direita, e no celular o
+   simulador ocupa a tela inteira. Abrir um sem fechar o outro faz o toque no
+   card parecer nao fazer nada - e simular, abrir o card e corrigir e justamente
+   o laco pelo qual a aba existe. */
+const abre = fjs.match(/function poFluxoAbre\([\s\S]*?\n\}/);
+assert.ok(abre, 'poFluxoAbre encontrada no fluxo.js');
+assert.ok(abre[0].includes('poSimFecha('),
+  'poFluxoAbre fecha o simulador antes de abrir a gaveta: ' + abre[0].slice(0, 220));
+
+/* ---------- um redesenho do fluxo nao pode engolir a conversa ---------- */
+
+/* poFluxoRender() recria o #sim-painel vazio e escondido, e roda depois de
+   salvar um card e depois de publicar. Religar o clique num elemento vazio
+   mantem o handler vivo e a conversa invisivel: o estado continua em PO_SIM e a
+   cliente ve o simulador ter sumido sem aviso. Teste de COMPORTAMENTO com DOM
+   em duble, nao trava de fonte: trava de fonte se contorna movendo a palavra de
+   lugar. */
+const chamadas = [];
+const Liga = new Function('doc', 'estado', 'desenha',
+  'const document = doc; let PO_SIM = estado; const poSimDesenha = desenha;' +
+  'const poSimClique = () => {}; const poSimEnvia = () => {};' +
+  pega('poSimCaixa') + pega('poSimLiga') + '; return poSimLiga();');
+
+const caixaFake = { onclick: null, onsubmit: null };
+const docFake = { querySelector: () => caixaFake };
+Liga(docFake, { fluxo_id: 'f1', linhas: [] }, () => chamadas.push('desenhou'));
+assert.ok(typeof caixaFake.onclick === 'function', 'religa o clique');
+assert.ok(typeof caixaFake.onsubmit === 'function', 'e o envio do formulario');
+assert.deepEqual(chamadas, ['desenhou'], 'e REDESENHA a conversa que estava aberta');
+
+chamadas.length = 0;
+Liga(docFake, null, () => chamadas.push('desenhou'));
+assert.deepEqual(chamadas, [], 'sem conversa aberta, nao desenha nada');
+
+chamadas.length = 0;
+Liga({ querySelector: () => null }, { fluxo_id: 'f1' }, () => chamadas.push('desenhou'));
+assert.deepEqual(chamadas, [], 'sem a caixa na pagina, sai quieto');
 
 /* ---------- trava: ordem na cascata do CSS ---------- */
 

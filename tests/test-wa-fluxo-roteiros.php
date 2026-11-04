@@ -4,9 +4,11 @@ function ok($cond, $msg) { if (!$cond) { fwrite(STDERR, "ASSERT: $msg\n"); exit(
 ini_set('error_log', sys_get_temp_dir() . '/po-test-wa-fluxo-roteiros.log');
 
 $cat = [
-  ['slug'=>'vietna','titulo'=>'Vietnã Completo','periodo'=>'De 22/02/27 a 15/03/27','ativo'=>true,'status_viagem'=>null],
-  ['slug'=>'turquia','titulo'=>'Turquia com Antália','periodo'=>'De 27/10/26 a 12/11/26','ativo'=>true,'status_viagem'=>'esgotado'],
-  ['slug'=>'chile','titulo'=>'Chile e Deserto do Atacama','periodo'=>'25/11/26 a 02/12/26','ativo'=>true,'status_viagem'=>'ultimas_vagas'],
+/* Datas BEM no futuro: a ordenacao por data usa o dia de hoje, e fixture com
+   data perto do presente vira vermelho sozinho quando a data passa. */
+  ['slug'=>'vietna','titulo'=>'Vietnã Completo','periodo'=>'De 22/02/40 a 15/03/40','ativo'=>true,'status_viagem'=>null],
+  ['slug'=>'turquia','titulo'=>'Turquia com Antália','periodo'=>'De 27/10/39 a 12/11/39','ativo'=>true,'status_viagem'=>'esgotado'],
+  ['slug'=>'chile','titulo'=>'Chile e Deserto do Atacama','periodo'=>'25/11/39 a 02/12/39','ativo'=>true,'status_viagem'=>'ultimas_vagas'],
   ['slug'=>'peru','titulo'=>'Peru','periodo'=>'','ativo'=>true,'status_viagem'=>'em_breve'],
   ['slug'=>'japao','titulo'=>'Japão','periodo'=>'x','ativo'=>true,'status_viagem'=>'em_viagem'],
   ['slug'=>'india','titulo'=>'Índia','periodo'=>'y','ativo'=>false,'status_viagem'=>null],
@@ -21,7 +23,7 @@ $txt = wa_fluxo_lista_roteiros($v);
 ok(strpos($txt, '1.') === 0, 'numera a partir de 1');
 ok(strpos($txt, 'Peru') !== false && strpos($txt, '3.') !== false, 'em_breve entra mesmo sem data');
 ok(substr_count($txt, "\n") === 2, 'uma linha por roteiro');
-ok(strpos($txt, '1. Chile e Deserto do Atacama (25/11/26 a 02/12/26)') === 0, 'linha com titulo e periodo entre parenteses');
+ok(strpos($txt, '1. Chile e Deserto do Atacama (25/11/39 a 02/12/39)') === 0, 'linha com titulo e periodo entre parenteses');
 ok(substr($txt, -7) === '3. Peru', 'sem periodo, sem parenteses pendurados: ' . $txt);
 ok(preg_match('/[\x{2014}\x{2013}]/u', $txt) === 0, 'a lista nao tem travessao nem meia-risca (regra de copy da casa)');
 
@@ -36,7 +38,7 @@ ok(wa_fluxo_casa_roteiro('9', $slugs, $v) === null, 'numero fora da lista nao es
 ok(wa_fluxo_casa_roteiro('1.', $slugs, $v) === 'chile', 'numero com ponto resolve por posicao');
 ok(wa_fluxo_casa_roteiro('1)', $slugs, $v) === 'chile', 'numero com parentese resolve por posicao');
 ok(wa_fluxo_casa_roteiro('1 - Chile', $slugs, $v) === 'chile', 'numero, hifen e nome resolve por posicao');
-ok(wa_fluxo_casa_roteiro('1. Chile e Deserto do Atacama (25/11/26 a 02/12/26)', $slugs, $v) === 'chile', 'a linha copiada inteira resolve por posicao');
+ok(wa_fluxo_casa_roteiro('1. Chile e Deserto do Atacama (25/11/39 a 02/12/39)', $slugs, $v) === 'chile', 'a linha copiada inteira resolve por posicao');
 ok(wa_fluxo_casa_roteiro('22', $slugs, $v) === null, 'dois digitos sem marcador seguem como numero e nao viram 2');
 ok(wa_fluxo_casa_roteiro('3. Vietna', $slugs, $v) === 'peru', 'a posicao vence o nome (nunca escolhe o errado)');
 ok(wa_fluxo_casa_roteiro('0', $slugs, $v) === null, 'zero nao escolhe');

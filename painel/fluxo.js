@@ -1112,6 +1112,11 @@ function poFluxoAbre(id) {
   const card = poFluxoCardAtual(id);
   const g = document.querySelector('#fl-gaveta');
   if (!card || !g || !poFluxoEditavel(card)) return;
+  /* A gaveta e o simulador sao os dois `position:fixed` na mesma faixa a
+     direita, e no celular o simulador ocupa a tela inteira. Sem fechar um, o
+     toque no card parece nao fazer nada - e simular, abrir o card e corrigir e
+     justamente o laco pelo qual esta aba existe. */
+  if (typeof poSimFecha === 'function') poSimFecha();
   PO_FLUXO_CARD = String(id);
   PO_FLUXO_REMOV = [];
   g.innerHTML = poFluxoGaveta(card);

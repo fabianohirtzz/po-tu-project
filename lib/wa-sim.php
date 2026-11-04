@@ -46,6 +46,34 @@ const WA_SIM_FONE = '5548900000001';
    teto, e eles desandariam separados. */
 const WA_SIM_MAX_PASSOS = WA_FLUXO_MAX_PASSOS;
 
+/* Tetos da Cloud API que NENHUMA funcao de envio confere do nosso lado: corpo
+   de texto e legenda de documento. Acima deles a Meta devolve 400 e o cliente
+   nao recebe nada, em silencio - e e esse silencio que o simulador precisa
+   quebrar. Contados em CARACTERES (mb_strlen), nunca em bytes: 900 letras
+   acentuadas seriam recusadas a toa.
+
+   Pura. Devolve a frase do motivo, ou null quando o payload passa. */
+const WA_SIM_MAX_TEXTO  = 4096;
+const WA_SIM_MAX_LEGENDA = 1024;
+
+function wa_sim_recusa_meta($p) {
+    if (!is_array($p)) return null;
+    $tipo = (string) ($p['type'] ?? '');
+    if ($tipo === 'text') {
+        $n = mb_strlen((string) ($p['text']['body'] ?? ''), 'UTF-8');
+        if ($n > WA_SIM_MAX_TEXTO) {
+            return 'texto de ' . $n . ' caracteres: a Meta recusa acima de ' . WA_SIM_MAX_TEXTO . ' e nada chega ao cliente';
+        }
+    }
+    if ($tipo === 'document') {
+        $n = mb_strlen((string) ($p['document']['caption'] ?? ''), 'UTF-8');
+        if ($n > WA_SIM_MAX_LEGENDA) {
+            return 'legenda de ' . $n . ' caracteres: a Meta recusa acima de ' . WA_SIM_MAX_LEGENDA . ' e nada chega ao cliente';
+        }
+    }
+    return null;
+}
+
 /* Instala o transporte falso e as dependencias que nao escrevem, e devolve o
    coletor.
 
@@ -73,8 +101,20 @@ function wa_sim_deps() {
     $GLOBALS['WA_SIM_COL'] = $col;
 
     wa_set_transport(function ($url, $payload, $headers) use ($col, &$n) {
+        $p = json_decode($payload, true);
+        /* O transporte falso faz o papel da META, e a Meta recusa o que passa
+           dos tetos dela. Isto NAO e redundante com as funcoes de envio: elas
+           recusam botao demais e rotulo comprido localmente, mas `wa_send_text`
+           e `wa_send_document` nao conferem tamanho nenhum (decisao da casa:
+           acima do teto a Meta devolve 400 e o cliente nao recebe nada, calado).
+           Sem esta recusa aqui o simulador diria SIM a um card que a Meta
+           recusa - a unica assimetria que ele nao pode ter. */
+        $erro = wa_sim_recusa_meta($p);
+        if ($erro !== null) {
+            return ['status' => 400, 'body' => json_encode(['error' => ['message' => $erro, 'code' => 131009]])];
+        }
         $n++;
-        $col->envios[] = json_decode($payload, true);
+        $col->envios[] = $p;
         return ['status' => 200, 'body' => '{"messages":[{"id":"sim-' . $n . '"}]}'];
     });
 

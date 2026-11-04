@@ -198,11 +198,22 @@ const WA_FLUXO_MAX_PASSOS = 10;
    posicao de origem, porque a ordem entre dois roteiros da mesma data tem que
    ser a MESMA em requisicoes diferentes - o numero vale por posicao, e se a
    ordem variar, o "2" que a pessoa leu vira outro roteiro quando ela responde.
-   Pura. */
-function wa_fluxo_ordena_roteiros($roteiros) {
+
+   DATA QUE JA PASSOU CONTA COMO SEM DATA. O publico responde por numero, e
+   oferecer como "1" uma viagem que ja partiu seria o efeito direto de ordenar
+   por data sem piso - antes desta regra quem mandava na posicao era a `ordem`
+   manual da cliente, e nao manda mais. Ela nao SOME da lista: quem decide isso
+   e o `status_viagem`/`ativo`, que seguem sendo dela. Parte hoje ainda e
+   futuro; so o que ficou estritamente para tras sai da fila.
+
+   $hoje existe para o teste nao depender do calendario. Pura. */
+function wa_fluxo_ordena_roteiros($roteiros, $hoje = null) {
+    $hoje = $hoje === null ? gmdate('Y-m-d') : (string) $hoje;
     $lista = [];
     foreach (array_values((array) $roteiros) as $i => $r) {
-        $lista[] = ['i' => $i, 'd' => wa_roteiro_data_ini($r), 'r' => $r];
+        $d = wa_roteiro_data_ini($r);
+        if ($d !== null && strcmp($d, $hoje) < 0) $d = null;
+        $lista[] = ['i' => $i, 'd' => $d, 'r' => $r];
     }
     // Decorado com a posicao de origem em vez de confiar na estabilidade do
     // usort: assim o desempate e explicito e nao muda com a versao do PHP.
