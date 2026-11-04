@@ -1450,7 +1450,36 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
   `tests/test-simulador.mjs`. Plano:
   `docs/superpowers/plans/2026-11-03-ordem-por-data-e-simulador.md` · pendencias e
   herancas: `docs/superpowers/reviews/2026-11-03-ordem-e-simulador-pendencias.md`.
-  **Nao foi deployado**; webhook segue fora e os dois fluxos seguem `ativo = false`.
+  **DEPLOY FEITO EM 04/11/2026**; webhook segue fora e os dois fluxos seguem
+  `ativo = false`, entao o robo continua sem atender ninguem.
+  - **9 arquivos por FTP, nesta ordem, e a ordem importa:** `lib/wa-roteiro.php`
+    (o `wa-fluxo.php` novo chama `wa_roteiro_data_ini`), `lib/wa-fluxo.php`,
+    `lib/wa-sim.php`, `lib/wa-motor.php`, `fluxo.php`, `painel/simulador.js`,
+    `painel/fluxo.js`, `painel/fluxo.css` e o `painel/index.html` **por ultimo**.
+  - **`wa-fluxo.php` ANTES de `wa-motor.php` por causa da constante que mudou de
+    casa.** `WA_FLUXO_MAX_PASSOS` saiu do motor e foi para o fluxo, entao durante a
+    janela do FTP havia duas possibilidades: nesta ordem os DOIS arquivos a declaram
+    (medido: declaracao duplicada de `const` e **warning**, nao fatal, e o valor e
+    o mesmo 10, entao nada quebra); na ordem inversa **nenhum** a declararia, e o
+    painel daria fatal de constante indefinida. Constante que muda de arquivo sempre
+    tem uma ordem de upload certa e uma errada: medir qual antes de subir.
+  - **Conferido por hash, duas vezes e por caminhos diferentes:** cada um dos 9 foi
+    baixado de volta por FTP e comparado por md5 (curl=0 nos 9, mas quem decidiu foi
+    o hash); depois `bash scripts/confere-deploy.sh` comparou os **16 arquivos do
+    painel por HTTPS** (lista completa tirada do proprio `index.html`) e um
+    comparador novo passou pelos **28 PHP de `lib/` + os endpoints da raiz** por FTP.
+    Resultado: 16/16 e 28/28 iguais, zero ausentes.
+  - **Medido no ar:** `fluxo.php` 405 no GET e **401 em todo POST sem login**,
+    inclusive `modo=simular` e modo inventado (a autenticacao vem antes da lista de
+    modos); `lib/wa-sim.php` e `lib/wa-fluxo.php` servem **corpo vazio**; webhook
+    403, cron 403, campanha 401; o `index.html` servido pede `fluxo.js?v=19`,
+    `fluxo.css?v=9` e `simulador.js?v=2`, e os tres respondem 200; e o site publico
+    inteiro de pe (`/`, `/roteiros`, `/roteiros/turquia`, `/link`, `/contato`,
+    `/perguntas-frequentes`, `/nossa-historia`, `/sitemap.xml`, `/llms.txt`).
+  - **`painel/assets-lock.json` nao subiu**, como manda a regra: e trava de teste.
+  - **Falta ver a aba Fluxo logada**, com o botao Simular. A tela foi conferida a
+    1440 e a 390 com envelopes reais do `lib/wa-sim.php`, mas fora do painel: ninguem
+    abriu o simulador com a sessao da cliente ainda.
   - **A DATA DO ROTEIRO VEM DE `periodo`.** O banco nao tem coluna de data: ela vive
     no texto que a cliente escreve. `wa_roteiro_data_ini()` (em `lib/wa-roteiro.php`)
     le a primeira data `d/m/a` valida procurando em `periodo`, `data_label` e
