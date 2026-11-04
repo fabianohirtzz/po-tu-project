@@ -49,11 +49,15 @@
     "sha": "cb5a5a5625fb12a2"
   },
   "fluxo.js": {
-    "v": 17,
-    "sha": "1958b898ba957f41"
+    "v": 18,
+    "sha": "4e98e8094ca358e0"
   },
   "fluxo.css": {
-    "v": 8,
-    "sha": "45e1b70dd8e4861d"
+    "v": 9,
+    "sha": "e1191543908c19ab"
+  },
+  "simulador.js": {
+    "v": 1,
+    "sha": "b152c6c85a97a099"
   }
 }

@@ -122,3 +122,60 @@ textarea.fl-campo{min-height:150px;line-height:1.5}
 .fl-problema__abrir{margin-left:6px;padding:2px 8px;border:1px solid var(--border2);border-radius:6px;background:var(--surface);color:var(--azul);font:inherit;font-size:.78rem;cursor:pointer}
 .fl-problemas--fluxo{margin-top:2px}
 
+/* ============================================================
+   O simulador da conversa (painel/simulador.js).
+
+   PADRAO = CELULAR: ocupa a tela, porque e nela que a dona da agencia usa o
+   painel. A partir de 980px vira uma coluna ao lado do canvas. O ajuste do
+   desktop esta no @media LA EMBAIXO, e todo padrao que ele redefine esta
+   declarado AQUI, antes dele: com a mesma especificidade vence a ultima regra
+   declarada, e foi assim que a barra de zoom ficou invisivel com dois testes
+   verdes. tests/test-simulador.mjs trava a ordem.
+============================================================ */
+.sim{position:fixed;inset:0;z-index:80;display:flex;flex-direction:column;gap:10px;padding:16px;box-sizing:border-box;background:var(--surface);box-shadow:var(--shadow-pop);overflow:auto}
+.sim[hidden]{display:none}
+.sim__cab{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.sim__tit{font-family:var(--font-display);font-size:1.1rem;margin:0;color:var(--ink)}
+.sim__sub{font-size:.85rem;color:var(--muted);margin:2px 0 0}
+.sim__x{border:0;background:none;font-size:1.6rem;line-height:1;color:var(--muted);cursor:pointer;padding:0 4px}
+.sim__nota{font-size:.78rem;color:var(--muted);margin:0}
+.sim__rodape{display:flex;flex-wrap:wrap;gap:8px}
+.sim-avisos{border:1px solid var(--border);border-left:4px solid var(--st-aberto);background:var(--surface2);border-radius:10px;padding:10px 12px;font-size:.82rem;color:var(--text)}
+.sim-avisos p{margin:0 0 4px}
+.sim-avisos p:last-child{margin:0}
+
+/* a conversa: robo a esquerda, cliente a direita, como no WhatsApp */
+.sim-conversa{flex:1;min-height:140px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--surface3);border:1px solid var(--border);border-radius:10px}
+.sim-bolha{max-width:86%;padding:8px 12px;border-radius:12px;font-size:.88rem;line-height:1.45}
+.sim-bolha--robo{align-self:flex-start;background:var(--surface);border:1px solid var(--border);border-top-left-radius:3px}
+.sim-bolha--eu{align-self:flex-end;background:rgba(132,196,64,.18);border:1px solid rgba(132,196,64,.45);border-top-right-radius:3px}
+.sim-txt{margin:0;white-space:pre-wrap}
+.sim-doc{margin:0 0 4px;font-size:.82rem;color:var(--muted)}
+.sim-ops{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.sim-op{padding:6px 12px;border:1px solid var(--azul);border-radius:99px;background:var(--surface);color:var(--azul);font:inherit;font-size:.82rem;cursor:pointer}
+.sim-op:hover{background:var(--azul);color:#fff}
+.sim-itens{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
+.sim-item{width:100%;text-align:left;display:flex;flex-direction:column;gap:2px;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;background:var(--surface);font:inherit;cursor:pointer}
+.sim-item:hover{border-color:var(--azul)}
+.sim-item__t{font-size:.85rem;color:var(--ink)}
+.sim-item__d{font-size:.75rem;color:var(--muted)}
+
+.sim-selo{align-self:flex-start;font-size:.72rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:3px 10px;border-radius:99px;background:var(--surface3);color:var(--muted)}
+.sim-selo--aguardando{background:rgba(31,168,221,.14);color:var(--azul)}
+.sim-selo--humano{background:rgba(22,163,74,.12);color:var(--st-venda)}
+.sim-selo--recusado{background:rgba(220,38,38,.1);color:var(--st-perdido)}
+.sim-selo--teto_passos{background:rgba(220,38,38,.1);color:var(--st-perdido)}
+.sim-erro{margin:0;font-size:.85rem;color:var(--st-perdido)}
+.sim-form{display:flex;gap:8px}
+.sim-vazio{margin:auto;font-size:.85rem;color:var(--muted);text-align:center}
+.sim-campo{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--border2);border-radius:8px;background:var(--surface);color:var(--text);font:inherit}
+
+/* ---------- o simulador no desktop: coluna ao lado do canvas ----------
+   Este @media vem DEPOIS dos padroes acima, e e por isso que ele vence no
+   desktop. Invertido, o celular venceria em toda largura e a coluna nunca
+   apareceria - com o teste de presenca ainda verde. */
+@media (min-width:980px){
+  .sim{inset:0 0 0 auto;width:min(460px,42vw);border-left:1px solid var(--border);padding:20px}
+  .sim-conversa{min-height:260px}
+}
+

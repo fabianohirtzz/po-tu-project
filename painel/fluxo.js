@@ -790,6 +790,7 @@ function poFluxoBarra(fluxo, estado, fluxos) {
   return '<div class="fl-barra__estado">' + poFluxoEstado(f) + '</div>' +
     (ordem ? '<p class="fl-ordem">' + esc(ordem) + '</p>' : '') +
     '<div class="fl-barra__acoes">' +
+    '<button type="button" class="btn btn-ghost" data-bar="simular">Simular</button>' +
     '<button type="button" class="btn btn-ghost" data-bar="conferir">Conferir</button>' +
     '<button type="button" class="btn btn-primary" data-bar="publicar"' + (poFluxoPodePublicar(estado) ? '' : ' disabled') + '>Publicar</button>' +
     liga + '</div>' +
@@ -1023,6 +1024,12 @@ async function poFluxoLiga(modo) {
 }
 
 function poFluxoBarraAcao(acao) {
+  /* O simulador vive em painel/simulador.js e desenha na propria caixa
+     (#sim-painel). Esta tela so o abre com o fluxo selecionado. */
+  if (acao === 'simular') {
+    const f = poFluxoAtual();
+    return f ? poSimAbre(f.id) : null;
+  }
   if (acao === 'conferir') return poFluxoConfere();
   if (acao === 'publicar') return poFluxoPublicar();
   if (acao === 'ligar' || acao === 'desligar') return poFluxoLiga(acao);
@@ -1043,7 +1050,8 @@ function poFluxoRender() {
     '<div class="fl-vista fl-vista--lista">' + poFluxoLista(f) + '</div>' +
     '<div class="fl-vista fl-vista--canvas">' + poFluxoZoomBarra(PO_FLUXO_ZOOM) +
       '<div class="fl-rolagem">' + poFluxoCanvas(f) + '</div></div>' +
-    '<aside id="fl-gaveta" class="fl-gaveta" hidden></aside>';
+    '<aside id="fl-gaveta" class="fl-gaveta" hidden></aside>' +
+    '<aside id="sim-painel" class="sim" hidden></aside>';
   PO_FLUXO_CARD = null;
   const s = box.querySelector('#fl-seletor');
   if (s) s.onchange = function () { PO_FLUXO_SEL = s.value; PO_FLUXO_RES = ''; poFluxoRender(); };
@@ -1055,6 +1063,9 @@ function poFluxoRender() {
   poFluxoZoomAplica(PO_FLUXO_ZOOM);
   const rol = box.querySelector('.fl-rolagem');
   if (rol) rol.addEventListener('wheel', poFluxoZoomRoda, { passive: false });
+  /* A caixa do simulador e repintada junto: religar o clique dela aqui e o
+     que mantem a conversa viva depois de um redesenho do fluxo. */
+  if (typeof poSimLiga === 'function') poSimLiga();
 }
 
 /* O data-card sai DUAS vezes no DOM (na lista e no canvas, que chamam a mesma
