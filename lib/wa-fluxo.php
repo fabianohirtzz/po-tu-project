@@ -184,7 +184,32 @@ const WA_FLUXO_MAX_TENTATIVAS = 2;
    conversa), nunca pela de agora: se a cliente editar uma viagem entre o envio
    e a resposta, o "2" tem que ser o que a pessoa leu. */
 
-/* O que esta a venda, na ordem recebida. Pura. */
+/* Da viagem mais proxima para a mais distante. Sem data vai para o FIM (nunca
+   para o meio: no meio ela mente sobre a sequencia). Empate desfeito pela
+   posicao de origem, porque a ordem entre dois roteiros da mesma data tem que
+   ser a MESMA em requisicoes diferentes - o numero vale por posicao, e se a
+   ordem variar, o "2" que a pessoa leu vira outro roteiro quando ela responde.
+   Pura. */
+function wa_fluxo_ordena_roteiros($roteiros) {
+    $lista = [];
+    foreach (array_values((array) $roteiros) as $i => $r) {
+        $lista[] = ['i' => $i, 'd' => wa_roteiro_data_ini($r), 'r' => $r];
+    }
+    // Decorado com a posicao de origem em vez de confiar na estabilidade do
+    // usort: assim o desempate e explicito e nao muda com a versao do PHP.
+    usort($lista, function ($a, $b) {
+        if ($a['d'] === null || $b['d'] === null) {
+            if ($a['d'] === $b['d']) return $a['i'] <=> $b['i'];
+            return $a['d'] === null ? 1 : -1;
+        }
+        return strcmp($a['d'], $b['d']) ?: ($a['i'] <=> $b['i']);
+    });
+    return array_column($lista, 'r');
+}
+
+/* O que esta a venda, JA em ordem de data (a lista que a pessoa le numerada e
+   a mesma que casa a resposta por numero: ordenar aqui e o que garante que as
+   duas nao divergem). Pura. */
 function wa_fluxo_roteiros_venda($roteiros) {
     $venda = [];
     foreach ((array) $roteiros as $r) {
@@ -193,7 +218,7 @@ function wa_fluxo_roteiros_venda($roteiros) {
         if (trim((string) ($r['slug'] ?? '')) === '' || trim((string) ($r['titulo'] ?? '')) === '') continue;
         $venda[] = $r;
     }
-    return $venda;
+    return wa_fluxo_ordena_roteiros($venda);
 }
 
 /* "1. Titulo (periodo)", sem travessao (regra de copy da casa), uma linha por roteiro, sem quebra no fim. Pura. */
@@ -922,12 +947,15 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
     $tipo = $card['tipo'];
     if ($tipo === 'ir_para_fluxo') return $res(true);
 
-    // O catalogo e lido uma vez por execucao.
+    // O catalogo e lido uma vez por execucao, e ja sai em ordem de data: assim
+    // o card `lista` legado, que monta os itens direto daqui sem passar por
+    // wa_fluxo_roteiros_venda, herda a mesma regra sem uma segunda chamada
+    // espalhada pelo arquivo.
     $catalogo = null;
     $roteiros = function () use (&$catalogo) {
         if ($catalogo === null) {
             $c = wa_fl_call('roteiros');
-            $catalogo = is_array($c) ? $c : [];
+            $catalogo = wa_fluxo_ordena_roteiros(is_array($c) ? $c : []);
         }
         return $catalogo;
     };

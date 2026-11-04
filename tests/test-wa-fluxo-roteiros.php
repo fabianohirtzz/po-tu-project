@@ -12,28 +12,31 @@ $cat = [
   ['slug'=>'india','titulo'=>'Índia','periodo'=>'y','ativo'=>false,'status_viagem'=>null],
 ];
 $v = wa_fluxo_roteiros_venda($cat);
-ok(array_column($v,'slug') === ['vietna','chile','peru'], 'so o que esta a venda, na ordem: ' . implode(',', array_column($v,'slug')));
+/* A ordem e a de DATA, nao a de `ordem.asc` que o banco devolve: o Chile
+   (25/11/26) parte antes do Vietna (22/02/27), e o Peru, sem data, vai para o
+   fim. Ver tests/test-wa-roteiro-ordem.php. */
+ok(array_column($v,'slug') === ['chile','vietna','peru'], 'so o que esta a venda, em ordem de data: ' . implode(',', array_column($v,'slug')));
 
 $txt = wa_fluxo_lista_roteiros($v);
 ok(strpos($txt, '1.') === 0, 'numera a partir de 1');
 ok(strpos($txt, 'Peru') !== false && strpos($txt, '3.') !== false, 'em_breve entra mesmo sem data');
 ok(substr_count($txt, "\n") === 2, 'uma linha por roteiro');
-ok(strpos($txt, '1. Vietnã Completo (De 22/02/27 a 15/03/27)') === 0, 'linha com titulo e periodo entre parenteses');
+ok(strpos($txt, '1. Chile e Deserto do Atacama (25/11/26 a 02/12/26)') === 0, 'linha com titulo e periodo entre parenteses');
 ok(substr($txt, -7) === '3. Peru', 'sem periodo, sem parenteses pendurados: ' . $txt);
 ok(preg_match('/[\x{2014}\x{2013}]/u', $txt) === 0, 'a lista nao tem travessao nem meia-risca (regra de copy da casa)');
 
 $slugs = array_column($v, 'slug');
-ok(wa_fluxo_casa_roteiro('2', $slugs, $v) === 'chile', 'casa por numero');
+ok(wa_fluxo_casa_roteiro('2', $slugs, $v) === 'vietna', 'casa por numero');
 ok(wa_fluxo_casa_roteiro('Chile e Deserto do Atacama', $slugs, $v) === 'chile', 'casa por nome completo');
 ok(wa_fluxo_casa_roteiro('chile', $slugs, $v) === 'chile', 'casa por parte do nome, sem caixa');
 ok(wa_fluxo_casa_roteiro('VIETNA', $slugs, $v) === 'vietna', 'casa sem acento');
-ok(wa_fluxo_casa_roteiro('  2  ', $slugs, $v) === 'chile', 'ignora espaco em volta');
+ok(wa_fluxo_casa_roteiro('  2  ', $slugs, $v) === 'vietna', 'ignora espaco em volta');
 // as que NAO podem escolher
 ok(wa_fluxo_casa_roteiro('9', $slugs, $v) === null, 'numero fora da lista nao escolhe');
-ok(wa_fluxo_casa_roteiro('2.', $slugs, $v) === 'chile', 'numero com ponto resolve por posicao');
-ok(wa_fluxo_casa_roteiro('2)', $slugs, $v) === 'chile', 'numero com parentese resolve por posicao');
-ok(wa_fluxo_casa_roteiro('2 - Chile', $slugs, $v) === 'chile', 'numero, hifen e nome resolve por posicao');
-ok(wa_fluxo_casa_roteiro('2. Chile e Deserto do Atacama (25/11/26 a 02/12/26)', $slugs, $v) === 'chile', 'a linha copiada inteira resolve por posicao');
+ok(wa_fluxo_casa_roteiro('1.', $slugs, $v) === 'chile', 'numero com ponto resolve por posicao');
+ok(wa_fluxo_casa_roteiro('1)', $slugs, $v) === 'chile', 'numero com parentese resolve por posicao');
+ok(wa_fluxo_casa_roteiro('1 - Chile', $slugs, $v) === 'chile', 'numero, hifen e nome resolve por posicao');
+ok(wa_fluxo_casa_roteiro('1. Chile e Deserto do Atacama (25/11/26 a 02/12/26)', $slugs, $v) === 'chile', 'a linha copiada inteira resolve por posicao');
 ok(wa_fluxo_casa_roteiro('22', $slugs, $v) === null, 'dois digitos sem marcador seguem como numero e nao viram 2');
 ok(wa_fluxo_casa_roteiro('3. Vietna', $slugs, $v) === 'peru', 'a posicao vence o nome (nunca escolhe o errado)');
 ok(wa_fluxo_casa_roteiro('0', $slugs, $v) === null, 'zero nao escolhe');
@@ -102,7 +105,7 @@ ok($r['ok'] === true && $r['espera'] === true, 'card roteiros espera a resposta'
 ok(strpos($ENV[0], 'Qual viagem?') === 0, 'corpo do card vem primeiro');
 ok(strpos($ENV[0], $txt) !== false, 'seguido da lista numerada');
 ok(strpos($ENV[0], 'Turquia') === false, 'esgotado nao aparece');
-ok($r['ctx']['roteiros_enviados'] === ['vietna','chile','peru'], 'grava a ordem enviada no contexto');
+ok($r['ctx']['roteiros_enviados'] === ['chile','vietna','peru'], 'grava a ordem enviada no contexto, que e a de data');
 
 // teto de 4096: corta ITENS INTEIROS do fim, e a ordem enviada acompanha
 $ENV = [];

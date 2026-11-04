@@ -122,6 +122,39 @@ function wa_match_roteiros($texto, $roteiros) {
     return array_values(array_unique($achados));
 }
 
+/* Data de partida do roteiro, em 'YYYY-MM-DD', ou null. Pura.
+
+   O banco NAO tem coluna de data: a data vive no texto que a cliente escreve
+   no painel. Medido nos 7 roteiros em 03/11/2026, em 4 formatos ("De
+   22/02/2027 a 15/03/2027", "De 27/10/26 à 12/11/26", "25/11/26 a 02/12/26",
+   "De 18/03/27 à 09/04/27").
+
+   A ORDEM DOS CAMPOS vem dessa medicao: `periodo` primeiro porque os 7 tem
+   data ali; `descricao_curta` por ultimo porque nela a data existe em 1 so
+   (nos outros 6 e texto de venda, e ler data dali daria a data errada).
+
+   Vale a PRIMEIRA data valida: o texto e um intervalo, e o que ordena a lista
+   e a partida. Data impossivel (31/02) e descartada e a busca continua - sem
+   `checkdate`, um erro de digitacao no painel mandaria a viagem para o lugar
+   errado da fila em vez de para o fim dela. */
+function wa_roteiro_data_ini($roteiro) {
+    if (!is_array($roteiro)) return null;
+    foreach (['periodo', 'data_label', 'descricao_curta'] as $campo) {
+        $txt = (string) ($roteiro[$campo] ?? '');
+        if ($txt === '') continue;
+        if (!preg_match_all('#(\d{1,2})/(\d{1,2})/(\d{4}|\d{2})#', $txt, $ms, PREG_SET_ORDER)) continue;
+        foreach ($ms as $m) {
+            $d = (int) $m[1];
+            $mes = (int) $m[2];
+            $ano = (int) $m[3];
+            if (strlen($m[3]) === 2) $ano += 2000;
+            if (!checkdate($mes, $d, $ano)) continue;
+            return sprintf('%04d-%02d-%02d', $ano, $mes, $d);
+        }
+    }
+    return null;
+}
+
 /* Marcador embutido no texto pre-preenchido do link wa.me do site. E a
    forma mais confiavel depois do anuncio, porque o link e nosso. */
 function wa_slug_do_marcador($texto) {
