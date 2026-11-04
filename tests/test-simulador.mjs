@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 
 /* Le o fonte com o fim de linha NORMALIZADO. `core.autocrlf=true` neste repo:
    o mesmo arquivo chega LF no worktree e CRLF no checkout principal, e uma
@@ -182,8 +181,8 @@ const pedidos = new Map(
 assert.ok(pedidos.has('simulador.js'), 'o index.html carrega simulador.js com ?v=');
 
 const lock = JSON.parse(le('../painel/assets-lock.json'));
-const sha = arq => createHash('sha256')
-  .update(le('../painel/' + arq)).digest('hex').slice(0, 16);
+/* O sha de cada arquivo e conferido pelo tests/test-cache-buster.mjs, que e o
+   dono dessa trava; aqui so se confere que o arquivo novo ENTROU nela. */
 /* Os TRES arquivos de painel/ que esta tarefa mexe. Subir o index.html com
    versao nova sem subir um deles carimba o conteudo velho na versao nova por
    um mes: e o bug de 13/09/2026. */

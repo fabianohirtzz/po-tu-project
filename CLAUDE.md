@@ -1443,6 +1443,72 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
       de fonte se contorna movendo a palavra de lugar.
   - **Falta o Plano C:** o simulador e o filtro de transmissao por fluxo. As tres
     pre-condicoes estao no documento de pendencias.
+- **ORDEM POR DATA E SIMULADOR DO CHAT (03/11/2026): FEITO, NADA NO AR.** Branch
+  `fluxo-ordem-simulador`, 5 tarefas em TDD; a suite foi de 73 para **76** arquivos
+  executados (62 no Git, 14 so no disco). Novos: `lib/wa-sim.php`,
+  `painel/simulador.js`, `tests/test-wa-roteiro-ordem.php`, `tests/test-wa-sim.php`,
+  `tests/test-simulador.mjs`. Plano:
+  `docs/superpowers/plans/2026-11-03-ordem-por-data-e-simulador.md` · pendencias e
+  herancas: `docs/superpowers/reviews/2026-11-03-ordem-e-simulador-pendencias.md`.
+  **Nao foi deployado**; webhook segue fora e os dois fluxos seguem `ativo = false`.
+  - **A DATA DO ROTEIRO VEM DE `periodo`.** O banco nao tem coluna de data: ela vive
+    no texto que a cliente escreve. `wa_roteiro_data_ini()` (em `lib/wa-roteiro.php`)
+    le a primeira data `d/m/a` valida procurando em `periodo`, `data_label` e
+    `descricao_curta`, **nesta ordem**. Medido nos 7 roteiros em 03/11/2026: os 7 tem
+    data em `periodo` e **so 1** tem data em `descricao_curta` (nos outros 6 aquilo e
+    texto de venda, e ler data dali daria a data errada). Data impossivel (`31/02`) e
+    descartada por `checkdate` e a busca continua.
+  - **A ordenacao entra em DOIS pontos e so neles**, com trava de fonte: dentro de
+    `wa_fluxo_roteiros_venda` (a lista que vira texto numerado e a MESMA que casa a
+    resposta por numero, entao as duas nao podem divergir) e na closure `$roteiros` de
+    `wa_fluxo_executa` (para o card `lista` legado herdar a regra). Sem data vai para o
+    **fim**; empate desfeito pela posicao de origem, porque o numero vale por POSICAO e
+    uma ordem que varia troca o roteiro entre o envio e a resposta.
+  - **Vale so para o chat.** Home, `/roteiros` e `/link` seguem em `ordem.asc`, que e a
+    ordenacao manual da cliente. Ninguem pediu para mudar.
+  - **O SIMULADOR LE O RASCUNHO.** Unica excecao a regra de o motor so ler
+    `po_wa_fluxo_versoes.grafo`, e existe porque o pedido e testar ANTES de publicar. A
+    montagem e a mesma funcao do Publicar (`wa_fluxo_grafo_de`): nao existe segunda
+    montagem.
+  - **Ele roda o motor de verdade com as funcoes `wa_send_*` REAIS**, atras de um
+    transporte falso (`wa_set_transport`). Por isso os limites da Cloud API valem nele:
+    4 botoes viram "mais de 3 botoes", rotulo de 21 caracteres e recusado e nao
+    truncado, corpo acima de 1024 nao sai. As bolhas saem do PAYLOAD capturado, nao do
+    texto do card. Trocar por um envio de mentira faria a tela aprovar rascunho que a
+    Meta recusa, que e o oposto do que ele existe para fazer.
+  - **Ele ignora `ativo` no salto `ir_para_fluxo`, e isso aparece na tela.** Em producao
+    a regra 11 bloqueia saltar para fluxo desligado, e hoje os dois estao desligados:
+    sem a diferenca ela nunca alcancaria a Lista de espera. Cada salto desses empilha um
+    aviso, e o aviso e testado.
+  - **`wa_sim_passo` instala as dependencias a cada passo**, em vez de confiar em quem
+    chama: assim nao existe caminho em que o simulador rode com o banco e o transporte
+    de verdade. Ele **nao** chama `wa_fluxo_percorre`, que e casado com a persistencia.
+  - **`WA_FLUXO_MAX_PASSOS` mudou de `wa-motor.php` para `wa-fluxo.php`.** O simulador
+    precisa do mesmo teto e nao pode requerer o motor (a seta e db/send/po-data <-
+    fluxo <- sim/motor <- timeout). Um numero proprio la seriam dois tetos desandando
+    separados.
+  - **A tela nao roteia.** `painel/simulador.js` manda o que a pessoa fez e desenha o
+    que voltou; quem decide o caminho e o servidor. O clique manda o **id** da opcao e
+    mostra o **rotulo** na bolha: mandar o rotulo quebra o roteamento, mostrar o id poe
+    nome tecnico numa conversa que o cliente veria.
+  - **Trava de fonte por substring se escreve sem a palavra proibida, nem em**
+    **comentario.** Tanto o `lib/wa-sim.php` quanto o `painel/simulador.js` explicam o
+    que NAO fazem sem nomear o que nao fazem. E o que torna a trava impossivel de
+    burlar, e custou duas rodadas vermelhas ate ficar claro.
+  - **Funcao pura que o teste precisa alcancar nao pode morar no endpoint.** `require
+    fluxo.php` EXECUTA o endpoint, entao o processo pai do teste nunca chamaria uma
+    funcao definida nele: `wa_sim_ctx()` mora no `lib/wa-sim.php`.
+  - **O envelope do passo vai ANINHADO em `passo`**, nunca achatado na resposta:
+    `fok()` faz `['ok' => true] + $dados` e o `+` do PHP mantem a chave da esquerda,
+    entao achatar responderia `ok:true` sempre e esconderia as recusas da Cloud API.
+  - **O `@media` do simulador vem DEPOIS dos padroes do celular**, e ha teste travando
+    a ordem: mesma especificidade, vence a ultima declarada. E a mesma classe de
+    defeito que deixou a barra de zoom invisivel com dois testes verdes.
+  - **O item 2 da reuniao (filtrar o que a Lais recebe no WhatsApp) e IMPOSSIVEL.** Na
+    convivencia, o espelhamento e do NUMERO, nao da conversa: nao ha parametro que
+    filtre por lead ou por etapa do funil. O que ja e verdade e que **o robo nao a
+    envolve nos descartados** - ele se despede sozinho e so chama o humano no caminho de
+    quem qualificou. Ela pode arquivar ou silenciar a conversa no app.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro
