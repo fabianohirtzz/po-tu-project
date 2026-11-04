@@ -644,7 +644,15 @@ function poFluxoProblemas(problemas, id) {
   const l = poFluxoSemRepetido(problemas);
   const doFluxo = l.filter(function (p) { return p.card == null || p.card === ''; });
   const meus = l.filter(function (p) { return id != null && p.card != null && p.card !== '' && String(p.card) === String(id); });
-  const outros = l.length - meus.length - doFluxo.length;
+  const outros = l.filter(function (p) {
+    return p.card != null && p.card !== '' && String(p.card) !== String(id);
+  });
+  /* Bloqueio e aviso contam SEPARADO. Chamar de "aviso" o que impede de
+     publicar faz a cliente salvar, seguir em frente e so descobrir no Publicar
+     que o fluxo nao sai - aconteceu em 04/11/2026 com a regra 11 (card de salto
+     apontando para um fluxo desligado). */
+  const bloqueiamOutros = outros.filter(function (p) { return p.bloqueia; }).length;
+  const avisamOutros = outros.length - bloqueiamOutros;
   const item = function (p) {
     return '<li class="fl-problema' + (p.bloqueia ? ' fl-problema--bloqueia' : '') + '">' + esc(p.texto) + '</li>';
   };
@@ -654,7 +662,16 @@ function poFluxoProblemas(problemas, id) {
     h += '<p class="fl-dica">Do fluxo como um todo (não é de um card só):</p>' +
       '<ul class="fl-problemas fl-problemas--fluxo">' + doFluxo.map(item).join('') + '</ul>';
   }
-  if (outros > 0) h += '<p class="fl-aviso">E mais ' + outros + (outros === 1 ? ' aviso em outro card' : ' avisos em outros cards') + ' deste fluxo.</p>';
+  // O que impede de publicar vem antes do que so avisa.
+  if (bloqueiamOutros > 0) {
+    h += '<p class="fl-aviso">E mais ' + bloqueiamOutros +
+      (bloqueiamOutros === 1 ? ' problema que impede de publicar, em outro card' : ' problemas que impedem de publicar, em outros cards') +
+      ' deste fluxo.</p>';
+  }
+  if (avisamOutros > 0) {
+    h += '<p class="fl-aviso">E mais ' + avisamOutros +
+      (avisamOutros === 1 ? ' aviso em outro card' : ' avisos em outros cards') + ' deste fluxo.</p>';
+  }
   if (!l.length) h = '<p class="fl-ok">O fluxo foi conferido e está sem problemas.</p>';
   return h;
 }

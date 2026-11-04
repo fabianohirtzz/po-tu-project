@@ -779,6 +779,37 @@ const misto = F.poFluxoProblemas([PB(7, null, 'porta repetida', true), PB(2, 'b'
 assert.ok(misto.includes('E mais 2 avisos em outros cards') && misto.includes('porta repetida'), 'o card nulo nao entra na contagem de outros cards');
 assert.ok(F.poFluxoProblemas([PB(7, null, XSS, true)], 'a').includes(ESCAPADO), 'o bloco do fluxo escapa');
 
+/* "aviso" NAO pode nomear o que impede de publicar. Aconteceu de verdade em
+   04/11/2026: ao salvar a mensagem de boas-vindas, o rodape da gaveta disse
+   "E mais 1 aviso em outro card deste fluxo" para um BLOQUEIO da regra 11 (o
+   card de salto apontando para um fluxo desligado). A cliente le "aviso",
+   segue em frente e so descobre no Publicar que o fluxo nao sai. */
+const bloqOutro = F.poFluxoProblemas([PB(11, 'b', 'salto para fluxo desligado', true)], 'a');
+assert.ok(/impede de publicar/i.test(bloqOutro), 'bloqueio em outro card diz que IMPEDE de publicar: ' + bloqOutro);
+assert.ok(/1 problema/.test(bloqOutro), 'e e contado como problema, nao como aviso: ' + bloqOutro);
+/* So o TEXTO que ela le: a classe CSS chama-se fl-aviso, e nao e ela que esta
+   em julgamento aqui. */
+const soTexto = function (h) { return String(h).replace(/<[^>]*>/g, ' '); };
+assert.ok(!/\baviso[s]?\b/i.test(soTexto(bloqOutro)), 'e a palavra "aviso" nao aparece no texto: ' + bloqOutro);
+
+const doisBloq = F.poFluxoProblemas([PB(11, 'b', 'x', true), PB(2, 'c', 'y', true)], 'a');
+assert.ok(/2 problemas que impedem de publicar/.test(doisBloq), 'plural concorda: ' + doisBloq);
+
+const soAvisoOutro = F.poFluxoProblemas([PB(15, 'b', 'orfao', false)], 'a');
+assert.ok(/1 aviso em outro card/.test(soAvisoOutro), 'aviso de verdade segue sendo aviso: ' + soAvisoOutro);
+assert.ok(!/impede de publicar/i.test(soAvisoOutro), 'e nao vira bloqueio: ' + soAvisoOutro);
+
+/* Os dois tipos juntos: as duas frases, e a que impede vem primeiro. */
+const ambos = F.poFluxoProblemas([PB(15, 'c', 'y', false), PB(11, 'b', 'x', true)], 'a');
+assert.ok(/1 problema que impede de publicar/.test(ambos), 'conta os bloqueios: ' + ambos);
+assert.ok(/1 aviso em outro card/.test(ambos), 'e conta os avisos a parte: ' + ambos);
+assert.ok(ambos.indexOf('impede de publicar') < ambos.indexOf('1 aviso'),
+  'o que impede de publicar vem antes do aviso: ' + ambos);
+
+/* O bloqueio DO CARD ABERTO continua na lista de cima, nao na contagem. */
+const meuBloq = F.poFluxoProblemas([PB(11, 'a', 'no meu card', true)], 'a');
+assert.ok(meuBloq.includes('no meu card') && !/E mais/.test(meuBloq), 'problema do proprio card nao vira contagem: ' + meuBloq);
+
 /* a gaveta liga ao Publicar: estouro avisa que o fluxo nao publica assim */
 assert.ok(F.poFluxoContador('a'.repeat(1025), 1024).texto.includes('não pode ser publicado'), 'estouro: diz que o fluxo nao pode ser publicado assim');
 assert.ok(!F.poFluxoContador('abc', 1024).texto.includes('publicado'), 'e so quando estoura');
