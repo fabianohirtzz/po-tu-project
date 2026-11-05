@@ -130,8 +130,7 @@ ok(mb_strlen($longo, 'UTF-8') <= 300, 'respeita o teto: ' . mb_strlen($longo, 'U
 foreach ([120, 150, 180, 211, 247, 300, 333] as $teto) {
     $t = po_datas_proximas($sem($quatroMeses), '2039-01-01', $teto);
     ok(mb_strlen($t, 'UTF-8') <= $teto, "teto $teto respeitado: " . mb_strlen($t, 'UTF-8'));
-    foreach (explode("
-", $t) as $linha) {
+    foreach (explode("\n", $t) as $linha) {
         if ($linha === '') continue;
         $pos = mb_strpos($linha, ': ', 0, 'UTF-8');
         $corpo = ($pos === false) ? $linha : mb_substr($linha, $pos + 2, null, 'UTF-8');
