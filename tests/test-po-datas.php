@@ -99,4 +99,48 @@ ok(po_quando(['status_viagem' => null, 'data_label' => '', 'periodo' => 'De 1 a 
 ok(po_quando([], '2039-11-01') === '', 'roteiro sem nada');
 ok(po_quando('nem array', '2039-11-01') === '', 'roteiro que nao e array');
 
+/* ---------- po_datas_proximas: a lista que o robo manda ---------- */
+/* So as FUTURAS: data vencida no texto do WhatsApp e ruido, e pior, parece
+   oferta. Agrupadas pelo titulo que a cliente escreveu. */
+ok(po_datas_proximas($sem($doisMeses), '2039-01-01', 300)
+   === "Datas de Dezembro: 02/12/39, 10/12/39\nDatas de Janeiro: 07/01/40, 15/01/40", 'os dois meses, agrupados');
+ok(po_datas_proximas($sem($doisMeses), '2039-12-05', 300)
+   === "Datas de Dezembro: 10/12/39\nDatas de Janeiro: 07/01/40, 15/01/40", 'a que ja passou nao entra');
+ok(po_datas_proximas($sem($doisMeses), '2040-01-10', 300) === 'Datas de Janeiro: 15/01/40', 'mes que ficou sem data futura sai inteiro');
+ok(po_datas_proximas($sem($doisMeses), '2041-01-01', 300) === '', 'nada futuro, string vazia');
+ok(po_datas_proximas($sem([]), '2039-01-01', 300) === '', 'sem datas');
+ok(po_datas_proximas(['status_viagem' => 'em_breve', 'datas_texto' => $doisMeses], '2039-01-01', 300) === '', 'so para o status semanal');
+ok(po_datas_proximas($sem([['titulo' => '', 'datas' => ['02/12/39']]]), '2039-01-01', 300) === '02/12/39', 'grupo sem titulo sai so com as datas');
+
+/* O TETO, e por que ele corta em data INTEIRA: a legenda do card de PDF da
+   Cloud API para em 1024 caracteres, e acima disso a Meta recusa a mensagem
+   inteira EM SILENCIO. Cortar no meio de uma data afirmaria ao cliente um dia
+   que nao existe, entao o corte cai sempre numa data completa. */
+$quatroMeses = [];
+foreach (['Dezembro' => '12/39', 'Janeiro' => '01/40', 'Fevereiro' => '02/40', 'Marco' => '03/40'] as $nome => $sufixo) {
+    $ds = [];
+    foreach ([2, 9, 16, 23, 28] as $d) $ds[] = sprintf('%02d/%s', $d, $sufixo);
+    $quatroMeses[] = ['titulo' => 'Datas de ' . $nome, 'datas' => $ds];
+}
+$longo = po_datas_proximas($sem($quatroMeses), '2039-01-01', 300);
+ok(mb_strlen($longo, 'UTF-8') <= 300, 'respeita o teto: ' . mb_strlen($longo, 'UTF-8'));
+/* Em VARIOS tetos, e nao em um so: um teto sozinho pode cair, por sorte,
+   logo depois de uma data inteira, e ai um corte por caractere passaria.
+   A propriedade e que TODO pedaco continua sendo uma data completa. */
+foreach ([120, 150, 180, 211, 247, 300, 333] as $teto) {
+    $t = po_datas_proximas($sem($quatroMeses), '2039-01-01', $teto);
+    ok(mb_strlen($t, 'UTF-8') <= $teto, "teto $teto respeitado: " . mb_strlen($t, 'UTF-8'));
+    foreach (explode("
+", $t) as $linha) {
+        if ($linha === '') continue;
+        $pos = mb_strpos($linha, ': ', 0, 'UTF-8');
+        $corpo = ($pos === false) ? $linha : mb_substr($linha, $pos + 2, null, 'UTF-8');
+        foreach (explode(', ', $corpo) as $d) {
+            ok(po_datas_iso($d) !== null, "teto $teto: '$d' e uma data completa, nao um pedaco");
+        }
+    }
+}
+ok(strpos($longo, 'Datas de Dezembro') === 0, 'comeca pelo mes mais proximo');
+ok(po_datas_proximas($sem($doisMeses), '2039-01-01', 300) === po_datas_proximas($sem($doisMeses), '2039-01-01', 4096), 'texto que cabe nao e tocado');
+
 echo "OK test-po-datas\n";

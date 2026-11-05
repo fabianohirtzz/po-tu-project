@@ -665,7 +665,7 @@ assert.ok(Object.keys(lim).length >= 6, 'WA_FLUXO_LIMITE lido do PHP');
 for (const [t, n] of Object.entries(lim)) assert.equal(F.poFluxoLimite(t), n, 'limite de ' + t + ' igual ao do PHP');
 for (const t of F.poFluxoTipos ? ['marca', 'ir_para_fluxo'] : []) assert.ok(!(t in lim) && F.poFluxoLimite(t) === null, t + ' sem limite nos dois lados');
 const vmax = Object.fromEntries([...php.match(/const WA_FLUXO_VAR_MAX\s*=\s*\[([^\]]*)\]/)[1].matchAll(/'(\w+)'\s*=>\s*(\d+)/g)].map(m => [m[1], Number(m[2])]));
-assert.deepEqual(Object.keys(vmax).sort(), ['data', 'roteiro'], 'as duas variaveis do PHP');
+assert.deepEqual(Object.keys(vmax).sort(), ['data', 'datas', 'roteiro'], 'as tres variaveis do PHP');
 for (const [k, n] of Object.entries(vmax)) assert.equal(F.poFluxoPiorCaso('{' + k + '}'), n, '{' + k + '} vale o mesmo no PHP e no JS');
 const limLemb = Number(php.match(/wa_fluxo_tam_pior_caso\(\$c\['lembrete_texto'\]\)\) > (\d+)/)[1]);
 assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', opcoes: op(1) }).includes('data-campo="lembrete_texto" data-limite="' + limLemb + '"'),
@@ -2026,9 +2026,18 @@ assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', op
   assert.ok(dica, 'guarda: a dica das variaveis aparece na gaveta');
   // O artigo nao tem par no PHP: variavel nova sem `art` (ou com art vazio) imprimiria
   // "undefined maior x" na tela. Cada entrada precisa de um artigo de verdade.
-  vars.forEach(v => assert.ok(typeof v.art === 'string' && v.art.trim() !== '', 'a variavel ' + v.nome + ' tem artigo nao vazio'));
+  vars.forEach(v => {
+    assert.ok(typeof v.art === 'string' && v.art.trim() !== '', 'a variavel ' + v.nome + ' tem artigo nao vazio');
+    // Sem `sup` proprio, {datas} sairia como "as maior datas" na tela.
+    assert.ok(typeof v.sup === 'string' && v.sup.trim() !== '', 'a variavel ' + v.nome + ' tem superlativo nao vazio');
+  });
   assert.ok(!/undefined|null/.test(contador + dica), 'o contador e a dica nao imprimem undefined/null');
-  assert.ok(/ o maior roteiro e a maior data /.test(contador) && /o roteiro e a data\./.test(dica), 'guarda: as frases saem completas com o artigo');
+  // DERIVADA da lista, nao cravada: cravar a frase de duas variaveis so
+  // deixa o teste vermelho quando entra a terceira, sem dizer o que ha de
+  // errado. Assim ela confere a concordancia de cada entrada viva.
+  const juntar = l => (l.length > 1 ? l.slice(0, -1).join(', ') + ' e ' + l[l.length - 1] : l.join(''));
+  assert.ok(contador.includes(juntar(vars.map(v => v.art + ' ' + v.sup + ' ' + v.nome))), 'o contador concorda com cada variavel: ' + contador);
+  assert.ok(dica.includes(juntar(vars.map(v => v.art + ' ' + v.nome)) + '.'), 'e a dica tambem: ' + dica);
   vars.forEach(v => {
     assert.ok(dica.includes('{' + v.nome + '}'), 'a dica cita {' + v.nome + '}');
     assert.ok(contador.includes(v.nome), 'o contador cita ' + v.nome);

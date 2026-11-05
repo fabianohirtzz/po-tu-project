@@ -87,6 +87,65 @@ function po_datas_iso($txt) {
     return sprintf('%04d-%02d-%02d', $ano, $mes, $d);
 }
 
+/* As proximas datas de um roteiro de saidas semanais, agrupadas pelo titulo
+   que a cliente escreveu, uma linha por mes:
+
+     Datas de Dezembro: 02/12/26, 10/12/26
+     Datas de Janeiro: 07/01/27
+
+   SO AS FUTURAS: data vencida no texto do WhatsApp e ruido e, pior, parece
+   oferta. Mes que ficou sem data futura sai inteiro.
+
+   O CORTE CAI SEMPRE NUMA DATA COMPLETA. A legenda do card de PDF da Cloud
+   API para em 1024 caracteres, e acima disso a Meta recusa a mensagem
+   INTEIRA, em silencio - entao o teto nao e opcional. Mas cortar no meio de
+   uma data afirmaria ao cliente um dia que nao existe, que e pior que
+   mandar menos datas. Pura. */
+function po_datas_proximas($roteiro, $hoje = null, $max = 300) {
+    if (!is_array($roteiro) || ($roteiro['status_viagem'] ?? null) !== 'semanal') return '';
+    $hoje = ($hoje === null) ? date('Y-m-d') : (string) $hoje;
+
+    $linhas = [];
+    foreach (po_datas_grupos($roteiro) as $g) {
+        $ds = [];
+        foreach ($g['datas'] as $txt) {
+            $iso = po_datas_iso($txt);
+            if ($iso !== null && $iso >= $hoje) $ds[] = $txt;
+        }
+        if (!$ds) continue;
+        $t = trim($g['titulo']);
+        $linhas[] = ($t !== '' ? $t . ': ' : '') . implode(', ', $ds);
+    }
+    if (!$linhas) return '';
+
+    /* Monta ate onde cabe, data a data: a unidade do corte e a data, nunca o
+       caractere. Linha que nao cabe inteira entra com as datas que couberem;
+       nao cabendo nenhuma, a linha nao entra. */
+    $out = '';
+    foreach ($linhas as $linha) {
+        if (mb_strlen($out === '' ? $linha : $out . "
+" . $linha, 'UTF-8') <= $max) {
+            $out = ($out === '' ? $linha : $out . "
+" . $linha);
+            continue;
+        }
+        $pos = mb_strpos($linha, ': ', 0, 'UTF-8');
+        $pre = ($pos === false) ? '' : mb_substr($linha, 0, $pos + 2, 'UTF-8');
+        $ds  = explode(', ', ($pos === false) ? $linha : mb_substr($linha, $pos + 2, null, 'UTF-8'));
+        $parcial = '';
+        foreach ($ds as $d) {
+            $tenta = $pre . ($parcial === '' ? $d : $parcial . ', ' . $d);
+            if (mb_strlen($out === '' ? $tenta : $out . "
+" . $tenta, 'UTF-8') > $max) break;
+            $parcial = ($parcial === '' ? $d : $parcial . ', ' . $d);
+        }
+        if ($parcial !== '') $out = ($out === '' ? $pre . $parcial : $out . "
+" . $pre . $parcial);
+        break;   // o que nao coube nesta linha nao cabera nas seguintes
+    }
+    return $out;
+}
+
 /* A string de data que a pessoa le, em TODO lugar que mostra roteiro.
 
    Quem decide e o STATUS, nao a presenca do dado: um roteiro comum com

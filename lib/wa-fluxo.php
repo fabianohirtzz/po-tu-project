@@ -59,11 +59,14 @@ const WA_CARD_TERMINAL = ['humano','fim'];            // cards sem saida
 const WA_SEM_RESPOSTA_TIPOS = ['texto','marca','humano','fim'];
 
 /* ---------- variaveis de texto ---------- */
-const WA_FLUXO_VARS         = ['roteiro','data'];
-const WA_FLUXO_VARS_ROTEIRO = ['roteiro','data'];     // as que dependem de haver roteiro no contexto
+const WA_FLUXO_VARS         = ['roteiro','data','datas'];
+const WA_FLUXO_VARS_ROTEIRO = ['roteiro','data','datas'];   // as que dependem de haver roteiro no contexto
 // Maximo de caracteres de cada variavel. Vale nos dois lados: o valor real e
 // cortado nele, e a validacao conta o texto pelo pior caso com ele.
-const WA_FLUXO_VAR_MAX      = ['roteiro' => 60, 'data' => 40];
+/* {datas} vale 300: quatro meses de saidas semanais cabem, e sobram ~620
+   caracteres de texto no card de PDF, cuja legenda para em 1024 na Cloud
+   API. Acima disso a Meta recusa a mensagem INTEIRA, em silencio. */
+const WA_FLUXO_VAR_MAX      = ['roteiro' => 60, 'data' => 40, 'datas' => 300];
 
 /* Limite de caracteres por tipo de card, contado na expansao de pior caso.
    Corpo interativo e legenda de documento: 1024. Texto simples: 4096. */
@@ -83,18 +86,27 @@ const WA_FLUXO_CAMPOS_MARCAVEIS = ['status','qualif_data','qualif_grupo','qualif
 // e o que o atalho #proposta da dona carimba.
 const WA_FLUXO_STATUS_PERMITIDOS = ['novo','atendimento','perdido'];
 
-/* O {data} do roteiro. `data_label ?? 'na data prevista'` (o que o motor
-   fazia) so pega null, nao string vazia, e nenhum roteiro do banco tem
-   data_label preenchido (todos usam `periodo`): a variavel chegava vazia ao
-   cliente. `?:` pega vazio, e o periodo entra como segunda opcao. */
+/* As variaveis do roteiro.
+
+   {data}: po_quando decide, e para um roteiro de saidas semanais ela vira a
+   proxima saida. A conta inteira mora em lib/po-datas.php. Aqui ja houve um
+   `?? 'na data prevista'` que so pegava null e nao string vazia, e como
+   nenhum roteiro do banco preenche o rotulo escrito a mao, a variavel
+   chegava VAZIA ao cliente; o `?:` pega vazio tambem.
+
+   {datas}: as proximas saidas do mes, so para roteiro semanal. Cortada no
+   teto de WA_FLUXO_VAR_MAX, e o corte cai sempre numa data completa. */
 function wa_fluxo_vars_do_roteiro($r, $nome) {
     $data = '';
+    $datas = '';
     if (is_array($r)) {
-        $data = (string) ($r['data_label'] ?? '') ?: (string) ($r['periodo'] ?? '') ?: 'na data prevista';
+        $data = po_quando($r) ?: 'na data prevista';
     }
+    if (is_array($r)) $datas = po_datas_proximas($r, null, WA_FLUXO_VAR_MAX['datas']);
     $vars = [
         'roteiro' => is_array($r) ? (string) ($r['titulo'] ?? '') : '',
         'data'    => $data,
+        'datas'   => $datas,
     ];
     foreach (WA_FLUXO_VAR_MAX as $k => $max) $vars[$k] = wa_fluxo_corta($vars[$k], $max);
     return $vars;
@@ -245,7 +257,7 @@ function wa_fluxo_roteiros_venda($roteiros) {
 function wa_fluxo_lista_roteiros($venda) {
     $linhas = [];
     foreach (array_values($venda) as $i => $r) {
-        $quando = trim((string) ($r['data_label'] ?? '') ?: (string) ($r['periodo'] ?? ''));
+        $quando = trim(po_quando($r));
         $linhas[] = ($i + 1) . '. ' . trim((string) ($r['titulo'] ?? '')) . ($quando !== '' ? ' (' . $quando . ')' : '');
     }
     return implode("\n", $linhas);
@@ -1033,7 +1045,7 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
                 $id = (string) ($r['slug'] ?? '');
                 $titulo = trim((string) ($r['titulo'] ?? ''));
                 if ($id === '' || $titulo === '') continue;
-                $quando = (string) ($r['data_label'] ?? '') ?: (string) ($r['periodo'] ?? '');
+                $quando = po_quando($r);
                 // Corte COSMETICO, nao de correcao: wa_send_list ja trunca em 24/72
                 // e fatia em 10, mas seco. Aqui corta em limite de palavra com
                 // reticencia, senao um periodo cortado no meio afirma uma data

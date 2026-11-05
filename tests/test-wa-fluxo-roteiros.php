@@ -30,6 +30,28 @@ $vs = array_column(wa_fluxo_roteiros_venda($comSemanal), 'slug');
 ok(in_array('peru-semanal', $vs, true), 'roteiro semanal continua a venda: ' . implode(',', $vs));
 ok(!in_array('turquia', $vs, true) && !in_array('japao', $vs, true), 'esgotado e em_viagem seguem fora: ' . implode(',', $vs));
 
+/* A lista numerada de um roteiro SEMANAL diz a proxima saida. Sem isto ela
+   sai sem data nenhuma - enquanto a ordenacao ja o coloca pela proxima
+   saida, ou seja a lista contradiria a propria ordem. */
+$sem1 = ['slug'=>'peru-s','titulo'=>'Peru Completo','periodo'=>'','ativo'=>true,'status_viagem'=>'semanal',
+  'datas_texto'=>[['titulo'=>'Datas de Dezembro','datas'=>['02/12/39','10/12/39']]]];
+$ls = wa_fluxo_lista_roteiros([$sem1]);
+ok($ls === '1. Peru Completo (Próxima saída: 02/12/39)', 'a lista numerada diz a proxima saida: ' . $ls);
+
+/* {data} do semanal: a proxima saida, nao "na data prevista". A frase do
+   card e "Data da viagem: {data}. Essa data funciona para voce?" - um texto
+   generico ali desperdica a pergunta. */
+$vs = wa_fluxo_vars_do_roteiro($sem1, 'Ana');
+ok($vs['data'] === 'Próxima saída: 02/12/39', '{data} do semanal: ' . $vs['data']);
+/* {datas}: a lista do mes, so as futuras, para a legenda do PDF. */
+ok(strpos($vs['datas'], 'Datas de Dezembro: ') === 0, '{datas} traz as datas do mes: ' . $vs['datas']);
+/* Roteiro comum nao ganha {datas}, e o {data} segue como sempre. */
+$vc = wa_fluxo_vars_do_roteiro(['titulo'=>'X','periodo'=>'De 1 a 2','status_viagem'=>null], 'Ana');
+ok($vc['datas'] === '' && $vc['data'] === 'De 1 a 2', 'roteiro comum: {datas} vazio e {data} como sempre');
+/* Sem roteiro no contexto, nenhuma das duas inventa nada. */
+$vn = wa_fluxo_vars_do_roteiro(null, 'Ana');
+ok($vn['datas'] === '' && $vn['data'] === '', 'sem roteiro, as duas vazias');
+
 $txt = wa_fluxo_lista_roteiros($v);
 ok(strpos($txt, '1.') === 0, 'numera a partir de 1');
 ok(strpos($txt, 'Peru') !== false && strpos($txt, '3.') !== false, 'em_breve entra mesmo sem data');

@@ -7,7 +7,11 @@ ok(WA_CARD_TIPOS === ['texto','botoes','lista','roteiros','pdf','marca','ir_para
 ok(WA_CARD_ESPERA === ['botoes','lista','roteiros'], 'WA_CARD_ESPERA');
 ok(WA_CARD_TERMINAL === ['humano','fim'], 'WA_CARD_TERMINAL');
 ok(WA_SEM_RESPOSTA_TIPOS === ['texto','marca','humano','fim'], 'sem_resposta so aceita card que nao espera');
-ok(WA_FLUXO_VARS === ['roteiro','data'], 'WA_FLUXO_VARS');
+ok(WA_FLUXO_VARS === ['roteiro','data','datas'], 'WA_FLUXO_VARS');
+/* As TRES dependem de haver roteiro no contexto. Sem isto o validador
+   deixa publicar um card que usa {datas} antes de o cliente escolher a
+   viagem, e a variavel chega vazia a ele. */
+ok(WA_FLUXO_VARS_ROTEIRO === ['roteiro','data','datas'], 'WA_FLUXO_VARS_ROTEIRO');
 ok(!in_array('nome', WA_FLUXO_VARS, true), 'nome saiu de WA_FLUXO_VARS');
 ok(!array_key_exists('nome', WA_FLUXO_VAR_MAX), 'nome saiu de WA_FLUXO_VAR_MAX');
 
@@ -24,7 +28,7 @@ $v = wa_fluxo_vars_do_roteiro($r_periodo, 'Marta');
 ok($v['data'] === '27/10/27 a 12/11/27', 'data_label vazio cai em periodo (?: e nao ??)');
 ok($v['roteiro'] === 'Turquia com Antalia', 'roteiro vem do titulo');
 ok(!array_key_exists('nome', $v), 'wa_fluxo_vars_do_roteiro nao devolve nome, mesmo recebendo um');
-ok(array_keys($v) === ['roteiro','data'], 'so roteiro e data');
+ok(array_keys($v) === ['roteiro','data','datas'], 'roteiro, data e datas, na ordem de WA_FLUXO_VARS');
 
 $r_label = ['titulo' => 'Chile', 'data_label' => '10/03/27 a 20/03/27', 'periodo' => 'ignorar'];
 ok(wa_fluxo_vars_do_roteiro($r_label, 'X')['data'] === '10/03/27 a 20/03/27', 'data_label ganha quando existe');
@@ -79,7 +83,8 @@ ok(wa_acha_roteiro('b', [['slug' => 'a'], ['slug' => 'b']]) === ['slug' => 'b'],
 
 // 8. o teto vale no PONTO DE USO: $vars montado a mao tambem e cortado
 $mao = ['roteiro' => str_repeat('palavra ', 40),
-        'data' => '27/10/2027 a 12/11/2027 e depois mais um bocado de texto'];
+        'data' => '27/10/2027 a 12/11/2027 e depois mais um bocado de texto',
+        'datas' => str_repeat('Datas de Dezembro: 02/12/27, 10/12/27 ', 20)];
 foreach (WA_FLUXO_VARS as $k) {
     $saida = wa_fluxo_texto('{' . $k . '}', $mao);
     ok(mb_strlen($saida, 'UTF-8') <= WA_FLUXO_VAR_MAX[$k], "$k a mao nao passa do maximo");

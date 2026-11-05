@@ -61,9 +61,10 @@ for (const [arq, fn, helper] of PONTOS) {
      lib/po-data.php    po_ano precisa do TEXTO da data, nao da string de
                         exibicao, e tem o proprio teste de comportamento
      index.php          po_data_saida, pelo mesmo motivo (ver abaixo)
-     lib/wa-fluxo.php, lib/wa-motor.php   o robo, que e a Tarefa 6 */
+     lib/wa-motor.php   wa_envia_roteiro, legado SEM CHAMADORES, mantido ate
+                        o Plano A ser verificado em producao */
 const INLINE = /data_label[\s\S]{0,80}?periodo|periodo[\s\S]{0,80}?data_label/;
-for (const arq of ['roteiros.php', 'assets/js/historia.js', 'assets/js/main.js']) {
+for (const arq of ['roteiros.php', 'assets/js/historia.js', 'assets/js/main.js', 'lib/wa-fluxo.php']) {
   assert.ok(!INLINE.test(le(arq)), arq + ' nao escreve mais a conta na mao');
 }
 /* Nos tres arquivos que TAMBEM tem derivacao de data legitima, a conferencia

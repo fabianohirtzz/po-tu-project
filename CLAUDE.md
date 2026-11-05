@@ -1538,6 +1538,53 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     filtre por lead ou por etapa do funil. O que ja e verdade e que **o robo nao a
     envolve nos descartados** - ele se despede sozinho e so chama o humano no caminho de
     quem qualificou. Ela pode arquivar ou silenciar a conversa no app.
+- **STATUS "SAIDAS SEMANAIS" + DATAS DO MES (05/11/2026): FEITO, NADA NO AR.** Branch
+  `semanal-datas`, 6 tarefas em TDD; a suite foi de 76 para **80** arquivos. Novos:
+  `lib/po-datas.php`, `painel/datas.js`, migration `2026-11-04-status-semanal-datas.sql`
+  (**NAO rodada**), e 4 arquivos de teste. Spec:
+  `docs/superpowers/specs/2026-11-04-robo-entende-frase-e-roteiro-semanal-design.md`
+  (Parte B) · plano: `docs/superpowers/plans/2026-11-04-status-semanal-e-datas.md`.
+  Nasceu do roteiro do **Peru, que sai toda semana** e por isso nao tem periodo unico.
+  - **A ARMADILHA QUE ISTO EXISTE PARA IMPEDIR:** roteiro sem data vai para o **FIM** de
+    toda lista ordenada, que e onde ficam as viagens **que ja partiram**. Um semanal nao
+    tem data em `periodo`, entao o Peru seria anunciado depois de todos, saindo na semana
+    que vem. Vale em TRES lugares, e os tres foram corrigidos: `wa_roteiro_data_ini` (a
+    lista do robo), `po_data_saida` (as "Proximas viagens" da home) e `po_ano` (o ano do
+    `<title>`). Os dois ultimos o plano nao tinha contado.
+  - **`lib/po-datas.php` e ARQUIVO FOLHA, PURO, SEM NENHUM `require`.** E o que permite a
+    camada de view e o motor do robo requererem os dois sem ciclo e sem furar a seta
+    `db/send/po-data <- fluxo <- sim/motor <- timeout`.
+  - **A conta da data existe em TRES implementacoes** (`lib/po-datas.php`,
+    `assets/js/roteiros-shared.js`, `painel/datas.js`), porque as paginas publicas leem o
+    banco **no navegador** e o painel **nao carrega** o `roteiros-shared.js` (ele define
+    `poClient` e le `window.PO_CONFIG`, que colidiriam com o `config.js` do painel).
+    `tests/test-datas-semanal.mjs` roda a MESMA tabela de 25 casos nas tres e exige que
+    concordem caso a caso. **Tabela unica, nunca uma lista por implementacao:** lista
+    propria por lado e exatamente como duas divergem com os dois testes verdes.
+  - **A tela e o banco sao DUAS leituras de `datas_texto`.** `rotDatasDaTela` mantem o que
+    esta na tela; `rotDatasDoForm` limpa para gravar (descarta grupo sem data, apara). Usar
+    a do banco para redesenhar fazia o **mes recem-adicionado sumir no primeiro clique** e
+    os indices dos botoes deslocarem, fazendo "excluir mes" apagar o mes errado. **So
+    apareceu abrindo a tela.** Junto com ele: os botoes "Adicionar" sairam **sem estilo**
+    porque inventei uma classe `btn-sec` que nao existe; a convencao da gaveta e `rep-add`.
+  - **A variavel `{datas}` entrou**, com teto de **300** caracteres. `WA_FLUXO_VARS`,
+    `WA_FLUXO_VARS_ROTEIRO` e `WA_FLUXO_VAR_MAX` no `lib/wa-fluxo.php` e o espelho
+    `poFluxoVariaveis` no `painel/fluxo.js` **andam juntos**, com teste dos dois lados. Ela
+    ganhou `sup` (superlativo) proprio: com o `'maior'` fixo, a tela diria "as maior datas".
+    **O corte cai sempre numa DATA COMPLETA**, nunca no meio: a legenda do card de PDF para
+    em 1024 e acima disso a Meta recusa a mensagem INTEIRA em silencio, mas cortar no meio
+    de uma data afirma ao cliente um dia que nao existe.
+  - **O status `semanal` abre a lista** (as outras quatro estao em ordem de ciclo da viagem;
+    semanal nao tem ciclo). Azul da marca `#1FA8DD` com **texto escuro**: branco sobre ele
+    da 2,78:1 e o `status-tag.css` declara "todos acima de 4:1".
+  - **O robo NAO exclui semanal do catalogo de venda**, e ha teste travando isso: um roteiro
+    que sai toda semana sumir da lista e o pior defeito possivel deste status.
+  - **Ordem de deploy:** `lib/po-datas.php` **antes** de `lib/po-view.php`, `lib/po-data.php`
+    e `lib/wa-roteiro.php`, que passam a requere-lo; `painel/datas.js` antes do
+    `painel/app.js`; o `painel/index.html` **por ultimo**. Cache-buster: `painel.css?v=17`,
+    `app.js?v=24`, `datas.js?v=3`, `fluxo.js?v=21`, `roteiros-shared.js?v=8`,
+    `status-tag.css?v=3`.
+  - **Falta:** rodar a migration, fazer o deploy, e a cliente cadastrar o Peru.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro

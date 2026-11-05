@@ -414,16 +414,19 @@ function poFluxoMaxOpcoes(tipo) {
 }
 
 /* Tamanho do texto DEPOIS da expansao de pior caso: {roteiro} vale 60,
-   {data} 40 (espelho de WA_FLUXO_VAR_MAX). Conferir o texto cru deixaria passar
+   {data} 40 e {datas} 300 (espelho de WA_FLUXO_VAR_MAX). Conferir o texto cru deixaria passar
    uma frase que estoura o limite so quando o titulo do roteiro e comprido, e ai a
    Meta devolve 400 e o cliente nao recebe nada, em silencio. Variavel que o robo
    nao conhece e removida no envio, entao vale 0. Conta caracteres, nao bytes. */
 /* A UNICA lista de variaveis que o painel conhece (espelho de WA_FLUXO_VAR_MAX,
    que o teste confere). O pior caso, a dica e o contador saem todos daqui: frase
-   escrita a mao ficava falando de {nome} depois dele sair do sistema. `art` e o
-   artigo de cada nome, para a frase sair em portugues. */
+   escrita a mao ficava falando de {nome} depois dele sair do sistema. `art` e o artigo e
+   `sup` o superlativo de cada nome, para a frase sair em portugues: com um
+   'maior' fixo, {datas} viraria "as maior datas". */
 function poFluxoVariaveis() {
-  return [{ nome: 'roteiro', max: 60, art: 'o' }, { nome: 'data', max: 40, art: 'a' }];
+  return [{ nome: 'roteiro', max: 60, art: 'o', sup: 'maior' },
+          { nome: 'data', max: 40, art: 'a', sup: 'maior' },
+          { nome: 'datas', max: 300, art: 'as', sup: 'maiores' }];
 }
 
 // "a, b e c" a partir da lista viva: fn recebe a variavel e devolve o pedaco.
@@ -451,7 +454,7 @@ function poFluxoContador(texto, limite) {
   const estoura = typeof limite === 'number' && n > limite;
   return {
     n: n, limite: limite, estoura: estoura,
-    texto: n + ' de ' + limite + ' caracteres, contando ' + poFluxoVarFrase(function (v) { return v.art + ' maior ' + v.nome; }) + ' possíveis' +
+    texto: n + ' de ' + limite + ' caracteres, contando ' + poFluxoVarFrase(function (v) { return v.art + ' ' + v.sup + ' ' + v.nome; }) + ' possíveis' +
       (estoura ? '. Encurte: o WhatsApp recusa a mensagem inteira e o cliente não recebe nada, e o fluxo não pode ser publicado assim.' : '.'),
   };
 }
