@@ -1678,6 +1678,90 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
   - **Falta:** a cliente cadastrar o Peru (e o que vai exercitar o editor de datas pela
     primeira vez). **A gaveta com o editor novo ainda nao foi vista com a sessao dela** -
     foi conferida a 1440 e a 390 num harness local, fora do painel logado.
+- **ORDEM CRONOLOGICA EM TODO LUGAR + VENCIDO SE OCULTA SOZINHO (05/11/2026).**
+  Pedido do cliente: "em todo site, todos roteiros devem seguir a ordem cronologica
+  de suas datas, e o roteiro do peru fica por ultimo pois nao tem data definida,
+  puxa a data do campo Periodo (texto)" e "se venceu ja entra como oculto
+  automaticamente, considerar dai o ultimo dia da viagem se possivel".
+  - **O estado anterior, medido:** so DOIS lugares ordenavam por data (a lista do
+    painel "Sobre" e o robo). A home, `/roteiros`, "Outros roteiros", a Nossa
+    Historia e o `/link` saiam na `ordem` manual do painel, que estava com 4 dos 7
+    roteiros em `ordem = 0`. E o carrossel da home **dizia** ordenar por data e nao
+    ordenava: o `tripTime` exigia ano de 4 digitos e todos os `periodo` reais tem 2
+    ("De 27/10/26 à 12/11/26"), entao a comparacao empatava e a ordenacao era um
+    **no-op silencioso**. Era a divida registrada no item anterior.
+  - **Agora a ordem e o filtro moram na UNICA leitura de lista de cada lado:**
+    `po_fetch_roteiros()` (servidor) e `poFetchRoteiros()` (navegador). Superficie
+    nova de roteiro nasce ordenada e sem viagem vencida sem ninguem lembrar de
+    chamar nada. `tripTime` e `ordenarPorData` foram **removidos** do `main.js`.
+  - **UMA funcao de data para o site e para o robo.** Havia duas, e elas
+    **divergiam**: `po_data_saida` (dentro do `index.php`) lia `data_label` antes de
+    `periodo`, e `wa_roteiro_data_ini` lia `periodo` antes. Ordem de campo diferente
+    produz ordem de lista diferente na home e na conversa do robo. Agora e
+    `po_data_saida` em `lib/po-datas.php`, com **`periodo` primeiro** (o que o
+    cliente pediu, e o que a medicao dos 7 roteiros confirma: os 7 tem data ali, e
+    so 1 tem data em `descricao_curta`, onde aquilo e texto de venda).
+    `wa_roteiro_data_ini` passou a **delegar**.
+  - **O QUE VENCE E O ULTIMO DIA, nao o primeiro**, e isto foi medido no caso real:
+    em 05/11/2026 a Turquia tinha partido em **27/10** e terminava em **12/11** - uma
+    viagem **EM CURSO**. Pelo primeiro dia ela sumiria do site no meio do passeio do
+    grupo. `po_data_fim()` le a ULTIMA data do MESMO campo que deu a partida (nao a
+    ultima data que existir no roteiro: misturar o periodo com uma data perdida na
+    descricao de venda daria um fim que nao e desta viagem).
+  - **Oculta por DERIVACAO, nunca escrevendo `ativo=false`.** Tres razoes: a cliente
+    continua vendo o roteiro no painel para reativar na proxima edicao; nao ha cron
+    para rodar; e nao existe como o site e o painel discordarem sobre o que esta
+    publicado.
+  - **O SITEMAP CONTINUA COM OS VENCIDOS**, e esta e a excecao que protege o SEO.
+    `po_fetch_roteiros_todos()` tem um chamador so, o `sitemap.php`. O slug e a
+    identidade estavel da viagem e a URL carrega a autoridade que a edicao seguinte
+    herda; tirar do sitemap no dia seguinte a viagem, somado a nenhum link interno
+    apontar para ela, orfanaria a URL e jogaria fora o que os 301 de 20/07
+    existiram para recuperar. **A pagina do roteiro segue respondendo 200** porque
+    `po_fetch_roteiro($slug)` e uma consulta separada da lista.
+  - **O Peru fica por ultimo porque esta sem data**, nao porque e semanal. Ele JA
+    ESTA cadastrado (`peru-fascinante`, status Saidas semanais) com `periodo` vazio
+    e **zero** grupos em `datas_texto`. No dia em que a cliente cadastrar as datas
+    do mes, ele passa a ordenar pela proxima saida e sobe na lista - que e
+    exatamente o que o trabalho de 05/11 existe para produzir. Semanal **nunca
+    vence**: ele sai toda semana, nao termina.
+  - **Empate desfeito pela posicao de ORIGEM** (a `ordem` manual do painel). Por
+    isso o `order=ordem.asc` continua na consulta: ele e o critério de empate, e sem
+    ele a ordem dependeria do que o PostgREST devolvesse. Ordem que varia entre duas
+    leituras troca o roteiro debaixo do visitante - e, no robo, troca o roteiro
+    entre o numero enviado e a resposta do cliente.
+  - **UM relogio, uma CHAMADA.** Os defaults de `$hoje` passaram a chamar
+    `po_hoje()`, o unico ponto que le o relogio, e a trava de fonte conta **uma**
+    ocorrencia de `gmdate` (era duas). UTC nos dois lados: com hora local, entre 21h
+    e meia-noite em Sao Paulo a ORDEM da lista e o ROTULO impresso ao lado dela
+    discordariam.
+  - **Teste cruzado:** `tests/test-ordem-cronologica.mjs` roda 17 casos de uma
+    **tabela unica** no PHP (executado pela ponte, nao lido por regex) e no
+    `roteiros-shared.js`, e exige que concordem caso a caso - mais a ordem dos 7
+    roteiros reais em tres datas diferentes, incluindo 13/11, quando a Turquia sai
+    de cena sozinha. `tests/test-po-ordem-cronologica.php` cobre o lado PHP.
+  - **Duas travas alheias trocaram NOME por COMPORTAMENTO**, porque nome de funcao
+    num fonte envelhece: `test-home-index.php` procurava a string
+    `po_por_saida(po_fetch_roteiros())` no `index.php` (a ordenacao desceu um nivel
+    e ela ficou vermelha sem haver defeito), e agora injeta lista fora de ordem e
+    confere o resultado; `test-wa-roteiro-ordem.php` exigia exatamente 2 leituras do
+    catalogo em `wa-fluxo.php` e agora exige que **toda** leitura passe por
+    `wa_fluxo_roteiros_venda`.
+  - **DEPLOY (05/11/2026): FEITO E CONFERIDO NO AR.** 16 arquivos por FTP, nesta
+    ordem: `lib/po-datas.php` PRIMEIRO (os outros tres `lib/` chamam funcoes que so
+    existem na versao nova, e a janela invertida da fatal error) · `wa-destinos` ·
+    `wa-roteiro` · `po-data` · `wa-fluxo` · `wa-motor` · `wa-sim` · **os assets antes
+    do HTML** (`?v=` novo com arquivo velho carimba o conteudo velho na versao nova
+    por um mes) · `index.php`/`sitemap.php` · as 5 paginas HTML. Triagem e
+    conferencia por **hash** contra o servidor, antes e depois: 16/16 iguais.
+    Medido no ar: as 10 paginas 200, **zero** erro de PHP em qualquer uma,
+    `/roteiros` e o `llms.txt` na ordem Turquia, Chile, Vietna, Coreia, Grecia,
+    Escandinavia, **Peru por ultimo**, o **sitemap com os 7** (a excecao do SEO
+    funcionando), `main.js?v=12` e `roteiros-shared.js?v=9` servidos, `poPorSaida`
+    presente no JS publicado e `tripTime` ausente. O carrossel da home foi aberto no
+    navegador: 7 cards na mesma ordem, requisicao real ao projeto
+    `euzmbswywwhmicjlszqw` (nao mock), zero erro de console. O robo segue desligado
+    (webhook 403, cron 403, campanha 401, `fluxo.php` 401, `lib/` servindo 0 bytes).
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro
