@@ -6,6 +6,12 @@ import { join } from 'node:path';
    Todo lugar que mostra a data de um roteiro chama o helper, e nenhum
    escreve a conta na mao.
 
+   A LISTA tem de ser dos renderizadores VIVOS: a primeira versao dela
+   gastou uma vaga com window.poCard, que nao tem um unico chamador, e
+   deixou de fora o assets/js/link.js, que desenha os cards do /link - o
+   destino do link unico da bio do Instagram, a porta de maior trafego
+   desta cliente. Codigo morto pinado e cobertura de mentira.
+
    TRAVA NO PONTO DE CHAMADA, nao so na funcao pura. E a regra que este
    projeto aprendeu duas vezes por defeito real: a funcao pura travada e o
    chamador livre deixou o filtro wa_id da conversa sumir num commit que
@@ -33,7 +39,7 @@ const PONTOS = [
   ['roteiros.php',                 'po_roteiros_html',    'po_quando('],
   ['assets/js/historia.js',        null,                  'poQuando('],
   ['assets/js/main.js',            null,                  'poQuando('],
-  ['assets/js/roteiros-shared.js', 'poCard',              'poQuando('],
+  ['assets/js/link.js',             'cardHtml',            'poQuando('],
   ['painel/app.js',                null,                  'poQuando('],
 ];
 
@@ -70,7 +76,7 @@ for (const arq of ['roteiros.php', 'assets/js/historia.js', 'assets/js/main.js',
 /* Nos tres arquivos que TAMBEM tem derivacao de data legitima, a conferencia
    e por funcao, nao por arquivo. */
 for (const [arq, fn] of [['index.php', 'po_home_viagens_html'], ['roteiro.php', 'po_hero_chips'],
-                         ['roteiro.php', 'po_outros_roteiros'], ['assets/js/roteiros-shared.js', 'poCard'],
+                         ['roteiro.php', 'po_outros_roteiros'], ['assets/js/link.js', 'cardHtml'],
                          ['llms.php', 'po_llms_txt']]) {
   assert.ok(!INLINE.test(corpo(le(arq), fn)), arq + ' / ' + fn + ' nao escreve mais a conta na mao');
 }

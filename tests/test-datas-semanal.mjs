@@ -78,6 +78,10 @@ const CASOS = [
   ['data_label ganha de periodo', { status_viagem: null, data_label: 'outubro de 2039', periodo: 'De 1 a 2' }, '2039-11-01'],
   ['data_label string vazia cai em periodo', { status_viagem: null, data_label: '', periodo: 'De 1 a 2' }, '2039-11-01'],
   ['roteiro sem nada', {}, '2039-11-01'],
+  ['objeto de chave numerica e lista para o PHP', sem({ 0: { titulo: 'D', datas: ['02/12/39'] } }, { periodo: 'P' }), '2039-01-01'],
+  ['chave numerica furada nao e lista', sem({ 0: { titulo: 'D', datas: ['02/12/39'] }, 2: { titulo: 'J', datas: ['07/01/40'] } }, { periodo: 'P' }), '2039-01-01'],
+  ['NBSP antes da data', sem([{ titulo: 'D', datas: [' 02/12/39'] }], { periodo: 'P' }), '2039-01-01'],
+  ['NBSP depois da data', sem([{ titulo: 'D', datas: ['02/12/39 '] }], { periodo: 'P' }), '2039-01-01'],
 ];
 
 /* ---------- lado PHP: EXECUTADO, nao lido ---------- */

@@ -100,7 +100,7 @@ if (!defined('PO_TEST')) {
         'description' => 'Excursões em grupo com coordenador brasileiro, datas fixas e saída de Florianópolis. A Pereira Oliveira organiza viagens desde 1967.',
         'canonical'   => po_url('/roteiros'),
         'og_image'    => po_url('/assets/images/roteiro-grecia.jpg'),
-        'css'         => ['/assets/css/roteiro.css?v=12', '/assets/css/roteiros.css?v=3', '/assets/css/status-tag.css?v=3', '/assets/css/cadastur.css?v=2'],
+        'css'         => ['/assets/css/roteiro.css?v=12', '/assets/css/roteiros.css?v=3', '/assets/css/status-tag.css?v=4', '/assets/css/cadastur.css?v=2'],
         'jsonld'      => po_roteiros_jsonld($lista),
     ]);
     echo po_header();

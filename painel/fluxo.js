@@ -880,7 +880,7 @@ function poFluxoGaveta(card) {
     '<button type="button" class="fl-gaveta__x" data-acao="fechar" aria-label="Fechar">×</button></div>' +
     '<div class="fl-gaveta__corpo">';
   h += campoTexto('texto', def.tipo === 'pdf' ? 'Legenda do PDF' : 'Mensagem', c.texto, limite, 7);
-  h += '<p class="fl-dica">Use ' + poFluxoVarFrase(function (v) { return '{' + v.nome + '}'; }) + ' onde quiser que apareçam ' + poFluxoVarFrase(function (v) { return v.art + ' ' + v.nome; }) + '.</p>';
+  h += '<p class="fl-dica">Use ' + poFluxoVarFrase(function (v) { return '{' + v.nome + '}'; }) + ' onde quiser que apareçam ' + poFluxoVarFrase(function (v) { return v.art + ' ' + v.nome; }) + '. {datas} só tem conteúdo em roteiro com status Saídas semanais.</p>';
   if (opcoes.length) {
     h += '<fieldset class="fl-opcoes"><legend>' + (def.tipo === 'botoes' ? 'Botões (no máximo ' + max + ')' : 'Linhas da lista') + '</legend>';
     if (max !== null) h += '<div data-contagem>' + poFluxoContagem(opcoes.length, max) + '</div>';

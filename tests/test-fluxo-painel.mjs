@@ -2038,11 +2038,19 @@ assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', op
   const juntar = l => (l.length > 1 ? l.slice(0, -1).join(', ') + ' e ' + l[l.length - 1] : l.join(''));
   assert.ok(contador.includes(juntar(vars.map(v => v.art + ' ' + v.sup + ' ' + v.nome))), 'o contador concorda com cada variavel: ' + contador);
   assert.ok(dica.includes(juntar(vars.map(v => v.art + ' ' + v.nome)) + '.'), 'e a dica tambem: ' + dica);
+  /* {datas} e vazia em 6 dos 7 roteiros do catalogo (so roteiro semanal
+     tem datas do mes). Sem este aviso, quem escreve o card manda
+     "As proximas saidas sao:" e mais nada ao cliente. */
+  assert.ok(/\{datas\}[^<]*Sa[ií]das semanais/.test(dica), 'a dica avisa que {datas} so vale para o semanal: ' + dica);
   vars.forEach(v => {
     assert.ok(dica.includes('{' + v.nome + '}'), 'a dica cita {' + v.nome + '}');
     assert.ok(contador.includes(v.nome), 'o contador cita ' + v.nome);
   });
-  assert.deepEqual([...dica.matchAll(/\{(\w+)\}/g)].map(x => x[1]), vars.map(v => v.nome), 'a dica cita so as variaveis vivas, na ordem');
+  /* Sem repeticao: a dica pode citar a mesma variavel duas vezes (uma na
+     lista, outra para explicar quando ela vale). O que a guarda existe
+     para impedir e a dica citar variavel que NAO existe mais. */
+  assert.deepEqual([...new Set([...dica.matchAll(/\{(\w+)\}/g)].map(x => x[1]))], vars.map(v => v.nome),
+    'a dica cita so as variaveis vivas, na ordem');
   assert.ok(!/\bnome\b/.test(contador + dica) || vars.some(v => v.nome === 'nome'), 'nenhuma das duas fala de uma variavel que nao existe mais (nome)');
 }
 

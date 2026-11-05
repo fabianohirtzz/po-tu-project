@@ -44,7 +44,10 @@
 
   function cardHtml(r) {
     var href = comUtm(window.poRoteiroHref(r.slug), r.slug);
-    var meta = [r.badge, r.periodo].filter(Boolean).map(esc).join(' · ');
+    // poQuando, nao r.periodo cru: um roteiro de saidas semanais nao tem
+    // periodo, e o card saia so com o badge, sem data nenhuma - no /link,
+    // que e o destino do link unico da bio do Instagram.
+    var meta = [r.badge, window.poQuando(r)].filter(Boolean).map(esc).join(' · ');
     return '<li class="lk-card">' +
       '<a class="lk-card__img" href="' + esc(href) + '" tabindex="-1" aria-hidden="true">' +
         (window.poStatusTag ? window.poStatusTag(r) : '') +

@@ -143,4 +143,35 @@ foreach ([120, 150, 180, 211, 247, 300, 333] as $teto) {
 ok(strpos($longo, 'Datas de Dezembro') === 0, 'comeca pelo mes mais proximo');
 ok(po_datas_proximas($sem($doisMeses), '2039-01-01', 300) === po_datas_proximas($sem($doisMeses), '2039-01-01', 4096), 'texto que cabe nao e tocado');
 
+/* ---------- po_datas_iso sozinha, e o relogio ---------- */
+/* po_datas_iso e publica e chamada direto (por este teste e pelo
+   po_datas_proximas). A defesa dela contra espaco Unicode nao pode depender
+   de quem chama ter aparado antes: a rodada de mutacao mostrou que, sem esta
+   assercao, tirar o apara de dentro dela nao quebrava nada.
+
+   O caractere e montado com mb_chr, nao com escape: escrito como "\xC2\xA0"
+   ele atravessa heredoc e script de edicao e chega aqui como byte cru, e o
+   teste passa a medir o editor em vez do codigo. */
+$nbsp = mb_chr(0x00A0, 'UTF-8');     // espaco nao-quebravel
+$fino = mb_chr(0x2009, 'UTF-8');     // espaco fino
+ok(po_datas_iso($nbsp . '02/12/39') === '2039-12-02', 'NBSP antes, direto na po_datas_iso');
+ok(po_datas_iso('02/12/39' . $nbsp) === '2039-12-02', 'NBSP depois');
+ok(po_datas_iso($fino . '02/12/39') === '2039-12-02', 'espaco fino tambem');
+ok(po_datas_iso(' 02/12/39 ') === '2039-12-02', 'espaco comum segue valendo');
+ok(po_datas_iso('02 /12/39') === null, 'espaco NO MEIO continua invalidando');
+ok(po_datas_apara($nbsp . 'x' . $nbsp) === 'x', 'po_datas_apara tira o NBSP das duas pontas');
+ok(po_datas_apara('a' . $nbsp . 'b') === 'a' . $nbsp . 'b', 'e nao mexe no meio');
+
+/* UM RELOGIO SO, e ele e UTC. Trava de fonte porque o padrao de $hoje nao e
+   alcancavel por teste deterministico: todo teste passa $hoje explicito (que
+   e a pratica certa), entao trocar gmdate por date nao quebrava nada.
+   O custo de dois relogios: wa_fluxo_ordena_roteiros ja usa gmdate e os
+   gemeos em JS usam toISOString, tambem UTC. Com date() aqui, entre 21h e
+   meia-noite em Sao Paulo a ORDEM da lista do robo e o ROTULO impresso ao
+   lado dela discordam, e o cliente recebe "Proxima saida: hoje" num roteiro
+   que a ordenacao ja empurrou para depois do proximo. */
+$fonte = file_get_contents(__DIR__ . '/../lib/po-datas.php');
+ok(substr_count($fonte, "gmdate('Y-m-d')") === 2, 'os dois padroes de $hoje usam gmdate');
+ok(substr_count(str_replace("gmdate('Y-m-d')", '', $fonte), "date('Y-m-d')") === 0, 'nenhuma chamada a date() local sobrou');
+
 echo "OK test-po-datas\n";

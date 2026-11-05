@@ -24,7 +24,21 @@
     if (!roteiro || typeof roteiro !== 'object') return [];
     var v = roteiro.datas_texto;
     if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { return []; } }
-    if (!Array.isArray(v) || !v.length) return [];
+    /* A regra do PHP, nao a do JS: json_decode(..., true) transforma
+       {"0":...} em [0 => ...], entao do lado do servidor um objeto de chave
+       numerica E uma lista, e nao ha como distingui-los depois da decodagem.
+       Array.isArray sozinho rejeitava o que o PHP aceita, e as duas pontas
+       discordavam sobre o MESMO registro do banco - com o site anunciando a
+       data e o painel abrindo o bloco vazio, de modo que o Salvar seguinte
+       apagava o que o site ainda mostrava. Chave 0..n-1 passa; chave textual
+       ou numeracao furada, nao. */
+    if (!v || typeof v !== 'object') return [];
+    if (!Array.isArray(v)) {
+      var ks = Object.keys(v);
+      for (var k = 0; k < ks.length; k++) if (ks[k] !== String(k)) return [];
+      v = ks.map(function (x) { return v[x]; });
+    }
+    if (!v.length) return [];
     var out = [];
     for (var i = 0; i < v.length; i++) {
       var g = v[i];
@@ -193,7 +207,7 @@
         <button type="button" class="rd-del-mes" data-i="${i}" title="Excluir este mês" aria-label="Excluir este mês">✕</button>
       </div>
       ${(g.datas.length?g.datas:['']).map((d,j)=>`<div class="rd-linha">
-        <input class="rd-data" value="${rotEsc(d||'')}" placeholder="02/12/26" inputmode="numeric" aria-label="Data">
+        <input class="rd-data" value="${rotEsc(d||'')}" placeholder="02/12/26" aria-label="Data">
         <button type="button" class="rd-del-data" data-i="${i}" data-j="${j}" title="Excluir esta data" aria-label="Excluir esta data">✕</button>
       </div>`).join('')}
       <button type="button" class="rep-add rd-add-data" data-i="${i}">+ Adicionar data</button>

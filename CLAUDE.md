@@ -1548,9 +1548,14 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
   - **A ARMADILHA QUE ISTO EXISTE PARA IMPEDIR:** roteiro sem data vai para o **FIM** de
     toda lista ordenada, que e onde ficam as viagens **que ja partiram**. Um semanal nao
     tem data em `periodo`, entao o Peru seria anunciado depois de todos, saindo na semana
-    que vem. Vale em TRES lugares, e os tres foram corrigidos: `wa_roteiro_data_ini` (a
-    lista do robo), `po_data_saida` (as "Proximas viagens" da home) e `po_ano` (o ano do
-    `<title>`). Os dois ultimos o plano nao tinha contado.
+    que vem. Vale em QUATRO lugares. Tres foram corrigidos: `wa_roteiro_data_ini`
+    (a lista do robo), `po_data_saida` (as "Proximas viagens" da home) e `po_ano` (o ano
+    do `<title>`) — os dois ultimos o plano nao tinha contado. **O quarto NAO foi
+    tratado:** `tripTime` (`assets/js/main.js`), que ordena o carrossel da home, exige ano
+    de **4 digitos**, e o editor novo ensina 2 (`02/12/26`). Hoje e inocuo porque todos os
+    `periodo` reais tambem tem 2 digitos e empatam, caindo na `ordem` manual; no dia em
+    que um roteiro tiver ano de 4 digitos ele sobe sozinho e o semanal afunda. Divida
+    registrada, fora do escopo desta branch.
   - **`lib/po-datas.php` e ARQUIVO FOLHA, PURO, SEM NENHUM `require`.** E o que permite a
     camada de view e o motor do robo requererem os dois sem ciclo e sem furar a seta
     `db/send/po-data <- fluxo <- sim/motor <- timeout`.
@@ -1579,7 +1584,16 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     da 2,78:1 e o `status-tag.css` declara "todos acima de 4:1".
   - **O robo NAO exclui semanal do catalogo de venda**, e ha teste travando isso: um roteiro
     que sai toda semana sumir da lista e o pior defeito possivel deste status.
-  - **Ordem de deploy:** `lib/po-datas.php` **antes** de `lib/po-view.php`, `lib/po-data.php`
+  - **A MIGRATION VEM ANTES DO PRIMEIRO ARQUIVO, e nao e um item paralelo.** O
+    `collectRoteiro` do painel manda `datas_texto` em **todo** salvamento, de todo
+    roteiro, em qualquer status. Com o `painel/app.js` novo no ar e a coluna ainda
+    inexistente, o PostgREST devolve `PGRST204 Could not find the 'datas_texto'
+    column` e a **aba Roteiros inteira fica inutilizavel** — nao da para editar preco,
+    capa nem video de roteiro nenhum — ate alguem rodar o SQL. Salvar com
+    `status_viagem='semanal'` antes da troca do check devolve 23514 pelo mesmo
+    caminho. Os dois caem no `else` generico do `rotSaveErro` e aparecem como erro
+    cru para a cliente.
+  - **Ordem de deploy** (depois da migration): `lib/po-datas.php` **antes** de `lib/po-view.php`, `lib/po-data.php`
     e `lib/wa-roteiro.php`, que passam a requere-lo; `painel/datas.js` antes do
     `painel/app.js`; o `painel/index.html` **por ultimo**. Cache-buster: `painel.css?v=17`,
     `app.js?v=24`, `datas.js?v=3`, `fluxo.js?v=21`, `roteiros-shared.js?v=8`,

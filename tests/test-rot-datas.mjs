@@ -160,6 +160,10 @@ assert.ok(html.includes('class="rd-grupo"'), 'desenha o grupo');
 assert.equal((html.match(/class="rd-data"/g) || []).length, 2, 'um campo por data');
 assert.equal((html.match(/class="rd-del-data"/g) || []).length, 2, 'um botao de excluir por data');
 assert.ok(/class="rd-del-mes"/.test(html), 'botao de excluir o mes');
+/* SEM inputmode="numeric": no iPhone esse e o teclado de digitos PUROS,
+   sem barra e sem tecla para voltar ao ABC - e o formato exigido aqui e
+   02/12/26. A cliente usa o painel no celular. */
+assert.ok(!/inputmode/.test(html), 'o campo de data nao prende o teclado em digitos');
 /* Classe da CASA (rep-add), nao uma inventada: na primeira versao eu usei
    um `btn-sec` que nao existe no painel.css, e os dois botoes sairam sem
    estilo nenhum - so apareceu abrindo a tela. */

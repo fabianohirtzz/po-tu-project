@@ -1,0 +1,63 @@
+{
+  "_leia": "Trava de cache-buster do SITE PUBLICO (irma de painel/assets-lock.json). O arquivo so e rebaixado no navegador quando a URL muda, e o deploy e FTP manual: alterar um destes sem subir o ?v= em TODAS as paginas que o pedem faz o visitante seguir com a versao velha por ate 30 dias. Ao alterar: suba o ?v= em todas as paginas e rode `php tests/run.php` - o teste imprime o sha novo.",
+  "cadastur.css": {
+    "v": 2,
+    "sha": "ad7dbdbf790405ef"
+  },
+  "faq.css": {
+    "v": 3,
+    "sha": "fd1ee15709825b7c"
+  },
+  "historia.css": {
+    "v": 10,
+    "sha": "ad6ca389456479a1"
+  },
+  "link.css": {
+    "v": 4,
+    "sha": "531e45d65baea943"
+  },
+  "roteiro.css": {
+    "v": 12,
+    "sha": "c78d23f052c76715"
+  },
+  "roteiros.css": {
+    "v": 3,
+    "sha": "55debc091d8b9574"
+  },
+  "status-tag.css": {
+    "v": 4,
+    "sha": "d217afa02fcfc2da"
+  },
+  "style.css": {
+    "v": 23,
+    "sha": "ff9b65e74833234d"
+  },
+  "historia.js": {
+    "v": 5,
+    "sha": "891585188a94de64"
+  },
+  "insta-feed.js": {
+    "v": 1,
+    "sha": "6f60516bd48f7b28"
+  },
+  "lead-form.js": {
+    "v": 3,
+    "sha": "8317e84e2c2fdbd4"
+  },
+  "link.js": {
+    "v": 3,
+    "sha": "426c0740f77436c9"
+  },
+  "main.js": {
+    "v": 11,
+    "sha": "25a28cdf62dbc156"
+  },
+  "roteiro.js": {
+    "v": 5,
+    "sha": "999be3231e719a90"
+  },
+  "roteiros-shared.js": {
+    "v": 8,
+    "sha": "f7857d6a9280833e"
+  }
+}

@@ -441,7 +441,7 @@ if (!defined('PO_TEST')) {
         'description' => mb_substr($desc, 0, 155),
         'canonical'   => po_url(po_roteiro_href($r)),
         'og_image'    => $r['capa_url'] ?? po_url('/assets/images/roteiro-grecia.jpg'),
-        'css'         => ['/assets/css/roteiro.css?v=12', '/assets/css/status-tag.css?v=3', '/assets/css/cadastur.css?v=2'],
+        'css'         => ['/assets/css/roteiro.css?v=12', '/assets/css/status-tag.css?v=4', '/assets/css/cadastur.css?v=2'],
         'jsonld'      => po_roteiro_jsonld($r),
     ]);
     echo po_header();
