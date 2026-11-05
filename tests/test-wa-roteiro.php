@@ -33,6 +33,36 @@ ok(wa_match_roteiros('',                    $cat) === [], 'vazio');
 $dois = wa_match_roteiros('quero saber da turquia e da india', $cat);
 ok(count($dois) === 2, 'dois destinos citados devolvem dois slugs');
 
+// --- SINONIMO VEM DO BANCO, nao de constante em codigo.
+// A coluna po_roteiros.palavras_chave substituiu WA_APELIDOS, que tinha UMA
+// entrada e exigia deploy por FTP para cada sinonimo novo.
+//
+// MEDIDO EM 05/11/2026, e corrige o que a spec afirmava: ela justificava a
+// coluna dizendo que ninguem que escrevesse "coreia", "japao" ou "dubai"
+// alcancaria o "Tesouros do Oriente", que nao nomeia pais no titulo. Esta
+// errado - wa_tokens_do_roteiro tokeniza SLUG + TITULO e o slug e
+// `coreia-do-sul-japao-dubai`, entao os tres ja casavam. O que NAO casava e
+// nome de cidade, e e para isso que a coluna serve.
+$catPC = [
+    ['slug' => 'coreia-do-sul-japao-dubai', 'titulo' => 'Tesouros do Oriente', 'palavras_chave' => 'seul, toquio'],
+    ['slug' => 'turquia',                   'titulo' => 'Turquia com Antalia'],
+];
+ok(wa_match_roteiros('quero seul',   $catPC) === ['coreia-do-sul-japao-dubai'], 'nome de cidade vindo de palavras_chave');
+ok(wa_match_roteiros('quero toquio', $catPC) === ['coreia-do-sul-japao-dubai'], 'segunda palavra da mesma coluna');
+ok(wa_match_roteiros('quero coreia', $catPC) === ['coreia-do-sul-japao-dubai'], 'e o slug segue casando como antes');
+ok(wa_match_roteiros('quero seul',   $cat)   === [], 'roteiro SEM palavras_chave nao estoura nem casa');
+ok(!defined('WA_APELIDOS'), 'WA_APELIDOS saiu do codigo: sinonimo novo nao exige mais deploy por FTP');
+
+// --- wa_roteiro_unico: a regra e do CHAMADOR, nao da funcao de casamento.
+// wa_match_roteiros devolve todos os que casaram (ha teste acima provando que
+// dois destinos devolvem dois). Quem responde ao cliente precisa de certeza:
+// com dois, o robo nao sabe, e perguntar e melhor que mandar o PDF errado.
+ok(wa_roteiro_unico('quero a turquia',   $cat) === 'turquia', 'um roteiro devolve o slug');
+ok(wa_roteiro_unico('turquia e india',   $cat) === null, 'dois roteiros devolve null');
+ok(wa_roteiro_unico('bom dia',           $cat) === null, 'nenhum roteiro devolve null');
+ok(wa_roteiro_unico('',                  $cat) === null, 'frase vazia');
+ok(wa_roteiro_unico('quero a turquia',   [])   === null, 'catalogo vazio');
+
 // --- palavra curta nao pode casar por pedaco: "ar" nao e "Antalia"
 ok(wa_match_roteiros('ar', $cat) === [], 'fragmento curto nao casa');
 

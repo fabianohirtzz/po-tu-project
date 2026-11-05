@@ -36,9 +36,11 @@ require_once __DIR__ . '/po-datas.php';
    (revisao encontrou 'japao' apontando pra 'floracao-das-cerejeiras', que
    nem existe mais; hoje 'japao' ja casa direto com o slug
    'coreia-do-sul-japao-dubai', que e o roteiro de verdade). */
-const WA_APELIDOS = [
-    'noruega' => 'escandinavia',
-];
+/* WA_APELIDOS SAIU DAQUI em 05/11/2026. Era uma constante com UMA entrada
+   (`noruega` -> `escandinavia`), e cada sinonimo novo exigia deploy por FTP.
+   Agora os sinonimos vivem em `po_roteiros.palavras_chave`, editaveis no
+   painel, e a entrada antiga foi semeada pela migration
+   2026-11-05-destinos-espera.sql. Nenhum teste cobria a constante. */
 
 /* Minusculas, sem acento. O cliente digita "ESCANDINÁVIA" e "escandinavia"
    e as duas formas precisam casar com o mesmo roteiro.
@@ -87,11 +89,21 @@ function wa_eh_vazia($p) {
     return false;
 }
 
-/* Separa slug + titulo em tokens, no mesmo criterio de normalizacao do
-   texto do cliente - e o que permite comparar token contra token em vez
-   de procurar um pedaco dentro do outro. */
+/* Separa slug + titulo + palavras_chave em tokens, no mesmo criterio de
+   normalizacao do texto do cliente - e o que permite comparar token contra
+   token em vez de procurar um pedaco dentro do outro.
+
+   `palavras_chave` entra CRUA e e tokenizada, nao casada como frase (que e o
+   que wa_match_destinos faz com `po_destinos.palavras`). A assimetria e
+   deliberada e tem duas razoes: aqui os tokens vem majoritariamente de slug e
+   titulo, que ja sao casados token a token pelos 20 testes deste arquivo, e
+   trocar isso mudaria comportamento que eles travam; e usar o parser de
+   frases exigiria requerer wa-destinos.php, que requer ESTE arquivo - ciclo.
+   O risco fica limitado porque a coluna e semeada com palavra distintiva: a
+   unica composta hoje e `taj mahal`, e `taj` tem 3 caracteres, entao nunca
+   chega como palavra do cliente (o filtro de 4 a descarta antes). */
 function wa_tokens_do_roteiro($r) {
-    $alvo = wa_normaliza(($r['slug'] ?? '') . ' ' . ($r['titulo'] ?? ''));
+    $alvo = wa_normaliza(($r['slug'] ?? '') . ' ' . ($r['titulo'] ?? '') . ' ' . ($r['palavras_chave'] ?? ''));
     return array_values(array_filter(explode(' ', $alvo), function ($x) { return $x !== ''; }));
 }
 
@@ -112,15 +124,23 @@ function wa_match_roteiros($texto, $roteiros) {
             foreach ($tokens as $tok) {
                 if (wa_mesma_palavra($p, $tok)) { $casou = true; break; }
             }
-            if (!$casou && isset(WA_APELIDOS[$p])) {
-                foreach ($tokens as $tok) {
-                    if (wa_mesma_palavra(WA_APELIDOS[$p], $tok)) { $casou = true; break; }
-                }
-            }
             if ($casou) { $achados[] = $r['slug']; break; }
         }
     }
     return array_values(array_unique($achados));
+}
+
+/* O slug quando EXATAMENTE um roteiro casa, null quando zero ou dois ou
+   mais.
+
+   A regra e do CHAMADOR, nao do casamento: wa_match_roteiros devolve todos os
+   que casaram, de proposito, e ha teste acima provando que uma frase com dois
+   destinos devolve dois. Quem vai RESPONDER ao cliente precisa de certeza -
+   com dois, o robo nao sabe qual PDF mandar, e perguntar e melhor que errar.
+   E o atalho de roteiro usa esta funcao, nao a outra. */
+function wa_roteiro_unico($texto, $roteiros) {
+    $a = wa_match_roteiros($texto, $roteiros);
+    return count($a) === 1 ? $a[0] : null;
 }
 
 /* Data de partida do roteiro, em 'YYYY-MM-DD', ou null. Pura.
