@@ -158,8 +158,18 @@ ok(preg_match('/\$roteiros = function \(\) use \(&\$catalogo\) \{(?:(?!\n    \})
 /* Toda lista que vai para o cliente passa por wa_fluxo_roteiros_venda ou pela
    closure. Um wa_fl_call de roteiros solto montando lista seria uma terceira
    ordem possivel. */
+/* A trava era um NUMERO (exatamente 2 leituras), e numero envelhece: em
+   05/11/2026 o atalho de roteiro acrescentou uma terceira leitura legitima,
+   envolvida em wa_fluxo_roteiros_venda como as outras, e a trava ficou
+   vermelha sem haver defeito. Agora ela encarna a REGRA em vez da contagem:
+   toda leitura do catalogo esta envolvida em wa_fluxo_roteiros_venda, fora a
+   da closure, que ordena por conta propria (assercao acima). Leitura solta
+   montando lista seria uma terceira ordem possivel. */
 $n_call = preg_match_all('/wa_fl_call\(\x27roteiros\x27\)/', $src, $m2);
-ok($n_call === 2, 'wa_fl_call de roteiros aparece 2 vezes em wa-fluxo.php (uma em wa_fluxo_proximo, dentro de wa_fluxo_roteiros_venda, e uma na closure), achei ' . $n_call);
+$n_env  = preg_match_all('/wa_fluxo_roteiros_venda\(wa_fl_call\(\x27roteiros\x27\)\)/', $src, $m3);
+ok($n_call >= 2, 'ha ao menos as duas leituras conhecidas do catalogo, achei ' . $n_call);
+ok($n_call === $n_env + 1,
+   'toda leitura do catalogo em wa-fluxo.php passa por wa_fluxo_roteiros_venda, fora a da closure: leituras=' . $n_call . ' envolvidas=' . $n_env);
 ok(preg_match('/wa_fluxo_roteiros_venda\(wa_fl_call\(\x27roteiros\x27\)\)/', $src) === 1,
    'o wa_fl_call de roteiros de wa_fluxo_proximo passa por wa_fluxo_roteiros_venda');
 

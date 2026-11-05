@@ -280,7 +280,7 @@ function wa_sim_passo($grafos, $fluxo_id, $card_id, $resposta, $ctx, $clicou = f
         /* Card que espera: a resposta decide para onde ir. Digitado so conta
            no `roteiros`. */
         $vale = ($clicou || ($grafo['cards'][$card]['tipo'] ?? '') === 'roteiros') ? (string) $resposta : '';
-        $p = wa_fluxo_proximo($grafo, $card, $vale, $ctx);
+        $p = wa_fluxo_proximo($grafo, $card, $vale, $ctx, (string) $resposta);
         $ctx = $p['ctx'];
         if ($p['card'] === null) {
             $avisos[] = 'Este card não tem saída para essa resposta. No ar, a conversa iria para você.';
@@ -314,7 +314,7 @@ function wa_sim_passo($grafos, $fluxo_id, $card_id, $resposta, $ctx, $clicou = f
             return $fim('aguardando', true, $card, $r['erro']);
         }
 
-        $p = wa_fluxo_proximo($grafo, $card, '', $ctx);
+        $p = wa_fluxo_proximo($grafo, $card, '', $ctx, '');
 
         if ($p['motivo'] === 'proximo') {
             $card = (string) $p['card'];

@@ -24,6 +24,7 @@ require_once __DIR__ . '/po-data.php';
 require_once __DIR__ . '/wa-db.php';
 require_once __DIR__ . '/wa-send.php';
 require_once __DIR__ . '/wa-roteiro.php';   // wa_normaliza / wa_mesma_palavra, para a porta `palavra`
+require_once __DIR__ . '/wa-destinos.php';  // wa_destino_unico, para o atalho `destino`
 
 /* ---------- dependencias injetaveis ----------
    Usa o MESMO repositorio de dependencias do motor ($GLOBALS['WA_DEPS']).
@@ -41,6 +42,7 @@ function wa_fl_dep($nome) {
         'insert'      => 'wa_db_insert',
         'update'       => 'wa_db_update',
         'roteiros'     => 'po_fetch_roteiros',
+        'destinos'     => 'wa_destinos_ativos',
         'send_text'    => 'wa_send_text',
         'send_buttons' => 'wa_send_buttons',
         'send_list'    => 'wa_send_list',
@@ -222,6 +224,60 @@ function wa_atalhos_do_card($card) {
     return $out;
 }
 
+/* O atalho que a frase dispara neste card, ou null. Tenta na ORDEM em que a
+   cliente os colocou e o primeiro que casa vence.
+
+   Devolve ['card','tipo','saudacao','roteiro_slug','destino_nome']. Quem
+   grava no contexto e quem envia a saudacao e o chamador, nao esta funcao:
+   ela so responde "o que essa frase quer?".
+
+   TRES CUIDADOS, cada um por um motivo:
+
+   1. Texto vazio devolve null SEM tentar nada. E o que mantem compativel
+      todo chamador que ainda nao passa o texto cru, e o que impede o cron -
+      que roteia sem mensagem do cliente - de disparar um atalho sozinho.
+
+   2. Destino que nao existe no grafo e PULADO, nao vira rota. Quem reprova
+      isso e o validador (regra 17), antes de publicar; em execucao a
+      conversa nao pode parar num card fantasma com o cliente esperando.
+
+   3. `palavras` usa wa_fluxo_porta_casa, o MESMO casamento da porta por
+      palavra do fluxo. Ele compara sequencia de palavras INTEIRAS, entao
+      "natal" nao casa dentro de "natalidade" - a mesma classe de defeito do
+      PO dentro de "Poa". Reaproveitar em vez de escrever outro casamento e
+      o que impede a tela da porta e o atalho divergirem. */
+function wa_fluxo_atalho($grafo, $card, $texto_cru, $ctx) {
+    $texto_cru = trim((string) $texto_cru);
+    if ($texto_cru === '') return null;
+
+    foreach (wa_atalhos_do_card($card) as $a) {
+        $d = $a['destino'];
+        if (!is_string($d) || $d === '' || !isset($grafo['cards'][$d])) continue;
+
+        $achou = ['card' => $d, 'tipo' => $a['tipo'], 'saudacao' => $a['saudacao'],
+                  'roteiro_slug' => null, 'destino_nome' => null];
+
+        if ($a['tipo'] === 'palavras') {
+            if (!$a['palavras']) continue;
+            if (!wa_fluxo_porta_casa($texto_cru, implode(',', $a['palavras']))) continue;
+            return $achou;
+        }
+        if ($a['tipo'] === 'roteiro') {
+            $slug = wa_roteiro_unico($texto_cru, wa_fluxo_roteiros_venda(wa_fl_call('roteiros')));
+            if ($slug === null) continue;
+            $achou['roteiro_slug'] = $slug;
+            return $achou;
+        }
+        if ($a['tipo'] === 'destino') {
+            $nome = wa_destino_unico($texto_cru, (array) wa_fl_call('destinos'));
+            if ($nome === null) continue;
+            $achou['destino_nome'] = $nome;
+            return $achou;
+        }
+    }
+    return null;
+}
+
 /* ---------- roteamento puro ----------
    Dada a resposta do cliente, qual card vem agora. Nenhuma rede, nenhum
    banco, nenhum relogio: grafo, resposta e contexto entram, o proximo card
@@ -341,7 +397,7 @@ function wa_fluxo_casa_roteiro($resposta, $slugs_enviados, $venda) {
    proximo (card que nao espera) e terminal (humano/fim).
    `ir_para_fluxo` so se anuncia (card null): o destino esta em
    config.fluxo e quem carrega o outro grafo e o executor. */
-function wa_fluxo_proximo($grafo, $card_id, $resposta, $ctx) {
+function wa_fluxo_proximo($grafo, $card_id, $resposta, $ctx, $texto_cru = '') {
     $card = $grafo['cards'][$card_id] ?? null;
     if (!is_array($card) || !in_array($card['tipo'] ?? null, WA_CARD_TIPOS, true)) {
         return ['card' => null, 'ctx' => $ctx, 'motivo' => 'invalido'];
@@ -400,6 +456,27 @@ function wa_fluxo_proximo($grafo, $card_id, $resposta, $ctx) {
                 return ['card' => $o['destino'], 'ctx' => $certo, 'motivo' => 'opcao'];
             }
         }
+    }
+
+    /* ATALHO: depois de as opcoes falharem, ANTES do fallback.
+
+       A ordem e contrato. Opcao primeiro porque o clique carrega o id de uma
+       opcao e e escolha explicita; atalho depois porque e palpite sobre a
+       frase; fallback por ultimo porque e desistencia. Opcao e atalho nunca
+       disputam a mesma string: o `$resposta` que chega aqui ja veio vazio
+       quando o cliente DIGITOU num card de botoes, e a razao disso segue
+       valida - se "turquia" valesse como id de opcao, quem escreve em vez de
+       tocar na lista escolheria um roteiro sem querer. O texto cru viaja no
+       parametro separado exatamente para as duas coisas nao se misturarem.
+
+       Atalho que dispara NAO conta tentativa: foi rota certa, nao resposta
+       fora do esperado. Por isso ele parte de $certo, que zera o contador. */
+    $at = wa_fluxo_atalho($grafo, $card, $texto_cru, $ctx);
+    if ($at !== null) {
+        $novo = $certo;
+        if ($at['roteiro_slug'] !== null) $novo['roteiro_slug'] = $at['roteiro_slug'];
+        if ($at['destino_nome'] !== null) $novo['destino_nome'] = $at['destino_nome'];
+        return ['card' => $at['card'], 'ctx' => $novo, 'motivo' => 'atalho'];
     }
 
     $tentativas = (int) ($ctx['tentativas'] ?? 0);

@@ -567,7 +567,7 @@ function wa_processar($ev) {
         $digita   = ($grafo['cards'][$atual]['tipo'] ?? '') === 'roteiros';
         $clique   = in_array($ev['tipo_msg'] ?? '', ['list_reply', 'button_reply', 'button'], true);
         $resposta = ($clique || $digita) ? $texto : '';
-        $p = wa_fluxo_proximo($grafo, $atual, $resposta, $ctx);
+        $p = wa_fluxo_proximo($grafo, $atual, $resposta, $ctx, $texto);
         if ($p['card'] === null) {
             error_log('wa_processar: card ' . $atual . ' sem saida (' . $p['motivo'] . ') | ' . $wa_id);
             wa_entrega_humana($wa_id, 'O card em que a conversa estava não tem saída para essa resposta. Entregue para atendimento humano.');
@@ -723,7 +723,9 @@ function wa_fluxo_percorre($wa_id, $nome, $grafo, $versao_id, $card, $ctx, $esta
         }
 
         // Card que nao espera: segue para o proximo sem olhar resposta.
-        $p = wa_fluxo_proximo($grafo, $card, '', $ctx);
+        /* '' no texto cru de proposito: aqui o robo avanca um card que nao
+           espera resposta, entao nao ha frase do cliente a interpretar. */
+        $p = wa_fluxo_proximo($grafo, $card, '', $ctx, '');
 
         if ($p['motivo'] === 'proximo') {
             $card = $p['card'];

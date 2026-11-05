@@ -18,9 +18,14 @@
    wa-fluxo.php nem wa-motor.php.
 
    REAPROVEITA a normalizacao em vez de ter a propria: duas normalizacoes
-   divergem e os dois testes ficam verdes medindo coisas diferentes. */
+   divergem e os dois testes ficam verdes medindo coisas diferentes.
+
+   As funcoes de casamento sao PURAS. O unico leitor de banco deste arquivo e
+   wa_destinos_ativos(), no fim, separado de proposito: assim o teste das
+   regras de casamento roda sem banco nenhum. */
 
 require_once __DIR__ . '/wa-roteiro.php';
+require_once __DIR__ . '/wa-db.php';
 
 /* Parser unico de `po_destinos.palavras` e `po_roteiros.palavras_chave`, que
    tem a MESMA forma: texto separado por virgula.
@@ -100,4 +105,21 @@ function wa_match_destinos($texto, $destinos) {
 function wa_destino_unico($texto, $destinos) {
     $a = wa_match_destinos($texto, $destinos);
     return count($a) === 1 ? $a[0] : null;
+}
+
+/* ---------- o unico leitor de banco deste arquivo ----------
+   Os destinos ativos, na ordem da cliente.
+
+   Le com `wa_db_select_estrito`, que distingue ERRO de VAZIO. Com a leitura
+   comum, um Supabase fora do ar devolveria lista vazia e o atalho de destino
+   simplesmente nunca dispararia, em silencio - o robo cairia no menu e
+   ninguem saberia por que. Erro vira lista vazia TAMBEM, porque aqui nao ha
+   decisao destrutiva a tomar, mas vira com registro no log. */
+function wa_destinos_ativos() {
+    $r = wa_db_select_estrito('po_destinos', 'select=nome,palavras&ativo=is.true&order=ordem.asc');
+    if ($r === null) {
+        error_log('wa_destinos_ativos: leitura de po_destinos falhou; o atalho de destino nao vai disparar');
+        return [];
+    }
+    return is_array($r) ? $r : [];
 }
