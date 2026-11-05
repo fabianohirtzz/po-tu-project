@@ -1538,12 +1538,12 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     filtre por lead ou por etapa do funil. O que ja e verdade e que **o robo nao a
     envolve nos descartados** - ele se despede sozinho e so chama o humano no caminho de
     quem qualificou. Ela pode arquivar ou silenciar a conversa no app.
-- **STATUS "SAIDAS SEMANAIS" + DATAS DO MES (05/11/2026): FEITO E MERGEADO EM `main`
-  (fast-forward, 9 commits), NADA NO AR.** Branch `semanal-datas` (apagada); a suite foi
+- **STATUS "SAIDAS SEMANAIS" + DATAS DO MES (05/11/2026): FEITO, MERGEADO EM `main`
+  (fast-forward, 9 commits) e **NO AR** (deploy em 05/11).** Branch `semanal-datas` (apagada); a suite foi
   de 76 para **82** arquivos, e os 82 agora estao **todos no Git** (ver a correcao do
   item de 28/10 abaixo). Novos:
   `lib/po-datas.php`, `painel/datas.js`, migration `2026-11-04-status-semanal-datas.sql`
-  (**NAO rodada**), e 4 arquivos de teste. Spec:
+  (**rodada em 05/11**), e 4 arquivos de teste. Spec:
   `docs/superpowers/specs/2026-11-04-robo-entende-frase-e-roteiro-semanal-design.md`
   (Parte B) · plano: `docs/superpowers/plans/2026-11-04-status-semanal-e-datas.md`.
   Nasceu do roteiro do **Peru, que sai toda semana** e por isso nao tem periodo unico.
@@ -1635,7 +1635,49 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     rematerializados pelo `git checkout` (184/176/140 linhas CRLF) e a suite seguiu
     **verde, 82 arquivos**. Teste que le fonte normaliza na leitura; **esta trava le bytes
     crus de proposito**, porque o que ela mede e o byte.
-  - **Falta:** rodar a migration, fazer o deploy, e a cliente cadastrar o Peru.
+  - **DEPLOY (05/11/2026): FEITO E CONFERIDO NO AR.**
+    - **A migration foi a PRIMEIRA coisa**, antes de qualquer arquivo, porque o
+      `collectRoteiro` do painel manda `datas_texto` em todo salvamento: com o `app.js`
+      novo no ar e a coluna inexistente, o PostgREST devolve `PGRST204` e a aba Roteiros
+      inteira para de salvar. Aplicada pelo MCP em **um bloco** (o portao NAO recusou:
+      `drop constraint` e DDL, nao comando destrutivo de dado). Conferido depois:
+      o check aceita `semanal` **primeiro** na lista, `datas_texto` e
+      `jsonb NOT NULL default '[]'`, e as **8 linhas** ficaram com lista vazia, zero nulos.
+    - **24 arquivos por FTP**, e a lista nao foi a que eu lembrava: os 41 candidatos do
+      `git diff` foram comparados por **hash** contra o servidor antes de subir. Resultado
+      da triagem: 7 ja identicos, **10 diferindo so no fim de linha** (conteudo igual, nao
+      subiram), 22 com diferenca real e 2 ausentes (os arquivos novos).
+      `preview-pdf-roteiro.html` ficou **de fora de proposito**: e um mockup local
+      (`noindex`, "Preview · Secao...") que entrou no Git pelo commit de baseline e nunca
+      esteve no servidor.
+    - **Ordem, e ela tem um motivo cada:** `lib/po-datas.php` primeiro (os outros tres
+      `lib/` passam a requere-lo, e a janela invertida da fatal error) · depois
+      `po-view`/`po-data`/`wa-roteiro`/`wa-fluxo` · **os assets antes das paginas HTML**,
+      porque o `?v=` novo no HTML com o arquivo velho no servidor carimba o conteudo velho
+      na versao nova por um mes (o bug de 13/09) · os endpoints e as paginas ·
+      `painel/datas.js` antes do `painel/app.js` · `painel/index.html` **por ultimo**.
+    - **Conferido por hash, nao pelo codigo de saida do curl** (que deu 0 nos 24, e nao
+      decide nada): os 41 foram recomparados **por inteiro** depois do envio e os 24 deram
+      iguais; `bash scripts/confere-deploy.sh` comparou os **17 arquivos do painel por
+      HTTPS** e todos batem.
+    - **Medido no ar:** as 10 paginas publicas 200 (`/`, `/roteiros`, `/roteiros/turquia`,
+      `/nossa-historia`, `/contato`, `/perguntas-frequentes`, `/link`, `/sitemap.xml`,
+      `/llms.txt`, `/politica-de-privacidade`) · **zero** `Fatal error`/`Warning`/
+      `Undefined` em qualquer uma delas · `status-tag.css?v=4` serve a regra
+      `.st-tag--semanal` (era o risco: sem ela a tag sai como quadrado solido) e **as tres
+      paginas pedem a MESMA versao** · os 5 `lib/*.php` servem **corpo vazio** ·
+      `/roteiros` lista os **5 slugs** que o banco tem como visiveis, com 7 `<img src=`
+      bem formados e **zero** `<imgsrc=` (o bug de 22/10) · a lista do painel "Sobre" da
+      home tambem com 5 · e os assets do painel `datas.js?v=4`, `app.js?v=24`,
+      `fluxo.js?v=22`, `painel.css?v=17` todos 200.
+    - **NADA FOI LIGADO, e as duas travas seguem postas:** o app **nao esta inscrito** no
+      webhook da WABA e os dois fluxos seguem **`ativo = false`**. Nenhum cron no cPanel.
+      Conferido: `whatsapp.php` 403, `wa-cron.php` 403, `campanha.php` 401, `fluxo.php`
+      405 no GET e **401 em todo POST sem login**, inclusive com modo inventado.
+    - **`config.local.php` nao foi tocado.**
+  - **Falta:** a cliente cadastrar o Peru (e o que vai exercitar o editor de datas pela
+    primeira vez). **A gaveta com o editor novo ainda nao foi vista com a sessao dela** -
+    foi conferida a 1440 e a 390 num harness local, fora do painel logado.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro
