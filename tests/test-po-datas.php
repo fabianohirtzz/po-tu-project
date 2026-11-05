@@ -59,6 +59,12 @@ ok(po_proxima_saida($sem([['titulo' => 'D', 'datas' => ['18/12/39', '02/12/39', 
 ok(po_proxima_saida($sem([['titulo' => 'D', 'datas' => ['32/12/39', '31/02/40', 'dezembro', '02-12-39', '10/12/39']]]), '2039-11-01')
    === '2039-12-10', 'descarta data impossivel e texto, e acha a valida depois dela');
 ok(po_proxima_saida($sem([['titulo' => 'D', 'datas' => ['32/13/99']]]), '2039-01-01') === null, 'so data impossivel devolve null');
+/* A impossivel ANTES da valida: 31/02/39 nao existe, e se o codigo a
+   aceitasse ela seria a MENOR e viraria a proxima saida anunciada. Com uma
+   impossivel depois da valida (31/02/40) o caso passa sem provar nada,
+   porque ela nunca venceria o minimo. */
+ok(po_proxima_saida($sem([['titulo' => 'D', 'datas' => ['31/02/39', '10/12/39']]]), '2039-01-01') === '2039-12-10', 'data impossivel anterior nao vence o minimo');
+ok(po_quando($sem([['titulo' => 'D', 'datas' => ['31/02/39', '10/12/39']]]), '2039-01-01') === 'Próxima saída: 10/12/39', 'e nao e anunciada ao cliente');
 
 /* Ano de 2 e de 4 digitos dao o mesmo resultado (o banco tem os dois). */
 ok(po_proxima_saida($sem([['titulo' => 'D', 'datas' => ['02/12/39']]]), '2039-11-01')

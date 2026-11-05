@@ -59,5 +59,9 @@
   "simulador.js": {
     "v": 2,
     "sha": "ad3ccfcf116a1fe7"
+  },
+  "datas.js": {
+    "v": 1,
+    "sha": "289065f1ad821a9e"
   }
 }

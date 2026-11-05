@@ -111,6 +111,85 @@
       'disablepictureinpicture disableremoteplayback tabindex="-1" aria-hidden="true"></video>';
   };
 
+  /* ---------- datas de roteiro de SAIDAS SEMANAIS ----------
+     Gemeo de lib/po-datas.php e de painel/datas.js.
+     tests/test-datas-semanal.mjs roda a MESMA tabela de casos nas tres e
+     exige que concordem caso a caso. Existe aqui porque as paginas publicas
+     leem o banco NO NAVEGADOR: a home monta o carrossel por Supabase, sem
+     passar pelo PHP, entao o servidor nao tem onde calcular isto. */
+  window.poDatasGrupos = function (roteiro) {
+    if (!roteiro || typeof roteiro !== 'object') return [];
+    var v = roteiro.datas_texto;
+    if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { return []; } }
+    if (!Array.isArray(v) || !v.length) return [];
+    var out = [];
+    for (var i = 0; i < v.length; i++) {
+      var g = v[i];
+      if (!g || typeof g !== 'object' || typeof g.titulo !== 'string') continue;
+      if (!Array.isArray(g.datas)) continue;
+      var datas = [];
+      for (var j = 0; j < g.datas.length; j++) {
+        if (typeof g.datas[j] !== 'string') continue;
+        var d = g.datas[j].trim();
+        if (d !== '') datas.push(d);
+      }
+      out.push({ titulo: g.titulo, datas: datas });
+    }
+    return out;
+  };
+
+  /* 'd/m/a' -> 'YYYY-MM-DD', ou null. Data impossivel (32/12, 31/02) e
+     recusada: erro de digitacao no painel nao pode virar data valida. */
+  window.poDataIso = function (txt) {
+    if (typeof txt !== 'string') return null;
+    var m = /^\s*(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})\s*$/.exec(txt);
+    if (!m) return null;
+    var d = +m[1], mes = +m[2], ano = +m[3];
+    if (m[3].length === 2) ano += 2000;
+    if (mes < 1 || mes > 12 || d < 1) return null;
+    var dt = new Date(Date.UTC(ano, mes - 1, d));
+    if (dt.getUTCFullYear() !== ano || dt.getUTCMonth() !== mes - 1 || dt.getUTCDate() !== d) return null;
+    return ano + '-' + (mes < 10 ? '0' : '') + mes + '-' + (d < 10 ? '0' : '') + d;
+  };
+
+  /* A MENOR data de hoje em diante. `>=` porque a saida de hoje ainda e uma
+     saida. Data ilegivel e descartada e a busca CONTINUA. */
+  window.poProximaSaida = function (roteiro, hoje) {
+    var h = hoje || new Date().toISOString().slice(0, 10);
+    var gs = window.poDatasGrupos(roteiro), melhor = null;
+    for (var i = 0; i < gs.length; i++) {
+      for (var j = 0; j < gs[i].datas.length; j++) {
+        var iso = window.poDataIso(gs[i].datas[j]);
+        if (iso === null || iso < h) continue;
+        if (melhor === null || iso < melhor) melhor = iso;
+      }
+    }
+    return melhor;
+  };
+
+  /* A string de data que a pessoa le, em todo card. Quem decide e o STATUS,
+     nao a presenca do dado. Semanal sem data futura volta ao comportamento
+     de sempre: anunciar "Proxima saida" de data vencida e pior que nao
+     anunciar nada, e e o que acontece no mes em que ninguem atualiza o
+     painel. A data sai EXATAMENTE como foi digitada. */
+  window.poQuando = function (roteiro, hoje) {
+    if (!roteiro || typeof roteiro !== 'object') return '';
+    if (roteiro.status_viagem === 'semanal') {
+      var iso = window.poProximaSaida(roteiro, hoje);
+      if (iso !== null) {
+        var gs = window.poDatasGrupos(roteiro);
+        for (var i = 0; i < gs.length; i++) {
+          for (var j = 0; j < gs[i].datas.length; j++) {
+            if (window.poDataIso(gs[i].datas[j]) === iso) return 'Próxima saída: ' + gs[i].datas[j];
+          }
+        }
+      }
+    }
+    var s = String(roteiro.data_label == null ? '' : roteiro.data_label).trim();
+    if (s !== '') return s;
+    return String(roteiro.periodo == null ? '' : roteiro.periodo).trim();
+  };
+
   // registro do banco → card do slider/carrossel
   window.poCard = function (r) {
     return {
