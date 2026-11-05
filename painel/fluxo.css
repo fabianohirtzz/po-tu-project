@@ -182,9 +182,21 @@ textarea.fl-campo{min-height:150px;line-height:1.5}
 .sim-selo--recusado{background:rgba(220,38,38,.1);color:var(--st-perdido)}
 .sim-selo--teto_passos{background:rgba(220,38,38,.1);color:var(--st-perdido)}
 .sim-erro{margin:0;font-size:.85rem;color:var(--st-perdido)}
-.sim-form{display:flex;gap:8px}
+.sim-form{display:flex;flex-wrap:wrap;gap:8px}
 .sim-vazio{margin:auto;font-size:.85rem;color:var(--muted);text-align:center}
-.sim-campo{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--border2);border-radius:8px;background:var(--surface);color:var(--text);font:inherit}
+/* `flex:1 1 200px`, e nao `flex:1`: com base zero o campo encolhe ate o
+   placeholder truncar em vez de quebrar a linha. Medido a 390px em
+   05/11/2026: os DOIS campos do rodape saiam como "Escreva como o clie" e
+   "Primeira frase do clie", indistinguiveis um do outro - e e justamente a
+   diferenca entre eles (responder x recomecar) que a cliente precisa ler.
+   Com base de 200px eles descem para a propria linha quando nao cabem. */
+.sim-campo{flex:1 1 200px;min-width:0;padding:10px 12px;border:1px solid var(--border2);border-radius:8px;background:var(--surface);color:var(--text);font:inherit}
+/* O campo da PRIMEIRA frase, no rodape. Mesmo porte do campo de resposta, e
+   de proposito menos destacado: ele recomeca a conversa, e nao e o que a
+   cliente faz a toda hora. Fica ANTES de qualquer @media, como o resto - com
+   a mesma especificidade vence a ultima declarada, e foi assim que a barra do
+   zoom ficou invisivel com dois testes verdes. */
+.sim-primeira{flex:1 1 200px;min-width:0;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;background:var(--surface);color:var(--text);font:inherit;font-size:.9rem}
 
 /* ---------- o simulador no desktop: coluna ao lado do canvas ----------
    Este @media vem DEPOIS dos padroes acima, e e por isso que ele vence no

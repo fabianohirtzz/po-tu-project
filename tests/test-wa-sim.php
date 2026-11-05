@@ -336,10 +336,169 @@ $r = wa_sim_passo($gb, 'fb', '', 'bom dia', []);
 ok($r['card_id'] === 'bv' && count($r['mensagens']) === 1,
    'frase que nao casa atalho nenhum comeca no card inicial, sem desvio');
 
+/* ---------- ATALHO DE DESTINO: o caminho que a Parte C existe para encher ----
+   Este e o unico dos tres tipos que a cliente NAO consegue conferir de outro
+   jeito. Roteiro ela ve pelo PDF que sai; palavras, pela conversa indo para a
+   humana. Destino termina numa linha de lista de espera que o simulador nao
+   grava - entao, sem aviso na tela, ela nao tem como saber se funcionou. */
+$DESTINOS = [
+    ['nome' => 'Itália', 'palavras' => 'italia, roma, veneza', 'ativo' => true],
+    ['nome' => 'Chile',  'palavras' => 'chile, atacama',       'ativo' => true],
+];
+wa_fluxo_set_deps(['destinos' => function () use ($DESTINOS) { return $DESTINOS; }]);
+
+$GC = grafo('fc', [
+    card('bv', 'botoes', ['texto' => 'Oi! Sobre o que quer falar?', 'fallback' => 'ops',
+        'config' => ['atalhos' => [
+            ['tipo' => 'palavras', 'palavras' => ['atendente'], 'destino' => 'hum',   'saudacao' => 'Ja chamo alguem.'],
+            ['tipo' => 'roteiro',  'palavras' => [], 'destino' => 'pdf',   'saudacao' => 'Ja mando o roteiro.'],
+            ['tipo' => 'destino',  'palavras' => [], 'destino' => 'sdata', 'saudacao' => 'Deixa eu ver as datas.'],
+        ]],
+        'opcoes' => [['id' => 'ver', 'rotulo' => 'Ver roteiros', 'destino' => 'rot']]]),
+    card('sdata', 'botoes', ['texto' => 'Ainda nao temos data para {destino}. Quer entrar na lista?',
+        'fallback' => 'ops',
+        'opcoes' => [['id' => 'sim', 'rotulo' => 'Sim, quero', 'destino' => 'anota'],
+                     ['id' => 'nao', 'rotulo' => 'Nao, obrigado', 'destino' => 'fimz']]]),
+    card('anota', 'marca', ['texto' => null, 'config' => ['espera' => '+destino'], 'proximo' => 'fimz']),
+    card('pdf',  'pdf',      ['texto' => 'Segue o roteiro do {roteiro}.', 'proximo' => 'fimz']),
+    /* O card que espera tambem le a frase, e e ali que a pessoa digita o nome
+       do destino depois de tocar em "Ver roteiros". Saudacao vazia: no ponto 2
+       ela e ignorada. */
+    card('rot',  'roteiros', ['texto' => 'Qual viagem?', 'proximo' => 'fimz', 'fallback' => 'ops',
+        'config' => ['atalhos' => [
+            ['tipo' => 'palavras', 'palavras' => ['atendente'], 'destino' => 'hum',   'saudacao' => ''],
+            ['tipo' => 'destino',  'palavras' => [], 'destino' => 'sdata', 'saudacao' => 'Deixa eu ver as datas.'],
+        ]]]),
+    card('ops',  'texto',    ['texto' => 'Nao entendi.', 'proximo' => 'bv']),
+    card('fimz', 'fim',      ['texto' => 'Qualquer coisa, chama aqui.']),
+    card('hum',  'humano',   ['texto' => 'Vou chamar a Lais.']),
+]);
+$gc = ['fc' => $GC];
+
+/* Ponto 1: a frase traz o nome de um destino sem data. */
+$r = wa_sim_passo($gc, 'fc', '', 'tem viagem para a Italia?', []);
+ok($r['card_id'] === 'sdata' && $r['estado'] === 'aguardando',
+   'a primeira frase com o nome de um destino leva ao card "sem data": ' . $r['card_id'] . ' ' . $r['estado']);
+ok($r['ctx']['destino_nome'] === 'Itália', 'e o nome do destino entra no contexto');
+ok($r['mensagens'][0]['texto'] === 'Deixa eu ver as datas.', 'a saudacao do atalho e a primeira bolha');
+ok(strpos($r['mensagens'][1]['texto'], 'Itália') !== false,
+   'e a bolha do card diz o NOME do destino, nao {destino}: ' . $r['mensagens'][1]['texto']);
+
+/* O AVISO DO ATALHO. Sem ele a conversa salta e nada na tela diz por que: a
+   cliente nao consegue distinguir um atalho de um "nao entendi" que a levou
+   para outro lugar - e e justamente o atalho que ela acabou de montar na
+   gaveta que ela esta testando. */
+$diz = function ($avisos, $pedaco) {
+    foreach ((array) $avisos as $a) if (strpos($a, $pedaco) !== false) return true;
+    return false;
+};
+ok($diz($r['avisos'], 'destino'), 'a tela diz que foi um atalho de DESTINO que desviou a conversa: ' . json_encode($r['avisos'], JSON_UNESCAPED_UNICODE));
+ok($diz($r['avisos'], 'Ainda nao temos data') || $diz($r['avisos'], 'sdata'), 'e para onde ela foi');
+
+$r1 = wa_sim_passo($gc, 'fc', '', 'quero saber do chile', []);
+ok($r1['card_id'] === 'pdf' || $r1['estado'] === 'encerrado', 'o Chile esta nas duas listas e o atalho de roteiro vem antes');
+ok($diz($r1['avisos'], 'roteiro'), 'e a tela diz que foi o atalho de ROTEIRO: ' . json_encode($r1['avisos'], JSON_UNESCAPED_UNICODE));
+
+$r1 = wa_sim_passo($gc, 'fc', '', 'quero um atendente', []);
+ok($diz($r1['avisos'], 'palavras'), 'e para o terceiro tipo diz PALAVRAS: ' . json_encode($r1['avisos'], JSON_UNESCAPED_UNICODE));
+
+$r1 = wa_sim_passo($gc, 'fc', null, '', []);
+ok(!$diz($r1['avisos'], 'atalho'), 'abrir a conversa sem frase nao inventa aviso de atalho');
+
+/* PONTO 2: a frase digitada num card que espera. E o caminho mais provavel no
+   uso real - a pessoa toca "Ver roteiros" e so depois escreve "Italia". */
+$r2 = wa_sim_passo($gc, 'fc', 'rot', 'quero ir para Roma', [], false);
+ok($r2['card_id'] === 'sdata', 'digitar o nome de um destino num card que espera tambem dispara o atalho: ' . $r2['card_id']);
+ok($r2['ctx']['destino_nome'] === 'Itália', 'e o destino entra no contexto tambem no ponto 2');
+ok($diz($r2['avisos'], 'destino'), 'com o mesmo aviso');
+ok(!$diz($r2['avisos'], 'Deixa eu ver as datas'), 'e SEM a saudacao: no ponto 2 ela e ignorada, e mostra-la prometeria uma mensagem que nao sai');
+foreach ($r2['mensagens'] as $m) {
+    ok($m['texto'] !== 'Deixa eu ver as datas.', 'nenhuma bolha de saudacao no ponto 2');
+}
+
+/* O CONTEXTO ATRAVESSA O NAVEGADOR. A tela devolve o ctx em cada passo, e ele
+   passa por wa_sim_ctx antes de voltar ao motor: se a chave do destino nao
+   estiver na lista fechada, ela morre no caminho e a espera e anotada vazia -
+   calada, com a tela dizendo que deu certo. E o mesmo defeito que a producao
+   teve antes de po_wa_conversas ganhar a coluna. */
+$volta = wa_sim_ctx(json_encode($r['ctx']));
+ok(is_array($volta), 'o ctx do passo anterior e aceito de volta');
+ok(($volta['destino_nome'] ?? null) === 'Itália', 'e o nome do destino sobrevive a ida e volta pelo navegador');
+ok(wa_sim_ctx('{"destino_nome":123}') === null, 'destino que nao e texto recusa o contexto inteiro');
+ok(wa_sim_ctx('{"destino_nome":null}') === [], 'destino nulo e simplesmente ausencia');
+ok(!array_key_exists('estado', (array) wa_sim_ctx('{"destino_nome":"Itália","estado":"x"}')),
+   'e a lista segue FECHADA: chave que o motor nao le e descartada');
+
+/* A ESPERA: o simulador mostra que ela seria anotada, e NAO anota.
+   Hoje o caminho parava antes por acidente (a ficha nao era encontrada), nao
+   por decisao - e acidente nao e trava. */
+$r3 = wa_sim_passo($gc, 'fc', 'sdata', 'sim', $volta, true);
+ok($r3['estado'] === 'encerrado', 'o "sim" do card segue ate o fim: ' . $r3['estado'] . ' ' . (string) $r3['erro']);
+ok($diz($r3['avisos'], 'Itália'), 'e a tela diz que a Italia entraria na lista de espera: ' . json_encode($r3['avisos'], JSON_UNESCAPED_UNICODE));
+ok($diz($r3['avisos'], 'espera'), 'nomeando a lista de espera');
+$esp = array_values(array_filter($GLOBALS['WA_SIM_COL']->escritas, function ($e) { return $e['tipo'] === 'espera'; }));
+ok(count($esp) === 1, 'a intencao foi COLETADA uma vez: ' . count($esp));
+ok($esp[0]['feito'] === false, 'e marcada como nao feita, igual as outras escritas do simulador');
+ok($esp[0]['destino'] === 'Itália', 'com o destino que a pessoa disse');
+
+/* E sem destino no contexto, nada de aviso: dizer "entraria na lista" quando
+   nao ha nome e exatamente o defeito que o achado 6 era. */
+$r4 = wa_sim_passo($gc, 'fc', 'sdata', 'sim', [], true);
+ok(!$diz($r4['avisos'], 'lista de espera'), 'sem destino no contexto a tela nao promete uma anotacao que nao aconteceria');
+
+/* O AVISO DIZ QUAL DOS TRES CASOU, e nao so que "houve um atalho". A rodada de
+   mutacao achou isto: as frases dos tres tipos ja contem a palavra do tipo
+   ("...nome de um destino...", "...as palavras de um atalho..."), entao
+   procurar a palavra solta no aviso passava verde mesmo sem o rotulo. O rotulo
+   importa porque e ele que liga o aviso a LINHA da gaveta que ela configurou:
+   sao tres linhas no mesmo card, e saber qual disparou e o que ela veio ver. */
+$comeca = function ($avisos, $prefixo) {
+    foreach ((array) $avisos as $a) if (strpos($a, $prefixo) === 0) return true;
+    return false;
+};
+$r5 = wa_sim_passo($gc, 'fc', '', 'tem viagem para a Italia?', []);
+ok($comeca($r5['avisos'], 'Atalho de destino:'), 'o aviso nomeia o tipo: ' . json_encode($r5['avisos'], JSON_UNESCAPED_UNICODE));
+$r5 = wa_sim_passo($gc, 'fc', '', 'quero saber do chile', []);
+ok($comeca($r5['avisos'], 'Atalho de roteiro:'), 'idem para roteiro: ' . json_encode($r5['avisos'], JSON_UNESCAPED_UNICODE));
+$r5 = wa_sim_passo($gc, 'fc', '', 'quero um atendente', []);
+ok($comeca($r5['avisos'], 'Atalho de palavras:'), 'idem para palavras: ' . json_encode($r5['avisos'], JSON_UNESCAPED_UNICODE));
+
+/* Tipo que o motor casou e a tela nao sabe nomear ainda: aviso MESMO ASSIM,
+   com o nome cru. Um desvio real esta acontecendo, e a alternativa (frase
+   vazia) seria a tela calada no caso em que ela mais precisa falar. Pura,
+   entao se exercita direto. */
+$a = wa_sim_aviso_atalho('tipo_novo', 'Algum card');
+ok(strpos($a, 'tipo_novo') !== false, 'tipo desconhecido aparece no aviso: ' . $a);
+ok(strpos($a, 'Algum card') !== false, 'com o card de destino: ' . $a);
+ok(trim($a) !== '' && strpos($a, '::') === false, 'e a frase nao fica truncada nem vazia: ' . $a);
+/* O motivo nao pode sair VAZIO: "Atalho de tipo_novo: , e a conversa foi..."
+   e uma frase com buraco, e a cliente le isso na tela. A mutacao que trocou o
+   motivo desconhecido por string vazia sobreviveu a tres assercoes antes
+   desta. */
+ok(preg_match('/:\s*,/', $a) === 0, 'e nao fica um buraco entre o rotulo e a virgula: ' . $a);
+foreach (['palavras', 'roteiro', 'destino'] as $t) {
+    $f = wa_sim_aviso_atalho($t, 'X');
+    ok(strpos($f, 'Atalho de ' . $t . ':') === 0, 'o aviso de ' . $t . ' comeca pelo rotulo do tipo: ' . $f);
+    ok(strpos($f, 'card "X"') !== false, 'e termina no card de destino: ' . $f);
+}
+
+/* E O AVISO NAO PODE MENTIR. Rota que NAO foi atalho - a resposta digitada num
+   card de botoes, que cai no fallback - nao ganha aviso de atalho nenhum.
+   Sem esta assercao, um aviso disparando em toda rota passava verde: a cliente
+   leria "Atalho de ..." num caminho que o atalho nao decidiu, e iria mexer na
+   gaveta para consertar o que nao esta la. */
+$r6 = wa_sim_passo($gc, 'fc', 'bv', 'xpto zzz nada a ver', [], false);
+ok($r6['card_id'] === 'bv' || $r6['card_id'] === 'ops',
+   'frase que nao casa nada cai no fallback: ' . $r6['card_id']);
+ok(!$comeca($r6['avisos'], 'Atalho de'), 'e NAO ganha aviso de atalho: ' . json_encode($r6['avisos'], JSON_UNESCAPED_UNICODE));
+$r6 = wa_sim_passo($gc, 'fc', 'bv', 'ver', [], true);
+ok($r6['card_id'] === 'rot', 'o clique num botao segue pela opcao');
+ok(!$comeca($r6['avisos'], 'Atalho de'), 'e tampouco ganha aviso de atalho: ' . json_encode($r6['avisos'], JSON_UNESCAPED_UNICODE));
+
 /* ---------- travas de fonte ---------- */
 
 $src = str_replace("\r\n", "\n", file_get_contents(__DIR__ . '/../lib/wa-sim.php'));
-foreach (['wa_db_insert', 'wa_db_update', 'wa_conversa_set', 'wa_nota_lead', 'wa_entrega_humana'] as $proibido) {
+foreach (['wa_db_insert', 'wa_db_update', 'wa_conversa_set', 'wa_nota_lead', 'wa_entrega_humana', 'wa_espera_anota'] as $proibido) {
     ok(strpos($src, $proibido) === false, 'lib/wa-sim.php nao menciona ' . $proibido . ': o simulador nao grava e nao toca o funil');
 }
 ok(preg_match('/require(_once)?\s+__DIR__\s*\.\s*\x27\/wa-motor\.php\x27/', $src) === 0,

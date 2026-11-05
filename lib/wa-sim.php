@@ -74,6 +74,13 @@ function wa_sim_recusa_meta($p) {
     return null;
 }
 
+/* Ficha falsa. A lista de espera e por lead_id (a tabela tem chave
+   estrangeira para po_leads), entao o motor le a ficha antes de anotar. Sem
+   uma ficha aqui o caminho do destino para antes de chegar la, e o simulador
+   nao mostraria o unico dos tres atalhos cujo resultado nao aparece como
+   mensagem. Ela nao vai para lugar nenhum: a anotacao tambem e duble. */
+const WA_SIM_LEAD = '00000000-0000-4000-8000-000000000000';
+
 /* Instala o transporte falso e as dependencias que nao escrevem, e devolve o
    coletor.
 
@@ -84,7 +91,14 @@ function wa_sim_recusa_meta($p) {
 
    `select`/`select_estrito` devolvem [] - lista vazia, nunca null: null quer
    dizer "o banco nao respondeu", e o `marca` entao deixa de gravar interesses
-   para nao apagar o que estava la, o que apareceria como aviso de erro.
+   para nao apagar o que estava la, o que apareceria como aviso de erro. A
+   excecao e `po_leads`, que devolve a ficha falsa: ver WA_SIM_LEAD.
+
+   `espera_anota` e DUBLE, e isto nao e zelo: a funcao de verdade fala com o
+   banco por fora do repositorio de dependencias, entao sem o duble o
+   simulador gravaria linha de verdade em po_wa_espera. Hoje ele nao grava
+   porque o caminho para antes, na ficha que nao existe - e isso e acidente,
+   nao trava.
 
    `roteiros` NAO e trocada de proposito: o catalogo que a cliente precisa ver
    e o real. */
@@ -93,6 +107,9 @@ function wa_sim_deps() {
     $col->envios   = [];   // payloads decodificados, na ordem em que a Meta os receberia
     $col->escritas = [];   // intencoes de escrita, todas com feito=false
     $n = 0;
+    $ficha = function ($tabela, $query) {
+        return $tabela === 'po_leads' ? [['id' => WA_SIM_LEAD]] : [];
+    };
     /* O ultimo coletor instalado fica alcancavel pelo nome, no mesmo porte de
        $GLOBALS['WA_DEPS'] e $GLOBALS['WA_TRANSPORT']: wa_sim_passo instala o
        seu proprio a cada passo (as bolhas de um passo sao so as dele, e assim
@@ -127,8 +144,13 @@ function wa_sim_deps() {
             $col->escritas[] = ['tipo' => 'update', 'tabela' => $tabela, 'feito' => false];
             return true;
         },
-        'select'         => function ($tabela, $query) { return []; },
-        'select_estrito' => function ($tabela, $query) { return []; },
+        'espera_anota' => function ($lead_id, $destino, $slug = null) use ($col) {
+            $col->escritas[] = ['tipo' => 'espera', 'tabela' => 'po_wa_espera',
+                                'destino' => (string) $destino, 'roteiro' => $slug, 'feito' => false];
+            return true;
+        },
+        'select'         => $ficha,
+        'select_estrito' => $ficha,
     ]);
 
     return $col;
@@ -159,6 +181,17 @@ function wa_sim_ctx($json) {
     if (array_key_exists('roteiro_slug', $v) && $v['roteiro_slug'] !== null) {
         if (!is_string($v['roteiro_slug'])) return null;
         $out['roteiro_slug'] = $v['roteiro_slug'];
+    }
+    /* O NOME DO DESTINO ATRAVESSA O NAVEGADOR. Quem escreve "Italia" num
+       passo responde "Quero" no seguinte, e e la que a espera e anotada: sem
+       esta chave na lista fechada o nome morre no caminho de volta e a
+       anotacao sai vazia, com a tela dizendo que deu certo. E o mesmo defeito
+       que a producao teve ate po_wa_conversas ganhar a coluna. Sem teto de
+       tamanho de proposito: quem corta e wa_fluxo_texto, no ponto de uso,
+       pelo orcamento que a validacao aprovou. */
+    if (array_key_exists('destino_nome', $v) && $v['destino_nome'] !== null) {
+        if (!is_string($v['destino_nome'])) return null;
+        $out['destino_nome'] = $v['destino_nome'];
     }
     if (array_key_exists('tentativas', $v)) {
         if (!is_int($v['tentativas']) && !(is_string($v['tentativas']) && preg_match('/^[0-9]{1,3}$/', $v['tentativas']))) return null;
@@ -191,6 +224,25 @@ function wa_sim_grafos($fluxos, $cards) {
         $out[$id] = wa_fluxo_grafo_de($f, $meus) + ['sim_ativo' => !empty($f['ativo'])];
     }
     return $out;
+}
+
+/* A frase do aviso de atalho. Ela existe porque o desvio e INVISIVEL na
+   tela: a conversa pula para outro card e nada diz por que. Sem isto a
+   cliente nao distingue o atalho que ela acabou de montar na gaveta de um
+   "nao entendi" que a levou para outro lugar - e o atalho e justamente o que
+   ela veio testar.
+
+   Pura. O tipo desconhecido tem frase propria em vez de sumir: atalho que o
+   motor casou e a tela nao soube nomear ainda e um desvio real acontecendo. */
+const WA_SIM_ATALHO_FRASE = [
+    'palavras' => 'a frase do cliente casou as palavras de um atalho',
+    'roteiro'  => 'o cliente escreveu o nome de um roteiro à venda',
+    'destino'  => 'o cliente escreveu o nome de um destino que vocês vendem e que não tem data aberta',
+];
+function wa_sim_aviso_atalho($tipo, $titulo) {
+    $t = (string) $tipo;
+    $motivo = WA_SIM_ATALHO_FRASE[$t] ?? ('um atalho do tipo "' . $t . '" casou a frase');
+    return 'Atalho de ' . $t . ': ' . $motivo . ', e a conversa foi direto para o card "' . (string) $titulo . '".';
 }
 
 /* Uma mensagem do envelope, lida do PAYLOAD capturado (nao do texto do card:
@@ -256,6 +308,16 @@ function wa_sim_passo($grafos, $fluxo_id, $card_id, $resposta, $ctx, $clicou = f
     $fim = function ($estado, $ok, $card, $erro = null) use (&$fluxo_id, &$ctx, &$avisos, $col) {
         $mensagens = [];
         foreach ($col->envios as $p) $mensagens[] = wa_sim_bolha($p);
+        /* A lista de espera e o unico resultado do fluxo que nao vira
+           mensagem: a pessoa recebe "combinado, avisamos" venha o que vier, e
+           a diferenca entre ter sido anotada e nao ter sido mora numa tabela
+           que o simulador nao escreve. O aviso sai do COLETOR, nao do card:
+           assim ele so aparece quando o motor de fato chegou la. */
+        foreach ($col->escritas as $e) {
+            if (($e['tipo'] ?? '') !== 'espera') continue;
+            $avisos[] = 'Aqui "' . (string) $e['destino'] . '" entraria na lista de espera desta pessoa. '
+                      . 'No simulador nada é gravado.';
+        }
         return ['ok' => $ok, 'fluxo_id' => (string) $fluxo_id, 'card_id' => $card, 'ctx' => $ctx,
                 'estado' => $estado, 'mensagens' => $mensagens, 'avisos' => $avisos, 'erro' => $erro];
     };
@@ -293,6 +355,7 @@ function wa_sim_passo($grafos, $fluxo_id, $card_id, $resposta, $ctx, $clicou = f
             if ($at['roteiro_slug'] !== null) $ctx['roteiro_slug'] = $at['roteiro_slug'];
             if ($at['destino_nome'] !== null) $ctx['destino_nome'] = $at['destino_nome'];
             $card = (string) $at['card'];
+            $avisos[] = wa_sim_aviso_atalho($at['tipo'], (string) ($grafo['cards'][$card]['titulo'] ?? $card));
         }
     } elseif (!isset($grafo['cards'][$card])) {
         /* Mesmo desfecho da producao (wa_processar: card_atual que nao existe
@@ -310,6 +373,9 @@ function wa_sim_passo($grafos, $fluxo_id, $card_id, $resposta, $ctx, $clicou = f
             return $fim('humano', false, null, 'card sem saida: ' . $p['motivo']);
         }
         $card = (string) $p['card'];
+        if (($p['motivo'] ?? '') === 'atalho') {
+            $avisos[] = wa_sim_aviso_atalho($p['atalho_tipo'] ?? '', (string) ($grafo['cards'][$card]['titulo'] ?? $card));
+        }
     }
     /* Card que NAO espera e veio preenchido: a producao o reexecuta (cadeia
        interrompida), e a resposta nao decide nada. A cadeia abaixo faz isso. */

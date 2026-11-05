@@ -196,6 +196,58 @@ for (const arq of ['simulador.js', 'fluxo.css', 'fluxo.js']) {
    deixou o bug de 13/09/2026 passar verde). Quem amarra versao ao CONTEUDO e
    o tests/test-cache-buster.mjs; aqui basta o arquivo estar dentro da trava. */
 
+/* ---------- COMECAR A CONVERSA COM UMA FRASE ----------
+   O atalho do card de ENTRADA so dispara na PRIMEIRA mensagem, e ate aqui a
+   tela abria a simulacao mandando mensagem vazia - entao o caminho mais usado
+   dos tres (o cliente chega escrevendo "quero saber do Chile") era o unico
+   que ela NAO conseguia testar. O motor ja sabia fazer isso desde a tarefa 5;
+   faltava a tela ter como pedir.
+
+   O campo e OPCIONAL e mora no mesmo botao de sempre: vazio, a conversa abre
+   como abria; escrito, a frase e a primeira mensagem do cliente. Dois
+   controles separados fariam a cliente escolher antes de saber a diferenca. */
+const pf = F.poSimPainel({ fluxo_id: 'f1', fluxo_nome: 'F', card_id: 'bv', ctx: {},
+  estado: 'aguardando', erro: null, avisos: [], linhas: [] });
+assert.ok(/data-sim="recomeca"/.test(pf), 'o "Comecar de novo" continua la');
+assert.ok(/<form[^>]*data-sim="recomeca"/.test(pf),
+  'e ele virou um FORM, para o campo da primeira frase ter onde viver: ' + pf.slice(-400));
+assert.ok(/data-sim="recomeca"[\s\S]*<input/.test(pf), 'com um campo de texto dentro');
+assert.ok(/class="sim-primeira"/.test(pf), 'o campo tem classe propria (o CSS do rodape e outro)');
+/* O campo existe INDEPENDENTE de a conversa estar esperando: recomecar com
+   uma frase e justamente o que se faz depois de a conversa ter terminado. */
+const pfe = F.poSimPainel({ fluxo_id: 'f1', fluxo_nome: 'F', card_id: null, ctx: {},
+  estado: 'encerrado', erro: null, avisos: [], linhas: [] });
+assert.ok(/class="sim-primeira"/.test(pfe), 'inclusive com a conversa encerrada');
+assert.ok(!/data-sim="digita"/.test(pfe), 'enquanto o campo de RESPOSTA sai, porque a conversa nao anda');
+/* Os dois campos tem de ser distinguiveis por quem le a tela: um responde no
+   ponto em que a conversa parou, o outro joga tudo fora e recomeca. */
+assert.ok(/placeholder="[^"]*rimeira[^"]*"/.test(pfe),
+  'e o rotulo do campo diz que e a PRIMEIRA mensagem, nao mais uma resposta: ' + pfe.slice(-400));
+
+/* O recomecar virou SUBMIT, e o clique nao pode mais trata-lo: um
+   <button type="submit"> dispara click E submit, entao as duas rotas juntas
+   recomecariam duas vezes - a primeira sem a frase, que e a que a cliente
+   acabou de escrever. */
+const cl = pega('poSimClique');
+const en = pega('poSimEnvia');
+const ab = pega('poSimAbre');
+assert.ok(!/poSimAbre\(/.test(cl) && !/acao === 'recomeca'/.test(cl),
+  'o tratador de clique nao reinicia a conversa: ' + cl);
+assert.ok(/recomeca/.test(en) && /poSimAbre\(/.test(en), 'quem trata e o submit, e ele chama poSimAbre: ' + en);
+assert.ok(/digita/.test(en), 'e o mesmo submit continua tratando a resposta digitada');
+assert.ok(/function poSimAbre\(fluxoId,\s*\w+\)/.test(ab),
+  'poSimAbre recebe a frase alem do fluxo: ' + ab.slice(0, 120));
+assert.ok(/poSimPasso\(\s*\w+/.test(ab) && !/poSimPasso\(\s*''/.test(ab),
+  'e o primeiro passo leva a frase, nao a string vazia fixa: ' + ab);
+
+/* A TRAVA DO PONTO DE CHAMADA. A funcao pura pode emitir o campo perfeito e o
+   chamador ignora-lo: foi assim que a gaveta do fluxo abriu sem os cards em
+   05/11, com a pura travada e a chamada livre. */
+assert.ok(/sim-primeira/.test(src), 'alguem no arquivo LE o campo da primeira frase');
+const leitor = src.match(/sim-primeira[\s\S]{0,400}/g).join('\n');
+assert.ok(/\.value/.test(leitor) || /querySelector\([^)]*sim-primeira/.test(src),
+  'lendo o valor dele, e nao so desenhando: ' + leitor.slice(0, 300));
+
 /* O botao que abre a tela mora na barra do fluxo. */
 const fjs = le('../painel/fluxo.js');
 assert.ok(/data-bar="simular"/.test(fjs), 'a barra do fluxo tem o botao Simular');
@@ -268,6 +320,34 @@ function blocosMedia(txt) {
     out.push({ ini: m.index, fim: i, corpo: txt.slice(m.index, i) });
   }
   return out;
+}
+
+/* ---------- os dois campos do rodape cabem, ou descem de linha ----------
+   DEFEITO QUE SO A TELA MOSTROU, a 390px, em 05/11/2026. Com `flex:1` (base
+   zero) os dois campos encolhem ate o placeholder truncar, e saiam como
+   "Escreva como o clie" e "Primeira frase do clie": dois caixotes iguais,
+   justamente onde a diferenca entre eles (responder no ponto em que a conversa
+   parou x jogar fora e recomecar) e o que a cliente precisa ler. Com base de
+   200px eles quebram para a propria linha em vez de espremer.
+   A trava e sobre a BASE, nao sobre o numero exato de pixels: base zero e o
+   defeito, qualquer base que caiba o rotulo resolve. */
+for (const cls of ['.sim-campo', '.sim-primeira']) {
+  const m = css.match(new RegExp('\\' + cls + '\\{([^}]*)\\}'));
+  assert.ok(m, cls + ' existe no CSS');
+  const flex = m[1].match(/flex:\s*([^;]+)/);
+  assert.ok(flex, cls + ' declara flex');
+  assert.ok(!/^1\s*;?$/.test(flex[1].trim()),
+    cls + ' nao pode ser `flex:1` puro: base zero faz o placeholder truncar em vez de quebrar a linha');
+  const base = flex[1].trim().split(/\s+/)[2];
+  assert.ok(base && /^\d+px$/.test(base) && parseInt(base, 10) >= 160,
+    cls + ' tem base de ao menos 160px, que e o que faz ele descer de linha quando nao cabe: ' + flex[1]);
+}
+/* E os dois containers tem de PERMITIR a quebra: com nowrap a base nao serve
+   de nada e o campo e espremido do mesmo jeito. */
+for (const cls of ['.sim-form', '.sim__rodape']) {
+  const m = css.match(new RegExp('\\' + cls.replace('__', '__') + '\\{([^}]*)\\}'));
+  assert.ok(m && /flex-wrap:\s*wrap/.test(m[1]),
+    cls + ' deixa os filhos quebrarem de linha: ' + (m ? m[1] : 'nao achei'));
 }
 
 const medias = blocosMedia(css);

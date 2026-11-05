@@ -516,7 +516,13 @@ function wa_fluxo_proximo($grafo, $card_id, $resposta, $ctx, $texto_cru = '') {
         $novo = $certo;
         if ($at['roteiro_slug'] !== null) $novo['roteiro_slug'] = $at['roteiro_slug'];
         if ($at['destino_nome'] !== null) $novo['destino_nome'] = $at['destino_nome'];
-        return ['card' => $at['card'], 'ctx' => $novo, 'motivo' => 'atalho'];
+        /* `atalho_tipo` e o unico campo desta funcao que nao decide rota: ele
+           diz QUAL dos tres casou. O motivo 'atalho' ja carrega metade da
+           informacao, e sem a outra metade o simulador teria de reperguntar
+           ao catalogo - uma segunda leitura que poderia responder diferente
+           da que acabou de decidir. Chave a mais num array de retorno nao
+           quebra chamador nenhum. */
+        return ['card' => $at['card'], 'ctx' => $novo, 'motivo' => 'atalho', 'atalho_tipo' => $at['tipo']];
     }
 
     $tentativas = (int) ($ctx['tentativas'] ?? 0);

@@ -142,9 +142,23 @@ function poSimPainel(st) {
       ? '<form class="sim-form" data-sim="digita"><input type="text" class="sim-campo" name="t" ' +
         'placeholder="Escreva como o cliente" autocomplete="off"><button type="submit" class="btn btn-primary">Enviar</button></form>'
       : '') +
-    '<div class="sim__rodape">' +
-    '<button type="button" class="btn btn-ghost" data-sim="recomeca">Começar de novo</button>' +
-    '</div>';
+    /* O rodape e um FORMULARIO, e o campo da primeira frase e OPCIONAL. O
+       atalho do card de entrada so dispara na PRIMEIRA mensagem, entao sem
+       este campo o caminho mais usado dos tres - o cliente que chega
+       escrevendo "quero saber do Chile" - seria o unico que a cliente nao
+       conseguiria testar aqui.
+       Um controle so, e nao dois: vazio ele recomeca como sempre recomecou,
+       escrito ele recomeca com a frase. Dois botoes obrigariam a cliente a
+       escolher antes de saber a diferenca.
+       Ele aparece mesmo com a conversa parada, ao contrario do campo de
+       resposta: recomecar com outra frase e justamente o que se faz depois de
+       a conversa ter terminado. */
+    '<form class="sim__rodape" data-sim="recomeca">' +
+    '<input type="text" class="sim-primeira" name="p" ' +
+    'placeholder="Primeira frase do cliente (opcional)" autocomplete="off" ' +
+    'aria-label="Primeira frase do cliente, opcional">' +
+    '<button type="submit" class="btn btn-ghost">Começar de novo</button>' +
+    '</form>';
 }
 
 /* ---------- a tela ---------- */
@@ -204,13 +218,17 @@ async function poSimPasso(resposta, clicou, rotulo) {
   poSimDesenha();
 }
 
-async function poSimAbre(fluxoId) {
+/* `frase` e a primeira mensagem do cliente, e vazia e o caso comum (a cliente
+   toca Simular e quer ver as boas-vindas). Ela vai como resposta do primeiro
+   passo, que e onde o servidor avalia os atalhos do card de entrada. */
+async function poSimAbre(fluxoId, frase) {
   PO_SIM = poSimEstadoInicial(fluxoId);
   const f = (typeof PO_FLUXOS !== 'undefined' && Array.isArray(PO_FLUXOS))
     ? PO_FLUXOS.find(function (x) { return String(x.id) === String(fluxoId); }) : null;
   if (f) PO_SIM.fluxo_nome = f.nome || '';
   poSimDesenha();
-  await poSimPasso('', false);
+  const p = String(frase == null ? '' : frase).trim();
+  await poSimPasso(p, false);
 }
 
 function poSimFecha() {
@@ -226,13 +244,27 @@ function poSimClique(ev) {
   if (!t) return;
   const acao = t.getAttribute('data-sim');
   if (acao === 'fecha') { poSimFecha(); return; }
-  if (acao === 'recomeca') { poSimAbre(PO_SIM ? PO_SIM.fluxo_id : ''); return; }
+  /* O recomecar NAO e tratado aqui: ele virou submit, e um botao de submit
+     dispara click e submit. Tratar nos dois recomecaria duas vezes, e a
+     primeira seria sem a frase que a cliente acabou de escrever. */
   if (acao === 'responde') { poSimPasso(t.getAttribute('data-id') || '', true, t.textContent || ''); return; }
 }
 
+/* Os DOIS formularios passam por aqui, e a diferenca entre eles e o que a
+   cliente espera: o de cima responde no ponto em que a conversa parou, o de
+   baixo joga a conversa fora e recomeca. */
 function poSimEnvia(ev) {
-  const f = ev && ev.target && ev.target.closest ? ev.target.closest('[data-sim="digita"]') : null;
+  const f = ev && ev.target && ev.target.closest ? ev.target.closest('[data-sim]') : null;
   if (!f) return;
+  const acao = f.getAttribute('data-sim');
+  if (acao === 'recomeca') {
+    ev.preventDefault();
+    const c = f.querySelector('.sim-primeira');
+    const frase = c ? String(c.value || '').trim() : '';
+    poSimAbre(PO_SIM ? PO_SIM.fluxo_id : '', frase);
+    return;
+  }
+  if (acao !== 'digita') return;
   ev.preventDefault();
   const campo = f.querySelector('.sim-campo');
   const v = campo ? String(campo.value || '').trim() : '';
