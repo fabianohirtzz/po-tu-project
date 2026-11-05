@@ -626,6 +626,12 @@ function roteiroForm(r){
   <div class="field"><label>Período (texto) — usado no card e no hero</label><input id="r-periodo" value="${esc(r.periodo||'')}"></div>
   <div class="field"><label>Ativo no site</label><select id="r-ativo"><option value="1" ${r.ativo!==false?'selected':''}>Sim, publicado</option><option value="0" ${r.ativo===false?'selected':''}>Não (oculto)</option></select></div>
   <div class="field"><label>Status da viagem, aparece como tag na foto do roteiro</label><select id="r-status"><option value="">Sem tag</option>${Object.keys(STATUS_VIAGEM).map(k=>`<option value="${k}" ${r.status_viagem===k?'selected':''}>${STATUS_VIAGEM[k]}</option>`).join('')}</select></div>
+  <div class="field" id="r-datas-wrap" ${r.status_viagem==='semanal'?'':'hidden'}>
+    <label>Datas de cada mês — só para saídas semanais</label>
+    <p class="rd-ajuda">Uma linha por data, no formato 02/12/26. O site mostra a próxima saída e ordena o roteiro por ela.</p>
+    <div id="r-datas">${rotDatasHtml(rotDatasNormaliza(r))}</div>
+    <button type="button" class="rep-add" id="r-datas-mes">+ Adicionar mês</button>
+  </div>
 
   <div class="dr-section-l">Capa</div>
   <div class="field">
@@ -708,12 +714,31 @@ function repAfter(rep,y){
   for(const el of els){const b=el.getBoundingClientRect();const off=y-b.top-b.height/2;if(off<0&&off>bestOff){bestOff=off;best=el;}}
   return best;
 }
+/* Redesenha a partir do que esta na tela, para a edicao em curso nao se
+   perder: as puras do painel/datas.js devolvem lista nova, nunca mutam. */
+function rotDatasRedesenha(gs){$('#r-datas').innerHTML=rotDatasHtml(gs);}
+/* A TELA, nao o que iria para o banco: rotDatasDoForm descarta grupo sem
+   data, e o mes recem-adicionado nasce vazio - com ele aqui, o mes some
+   no primeiro clique e os indices dos botoes deslocam. */
+function rotDatasAtuais(){return rotDatasDaTela($('#r-datas'));}
 function wireRoteiroForm(){
   // remover linha repetível
   $('#rdr-body').addEventListener('click',e=>{if(e.target.classList.contains('rm'))e.target.closest('.rep-item').remove();});
   $('#r-dias-add').onclick=()=>$('#r-dias-rep').insertAdjacentHTML('beforeend',repItemDia());
   $('#r-val-add').onclick=()=>$('#r-val-rep').insertAdjacentHTML('beforeend',repItemVal());
   repReorder($('#r-dias-rep')); // arrastar cards de dia p/ corrigir a ordem
+  // datas do mes (so aparece no status semanal)
+  $('#r-datas-mes').onclick=()=>rotDatasRedesenha(rotDatasAddMes(rotDatasAtuais()));
+  $('#r-datas').addEventListener('click',e=>{
+    const b=e.target.closest('button');if(!b)return;
+    const i=Number(b.dataset.i),j=Number(b.dataset.j);
+    if(b.classList.contains('rd-add-data'))rotDatasRedesenha(rotDatasAddData(rotDatasAtuais(),i));
+    else if(b.classList.contains('rd-del-mes'))rotDatasRedesenha(rotDatasDelMes(rotDatasAtuais(),i));
+    else if(b.classList.contains('rd-del-data'))rotDatasRedesenha(rotDatasDelData(rotDatasAtuais(),i,j));
+  });
+  /* O bloco so existe para saidas semanais: nos outros roteiros seria um
+     campo que nao significa nada, e dado digitado ali nunca apareceria. */
+  $('#r-status').onchange=()=>{$('#r-datas-wrap').hidden=$('#r-status').value!=='semanal';};
   $('#r-imp-btn').onclick=()=>$('#imp-file').click();
   // capa upload
   $('#r-capa-btn').onclick=()=>$('#r-capa-file').click();
@@ -876,6 +901,7 @@ function collectRoteiro(){
     video_capa_url:$('#r-vcapa').value.trim()||null,video_insta_url:$('#r-vid').value.trim()||null,
     pdf_url:$('#r-pdf').value.trim()||null,
     ativo:$('#r-ativo').value==='1',status_viagem:$('#r-status').value||null,capa_url:$('#r-capa').value.trim()||null,
+    datas_texto:rotDatasDoForm($('#r-datas')),
     roteiro_dias:dias,hoteis:lines('r-hoteis'),inclui:lines('r-inclui'),nao_inclui:lines('r-naoinclui'),
     valores:valores,galeria:galeria
   };

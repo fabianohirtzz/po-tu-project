@@ -1,16 +1,16 @@
 {
   "_leia": "Trava de cache-buster. O .htaccess cacheia JS/CSS por 1 mes e o deploy e FTP manual, arquivo a arquivo. Se um destes arquivos muda e o ?v= do index.html NAO sobe, o navegador da cliente segue rodando a versao velha e o painel quebra em silencio. Ao alterar um arquivo daqui: suba o ?v= no index.html e rode `php tests/run.php` - o teste imprime o sha novo para colar aqui. E SUBA O ARQUIVO NO FTP.",
   "painel.css": {
-    "v": 15,
-    "sha": "27c894c3a5705faa"
+    "v": 17,
+    "sha": "e3d672f12e2b56f1"
   },
   "fone.js": {
     "v": 2,
     "sha": "b7a74d030ddfa10b"
   },
   "app.js": {
-    "v": 22,
-    "sha": "56ba4841a7b173e3"
+    "v": 24,
+    "sha": "dee2710d83ef1bde"
   },
   "clientes.js": {
     "v": 2,
@@ -61,7 +61,7 @@
     "sha": "ad3ccfcf116a1fe7"
   },
   "datas.js": {
-    "v": 1,
-    "sha": "289065f1ad821a9e"
+    "v": 3,
+    "sha": "b0201e6c31a6eeeb"
   }
 }

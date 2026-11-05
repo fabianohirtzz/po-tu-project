@@ -93,6 +93,122 @@
     return String(roteiro.periodo == null ? '' : roteiro.periodo).trim();
   }
 
+  /* ---------- o editor das datas do mes, na gaveta do roteiro ----------
+     Todas devolvem LISTA NOVA e nunca mexem na de entrada: o editor
+     redesenha a partir do retorno, e mutar a lista recebida faria o estado
+     anterior sumir e dois handlers lendo o mesmo array verem dado alterado.
+
+     Indice fora da faixa devolve a lista inalterada, sem estourar: clique
+     repetido enquanto a tela redesenha chega com indice que ja nao existe. */
+  function clona(gs) {
+    return (Array.isArray(gs) ? gs : []).map(function (g) {
+      return { titulo: g.titulo, datas: (g.datas || []).slice() };
+    });
+  }
+  function dentro(gs, i) { return Number.isInteger(i) && i >= 0 && i < gs.length; }
+
+  function rotDatasAddMes(gs) {
+    var out = clona(gs);
+    // Nasce com um campo de data vazio: mes sem nenhum campo obrigaria dois
+    // cliques para fazer a unica coisa que se quer fazer ali.
+    out.push({ titulo: '', datas: [''] });
+    return out;
+  }
+  function rotDatasDelMes(gs, i) {
+    var out = clona(gs);
+    if (!dentro(out, i)) return out;
+    out.splice(i, 1);
+    return out;
+  }
+  function rotDatasAddData(gs, i) {
+    var out = clona(gs);
+    if (!dentro(out, i)) return out;
+    out[i].datas.push('');
+    return out;
+  }
+  function rotDatasDelData(gs, i, j) {
+    var out = clona(gs);
+    if (!dentro(out, i) || !dentro({ length: out[i].datas.length }, j)) return out;
+    out[i].datas.splice(j, 1);
+    return out;
+  }
+
+  /* O que esta NA TELA, como esta: nada aparado, nada descartado.
+
+     E uma leitura diferente da que vai para o banco, e a diferenca ja foi
+     defeito: o redesenho usava a leitura do banco, que descarta grupo sem
+     data, entao o mes recem-adicionado - que nasce com um campo vazio -
+     sumia no primeiro clique seguinte, e os indices dos botoes deslocavam,
+     fazendo "excluir mes" apagar o mes errado. */
+  function rotDatasDaTela(root) {
+    var out = [];
+    var gs = root ? root.querySelectorAll('.rd-grupo') : [];
+    for (var i = 0; i < gs.length; i++) {
+      var t = gs[i].querySelector('.rd-tit');
+      var campos = gs[i].querySelectorAll('.rd-data');
+      var datas = [];
+      for (var j = 0; j < campos.length; j++) {
+        datas.push(String(campos[j].value == null ? '' : campos[j].value));
+      }
+      out.push({ titulo: String((t && t.value) || ''), datas: datas });
+    }
+    return out;
+  }
+
+  /* O que vai para o banco. Grupo com titulo e ZERO datas nao e gravado: ele
+     nao informa nada e ocuparia espaco na legenda do PDF, que tem teto de
+     1024 caracteres. Titulo em branco com data preenchida ENTRA - o titulo e
+     decoracao, a data e o dado, e perder a data por falta de rotulo seria o
+     pior dos dois erros. */
+  function rotDatasDoForm(root) {
+    var out = [];
+    var gs = root ? root.querySelectorAll('.rd-grupo') : [];
+    for (var i = 0; i < gs.length; i++) {
+      var t = gs[i].querySelector('.rd-tit');
+      var campos = gs[i].querySelectorAll('.rd-data');
+      var datas = [];
+      for (var j = 0; j < campos.length; j++) {
+        var v = String(campos[j].value == null ? '' : campos[j].value).trim();
+        if (v !== '') datas.push(v);
+      }
+      if (!datas.length) continue;
+      out.push({ titulo: String((t && t.value) || '').trim(), datas: datas });
+    }
+    return out;
+  }
+
+  /* Escape proprio, e nao o esc() do app.js: aquele NAO escapa aspa
+     simples, e aqui a marcacao e montada neste arquivo. Mais forte de
+     proposito - o dado vem do painel, mas a regra nao depende disso. */
+  function rotEsc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
+  /* Os grupos de datas, desenhados. Atributos com aspas DUPLAS: rotEsc() nao
+     escapa aspa simples, entao aspa simples em atributo e fuga. */
+  function rotDatasHtml(gs){
+    if(!gs.length)gs=[{titulo:'',datas:['']}];
+    return gs.map((g,i)=>`<div class="rd-grupo" data-i="${i}">
+      <div class="rd-head">
+        <input class="rd-tit" value="${rotEsc(g.titulo||'')}" placeholder="Datas de Dezembro" aria-label="Título do mês">
+        <button type="button" class="rd-del-mes" data-i="${i}" title="Excluir este mês" aria-label="Excluir este mês">✕</button>
+      </div>
+      ${(g.datas.length?g.datas:['']).map((d,j)=>`<div class="rd-linha">
+        <input class="rd-data" value="${rotEsc(d||'')}" placeholder="02/12/26" inputmode="numeric" aria-label="Data">
+        <button type="button" class="rd-del-data" data-i="${i}" data-j="${j}" title="Excluir esta data" aria-label="Excluir esta data">✕</button>
+      </div>`).join('')}
+      <button type="button" class="rep-add rd-add-data" data-i="${i}">+ Adicionar data</button>
+    </div>`).join('');
+  }
+
+  window.rotDatasAddMes = rotDatasAddMes;
+  window.rotDatasHtml = rotDatasHtml;
+  window.rotEsc = rotEsc;
+  window.rotDatasDelMes = rotDatasDelMes;
+  window.rotDatasAddData = rotDatasAddData;
+  window.rotDatasDelData = rotDatasDelData;
+  window.rotDatasDoForm = rotDatasDoForm;
+  window.rotDatasDaTela = rotDatasDaTela;
+
   window.poDatasGrupos = poDatasGrupos;
   window.poDataIso = poDataIso;
   window.poProximaSaida = poProximaSaida;

@@ -576,3 +576,22 @@ tbody tr:last-child td{border-bottom:none}
 .vit-ig__img{display:block;aspect-ratio:4/5;border-radius:8px;background-size:cover;background-position:center;background-color:#dfe4ea;border:1px solid var(--border)}
 .vit-ig__st{position:absolute;top:8px;left:8px;background:rgba(20,26,34,.8);color:#fff;font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:5px}
 @media(max-width:640px){.vit-av__top{grid-template-columns:1fr}.vit-form--linha{flex-direction:column;align-items:stretch}}
+
+/* Datas do mes do roteiro de saidas semanais (gaveta do roteiro).
+   O bloco so aparece quando o status e "semanal": nos outros roteiros seria
+   um campo que nao significa nada. Quem esconde e o atributo `hidden` no
+   #r-datas-wrap, posto na abertura da gaveta e no change do #r-status. */
+.rd-ajuda{margin:0 0 10px;font-size:.78rem;color:var(--muted);line-height:1.45}
+#r-datas{display:flex;flex-direction:column;gap:12px}
+.rd-grupo{border:1px solid var(--border);border-radius:9px;padding:12px;background:var(--surface2)}
+.rd-head{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.rd-head .rd-tit{flex:1 1 auto;min-width:0}
+.rd-linha{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.rd-linha .rd-data{flex:1 1 auto;min-width:0}
+/* Alvo de 32px: a cliente usa o painel no celular, e o botao de excluir
+   nao pode exigir mira. */
+.rd-del-mes,.rd-del-data{flex:0 0 auto;width:32px;height:32px;border-radius:6px;background:#fff;
+  border:1px solid var(--border2);color:var(--muted);font-size:.9rem;line-height:1}
+.rd-del-mes:hover,.rd-del-data:hover{border-color:var(--st-perdido);color:var(--st-perdido)}
+.rd-add-data{margin-top:4px}
+#r-datas-mes{margin-top:12px}
