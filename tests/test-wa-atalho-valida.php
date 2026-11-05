@@ -13,8 +13,16 @@
        "escolheu" o `proximo` de um card `roteiros`.
 
    As regras novas de FORMA sao cinco, todas bloqueio de publicacao, sob o
-   numero 15. O CLAUDE.md diz que nao se acrescenta regra ao validador sem
-   decisao: estas estao decididas na spec A.1. */
+   numero 17. O CLAUDE.md diz que nao se acrescenta regra ao validador sem
+   decisao: estas estao decididas na spec A.1.
+
+   POR QUE 17 E NAO 15: os numeros 15 e 16 JA ESTAVAM OCUPADOS por avisos
+   ("nenhum outro card leva a este" e "o fluxo nao tem card de fim"). Numero
+   repetido com significado diferente faz a tela agrupar um bloqueio junto de
+   um aviso. A primeira versao desta tarefa usou 15 e TODOS OS TESTES
+   PASSARAM, porque eles olham so a lista de bloqueios e o 15 existente e
+   aviso - a colisao era invisivel para eles. Por isso o teste abaixo tambem
+   confere que o 15 segue sendo aviso e nunca bloqueio. */
 require __DIR__ . '/../lib/wa-fluxo.php';
 function ok($cond, $msg) { if (!$cond) { fwrite(STDERR, "ASSERT: $msg\n"); exit(1); } }
 
@@ -73,30 +81,30 @@ function comAtalho($base, $atalhos, $cardId = 'bv') {
     return $out;
 }
 
-ok(temRegra($fx, comAtalho($base, [['tipo' => 'inventado', 'destino' => 'hum']]), 15),
+ok(temRegra($fx, comAtalho($base, [['tipo' => 'inventado', 'destino' => 'hum']]), 17),
     'FORMA 1: tipo fora da lista fechada bloqueia');
-ok(temRegra($fx, comAtalho($base, [['tipo' => 'palavras', 'palavras' => ['atendente'], 'destino' => 'naoexiste']]), 15),
+ok(temRegra($fx, comAtalho($base, [['tipo' => 'palavras', 'palavras' => ['atendente'], 'destino' => 'naoexiste']]), 17),
     'FORMA 2: destino inexistente bloqueia (Review Focus 2)');
-ok(temRegra($fx, comAtalho($base, [['tipo' => 'palavras', 'palavras' => [], 'destino' => 'hum']]), 15),
+ok(temRegra($fx, comAtalho($base, [['tipo' => 'palavras', 'palavras' => [], 'destino' => 'hum']]), 17),
     'FORMA 3: tipo palavras com lista vazia bloqueia');
-ok(temRegra($fx, comAtalho($base, [['tipo' => 'palavras', 'palavras' => ['ate'], 'destino' => 'hum']]), 15),
+ok(temRegra($fx, comAtalho($base, [['tipo' => 'palavras', 'palavras' => ['ate'], 'destino' => 'hum']]), 17),
     'FORMA 4: palavra de menos de 4 caracteres normalizados bloqueia');
-ok(temRegra($fx, comAtalho($base, [['tipo' => 'palavras', 'palavras' => ['ATÉ!'], 'destino' => 'hum']]), 15),
+ok(temRegra($fx, comAtalho($base, [['tipo' => 'palavras', 'palavras' => ['ATÉ!'], 'destino' => 'hum']]), 17),
     'FORMA 4: e conta DEPOIS de normalizar, senao acento e pontuacao enganariam a contagem');
 ok(temRegra($fx, comAtalho($base, [
-        ['tipo' => 'roteiro', 'destino' => 'hum'], ['tipo' => 'roteiro', 'destino' => 'fim']]), 15),
+        ['tipo' => 'roteiro', 'destino' => 'hum'], ['tipo' => 'roteiro', 'destino' => 'fim']]), 17),
     'FORMA 5: dois atalhos de roteiro no mesmo card bloqueia');
 ok(temRegra($fx, comAtalho($base, [
-        ['tipo' => 'destino', 'destino' => 'hum'], ['tipo' => 'destino', 'destino' => 'fim']]), 15),
+        ['tipo' => 'destino', 'destino' => 'hum'], ['tipo' => 'destino', 'destino' => 'fim']]), 17),
     'FORMA 5: dois atalhos de destino tambem');
 ok(!temRegra($fx, comAtalho($base, [
         ['tipo' => 'palavras', 'palavras' => ['atendente'], 'destino' => 'hum'],
-        ['tipo' => 'palavras', 'palavras' => ['humano'], 'destino' => 'hum']]), 15),
+        ['tipo' => 'palavras', 'palavras' => ['humano'], 'destino' => 'hum']]), 17),
     'FORMA 5 nao vale para `palavras`: varios grupos de palavra no mesmo card e uso legitimo');
 ok(!temRegra($fx, comAtalho($base, [
         ['tipo' => 'palavras', 'palavras' => ['atendente'], 'destino' => 'hum'],
         ['tipo' => 'roteiro', 'destino' => 'hum'],
-        ['tipo' => 'destino', 'destino' => 'hum']]), 15),
+        ['tipo' => 'destino', 'destino' => 'hum']]), 17),
     'um de cada tipo no mesmo card e a configuracao recomendada, e nao bloqueia');
 
 /* ---------- TRAVESSIA 1: a aresta do atalho conta no alcance ----------
@@ -134,5 +142,28 @@ ok(temRegra($fx, $pdfPorPalavras, 13),
     'atalho de PALAVRAS nao conta pelo mesmo motivo');
 ok(!temRegra($fx, $pdfPorRoteiro, 3) && !temRegra($fx, $pdfPorDestino, 3),
     'os tres tipos contam no ALCANCE, mesmo os que nao contam como roteiro escolhido');
+
+/* ---------- a trava da colisao de numero ----------
+   O 15 e o 16 sao AVISOS que ja existiam. Se alguem reaproveitar um deles
+   para um bloqueio novo, a tela do painel passa a mostrar um impedimento de
+   publicacao junto de uma observacao de desenho. */
+function avisos_de($fluxo, $cards) {
+    $out = [];
+    foreach (wa_fluxo_valida($fluxo, $cards) as $p) if (!$p['bloqueia']) $out[] = $p['regra'];
+    return array_values(array_unique($out));
+}
+$soltos = array_merge($base, [card('ninguem', 'fim')]);
+ok(in_array(15, avisos_de($fx, $soltos), true), '15 segue sendo AVISO: card que ninguem liga');
+ok(!temRegra($fx, $soltos, 15), 'e nunca bloqueio');
+ok(!in_array(17, avisos_de($fx, comAtalho($base, [['tipo' => 'xx', 'destino' => 'hum']])), true),
+    '17 e sempre bloqueio, nunca aviso');
+
+/* E a aresta de atalho tambem conserta o aviso 15, de graca, porque ele e
+   calculado pelo MESMO $saidas: card alcancado por atalho deixa de ser
+   "trabalho esquecido no desenho". */
+$orfaoFim = array_merge($base, [card('semdata2', 'fim')]);
+ok(in_array(15, avisos_de($fx, $orfaoFim), true), 'sem atalho, o card avulso recebe o aviso 15');
+ok(!in_array(15, avisos_de($fx, comAtalho($orfaoFim, [['tipo' => 'destino', 'destino' => 'semdata2']])), true),
+    'com atalho apontando para ele, o aviso 15 cessa');
 
 echo "OK test-wa-atalho-valida\n";

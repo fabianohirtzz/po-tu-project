@@ -431,7 +431,13 @@ function wa_fluxo_sem_resposta($grafo, $card_id) {
    rede, nenhum banco, nenhum relogio. Quem chama: o endpoint do painel e o
    publicar (que valida de novo por dentro, para nao existir caminho sem ela).
    Nao acrescente regra aqui sem decisao: a semente do fluxo e validada contra
-   exatamente estas 14 que bloqueiam (1 a 14) e 2 que avisam (15 e 16). */
+   exatamente estas 15 que bloqueiam (1 a 14 e 17) e 2 que avisam (15 e 16).
+
+   A 17 e a forma do atalho, decidida na spec A.1 de 04/11/2026. Ela ficou com
+   17 e nao com 15 porque 15 e 16 JA ESTAVAM OCUPADAS por avisos, e numero
+   repetido com significado diferente faz a tela do painel agrupar um bloqueio
+   junto de um aviso. A primeira versao desta tarefa usou 15 e os testes
+   passaram, porque eles conferiam so a lista de bloqueios. */
 
 /* Monta o retrato do fluxo no formato que o roteamento consome, a partir das
    linhas de edicao (fluxo + cards). Pura. */
@@ -543,7 +549,7 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
         }
     }
 
-    /* 15. A forma do atalho. Cinco problemas, todos BLOQUEIO de publicacao,
+    /* 17. A forma do atalho. Cinco problemas, todos BLOQUEIO de publicacao,
        decididos na spec A.1. A Meta nao avisa nada disto e o robo descobriria
        no meio de uma conversa: quem avisa e esta tela. */
     foreach ($C as $id => $c) {
@@ -552,15 +558,15 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
             $ond = 'No card ' . $nome($id) . ', o atalho ' . ($i + 1);
 
             if (!in_array($a['tipo'], WA_ATALHO_TIPOS, true)) {
-                $acha(15, $id, $ond . ' tem um tipo que nao existe. Use palavras, roteiro ou destino.');
+                $acha(17, $id, $ond . ' tem um tipo que nao existe. Use palavras, roteiro ou destino.');
                 continue;
             }
             if ($a['destino'] === null || !$existe($a['destino'])) {
-                $acha(15, $id, $ond . ' aponta para um card que nao existe. Escolha para onde ele leva.');
+                $acha(17, $id, $ond . ' aponta para um card que nao existe. Escolha para onde ele leva.');
             }
             if ($a['tipo'] === 'palavras') {
                 if (!$a['palavras']) {
-                    $acha(15, $id, $ond . ' e do tipo palavras e nao tem nenhuma palavra. Escreva as palavras que o cliente digitaria.');
+                    $acha(17, $id, $ond . ' e do tipo palavras e nao tem nenhuma palavra. Escreva as palavras que o cliente digitaria.');
                 }
                 foreach ($a['palavras'] as $p) {
                     /* Conta DEPOIS de normalizar: uma palavra de 4 caracteres
@@ -568,7 +574,7 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
                        fragmento curto casa por acidente. */
                     $n = trim(wa_normaliza($p));
                     if ($n === '' || mb_strlen($n, 'UTF-8') < 4) {
-                        $acha(15, $id, $ond . ' tem uma palavra curta demais para reconhecer sem errar. Use palavras de 4 letras ou mais.');
+                        $acha(17, $id, $ond . ' tem uma palavra curta demais para reconhecer sem errar. Use palavras de 4 letras ou mais.');
                     }
                 }
             }
@@ -579,7 +585,7 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
                lugar diferente). */
             if ($a['tipo'] !== 'palavras') {
                 if (isset($vistos[$a['tipo']])) {
-                    $acha(15, $id, 'O card ' . $nome($id) . ' tem mais de um atalho do mesmo tipo. So o primeiro dispararia. Deixe um.');
+                    $acha(17, $id, 'O card ' . $nome($id) . ' tem mais de um atalho do mesmo tipo. So o primeiro dispararia. Deixe um.');
                 }
                 $vistos[$a['tipo']] = true;
             }
