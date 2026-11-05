@@ -170,7 +170,13 @@ ok(po_datas_apara('a' . $nbsp . 'b') === 'a' . $nbsp . 'b', 'e nao mexe no meio'
    lado dela discordam, e o cliente recebe "Proxima saida: hoje" num roteiro
    que a ordenacao ja empurrou para depois do proximo. */
 $fonte = file_get_contents(__DIR__ . '/../lib/po-datas.php');
-ok(substr_count($fonte, "gmdate('Y-m-d')") === 2, 'os dois padroes de $hoje usam gmdate');
+/* UMA chamada, nao duas: os defaults de $hoje passaram a chamar po_hoje(),
+   que e o unico ponto que le o relogio. Com uma chamada so, nao ha como
+   acrescentar um segundo relogio sem esta contagem acusar. */
+ok(substr_count($fonte, "gmdate('Y-m-d')") === 1, 'o relogio e lido em UM ponto so (po_hoje)');
+ok(preg_match('/function po_hoje\(\) \{\s*return gmdate\(\x27Y-m-d\x27\);/', $fonte) === 1,
+    'e esse ponto e po_hoje');
+ok(substr_count($fonte, 'po_hoje()') >= 5, 'e todos os defaults de $hoje passam por ela');
 ok(substr_count(str_replace("gmdate('Y-m-d')", '', $fonte), "date('Y-m-d')") === 0, 'nenhuma chamada a date() local sobrou');
 
 echo "OK test-po-datas\n";

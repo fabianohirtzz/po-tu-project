@@ -78,28 +78,27 @@
     };
   }
 
-  /* extrai a data de partida do rótulo p/ ordenar o carrossel pela viagem.
-     Ex.: "11 dias · 10 a 21/12/2025" → 10/12/2025. Sem data reconhecida vai pro fim. */
-  const MESES = { jan:0, fev:1, mar:2, abr:3, mai:4, jun:5, jul:6, ago:7, set:8, out:9, nov:10, dez:11 };
-  function tripTime(data) {
-    const s = String(data || '');
-    // "10 a 21/12/2025" → dia inicial com mês/ano do fim
-    let m = s.match(/(\d{1,2})\s*a\s*\d{1,2}\/(\d{1,2})\/(\d{4})/);
-    if (m) return new Date(+m[3], +m[2] - 1, +m[1]).getTime();
-    // qualquer DD/MM/YYYY (usa o primeiro)
-    m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-    if (m) return new Date(+m[3], +m[2] - 1, +m[1]).getTime();
-    // "25 de novembro ... de 2026" (formato periodo)
-    m = s.match(/(\d{1,2})\s+de\s+([a-zç]+)\D+(\d{4})/i);
-    if (m) {
-      const mes = MESES[m[2].slice(0, 3).toLowerCase()];
-      if (mes != null) return new Date(+m[3], mes, +m[1]).getTime();
-    }
-    return Infinity;
-  }
-  function ordenarPorData(list) {
-    return list.slice().sort((a, b) => tripTime(a.data) - tripTime(b.data));
-  }
+  /* A ORDENACAO DO CARROSSEL SAIU DAQUI em 05/11/2026.
+
+     Havia um tripTime(rotulo) + ordenarPorData(list) que liam a data do
+     ROTULO ja formatado ("11 dias - 10 a 21/12/2025"). Dois problemas, e o
+     segundo era invisivel:
+
+       1. tripTime exigia ano de 4 digitos, e TODOS os periodos reais tem 2
+          ("De 27/10/26 a 12/11/26"). Ele devolvia o mesmo valor para quase
+          todos, a comparacao empatava, e a "ordenacao por data" da home era
+          um no-op silencioso - o carrossel saia na ordem manual do painel
+          enquanto o codigo dizia que ordenava por data. Ficou registrado
+          como divida no CLAUDE.md no mesmo dia em que o cliente pediu ordem
+          cronologica em todo lugar.
+
+       2. Ordenar pelo ROTULO e fragil por construcao: o rotulo e texto de
+          apresentacao e muda quando a copy muda. A ordem agora sai dos
+          campos CRUS do banco (periodo, status_viagem, datas_texto), dentro
+          de poFetchRoteiros, que serve tambem a Nossa Historia e o /link.
+
+     Uma conta so, com gemeo em PHP conferido caso a caso por teste cruzado.
+     MESES saiu junto: so o tripTime o usava. */
 
   /* O que um clique num card faz. Card lateral vem para o centro; o do centro
      abre o roteiro. O carrossel tambem se arrasta, e o navegador dispara um
@@ -211,6 +210,6 @@
       const db = await window.poFetchRoteiros();
       if (db && db.length) list = db.map(mapDb);
     }
-    initSlider(ordenarPorData(list));
+    initSlider(list);   // ja vem cronologica e sem vencidos de poFetchRoteiros
   })();
 })();

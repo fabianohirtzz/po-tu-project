@@ -39,7 +39,12 @@
     try {
       var res = await sb.from('po_roteiros').select('*').eq('ativo', true).order('ordem').order('created_at');
       if (res.error || !res.data || !res.data.length) return null;
-      return res.data;
+      /* ORDEM E FILTRO AQUI, na unica leitura de lista do front: a home, a
+         Nossa Historia e o /link saem todas desta funcao, entao tela nova de
+         roteiro nasce cronologica e sem viagem vencida sem ninguem lembrar de
+         chamar nada. O `.order('ordem')` continua na consulta porque ele e o
+         criterio de EMPATE de poPorSaida. */
+      return window.poPorSaida(window.poSemVencidos(res.data));
     } catch (e) { return null; }
   };
   // um roteiro por slug (RLS: público vê só ativo; painel logado vê rascunho também)
@@ -204,7 +209,93 @@
     return String(roteiro.periodo == null ? '' : roteiro.periodo).trim();
   };
 
-  // registro do banco → card do slider/carrossel
+  /* ---------- ORDEM CRONOLOGICA ----------
+     Gemeos de lib/po-datas.php. tests/test-ordem-cronologica.mjs roda a MESMA
+     tabela de casos nos dois lados e exige que concordem caso a caso: tabela
+     unica, nunca uma lista por implementacao, que e exatamente como dois
+     lados divergem com os dois testes verdes.
+
+     Existem em JavaScript porque as paginas publicas (home, Nossa Historia,
+     /link) leem o banco NO NAVEGADOR, com a consulta de poFetchRoteiros. */
+
+  // UTC, o mesmo instante que o gmdate do PHP e o toISOString dos outros
+  // gemeos. Hora local faria a ORDEM e o ROTULO discordarem entre 21h e
+  // meia-noite em Sao Paulo.
+  window.poHoje = function () { return new Date().toISOString().slice(0, 10); };
+
+  /* As datas do PRIMEIRO campo que tiver alguma, em ISO, na ordem do texto.
+     `periodo` primeiro: os 7 roteiros medidos tem data ali, e o cliente foi
+     explicito em 05/11/2026. Data impossivel (31/02) e descartada e a busca
+     continua; campo sem nenhuma data valida passa a vez ao seguinte.
+
+     Regex NAO ancorada, ao contrario de poDataIso: aqui se varre um texto
+     corrido ("De 27/10/26 a 12/11/26"), nao se valida um campo inteiro. */
+  window.poDatasDoCampo = function (roteiro) {
+    if (!roteiro || typeof roteiro !== 'object') return [];
+    var campos = ['periodo', 'data_label', 'descricao_curta'];
+    for (var c = 0; c < campos.length; c++) {
+      var txt = String(roteiro[campos[c]] == null ? '' : roteiro[campos[c]]);
+      if (txt === '') continue;
+      var re = /(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})/g, m, out = [];
+      while ((m = re.exec(txt)) !== null) {
+        var iso = window.poDataIso(m[1] + '/' + m[2] + '/' + m[3]);
+        if (iso !== null) out.push(iso);
+      }
+      if (out.length) return out;
+    }
+    return [];
+  };
+
+  /* A data de PARTIDA. Semanal tira da lista de datas do mes (a proxima
+     futura); sem data cadastrada, cai na regra de sempre e o roteiro vai para
+     o fim da lista - que e o caso do Peru hoje. */
+  window.poDataSaida = function (roteiro, hoje) {
+    if (!roteiro || typeof roteiro !== 'object') return null;
+    if (roteiro.status_viagem === 'semanal') {
+      var prox = window.poProximaSaida(roteiro, hoje);
+      if (prox !== null) return prox;
+    }
+    var d = window.poDatasDoCampo(roteiro);
+    return d.length ? d[0] : null;
+  };
+
+  /* O ULTIMO dia da viagem: a ultima data do MESMO campo que deu a partida.
+     Semanal nao tem fim - ele sai toda semana. */
+  window.poDataFim = function (roteiro) {
+    if (!roteiro || typeof roteiro !== 'object') return null;
+    if (roteiro.status_viagem === 'semanal') return null;
+    var d = window.poDatasDoCampo(roteiro);
+    return d.length ? d[d.length - 1] : null;
+  };
+
+  /* A viagem ja terminou? Pelo ULTIMO dia, nao pelo primeiro: em 05/11/2026 a
+     Turquia tinha partido em 27/10 e terminava em 12/11, ou seja estava EM
+     CURSO. Pelo primeiro dia ela sumiria do site no meio do passeio do grupo.
+     Roteiro sem data nunca vence. */
+  window.poVencido = function (roteiro, hoje) {
+    var fim = window.poDataFim(roteiro);
+    if (fim === null) return false;
+    return fim < (hoje || window.poHoje());
+  };
+
+  /* Ordem cronologica, sem data no fim. O empate e desfeito pela posicao de
+     ORIGEM, que e a ordem manual do painel: ordem que varia entre duas
+     leituras troca o roteiro debaixo do visitante. */
+  window.poPorSaida = function (lista, hoje) {
+    var h = hoje || window.poHoje();
+    return (lista || []).map(function (r, i) {
+      return { r: r, k: window.poDataSaida(r, h) || '9999-99-99', i: i };
+    }).sort(function (a, b) {
+      return a.k < b.k ? -1 : a.k > b.k ? 1 : a.i - b.i;
+    }).map(function (x) { return x.r; });
+  };
+
+  window.poSemVencidos = function (lista, hoje) {
+    var h = hoje || window.poHoje();
+    return (lista || []).filter(function (r) { return !window.poVencido(r, h); });
+  };
+
+  // registro do banco -> card do slider/carrossel
   window.poCard = function (r) {
     return {
       slug: r.slug, titulo: r.titulo || '',

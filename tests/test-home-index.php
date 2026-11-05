@@ -73,6 +73,35 @@ $ord = po_por_saida([
 ]);
 ok(array_column($ord, 'titulo') === ['Turquia', 'Chile', 'Vietna', 'Oriente', 'Sem data'],
    'mais proxima primeiro; sem data vai para o fim. Veio: ' . implode(',', array_column($ord, 'titulo')));
-ok(strpos($src, 'po_por_saida(po_fetch_roteiros())') !== false, 'o painel Sobre usa a ordem cronologica');
+/* A trava era pelo NOME da funcao no fonte do index.php
+   ('po_por_saida(po_fetch_roteiros())'), e em 05/11/2026 a ordenacao passou
+   para dentro de po_fetch_roteiros, onde serve TODAS as superficies. A trava
+   ficou vermelha sem haver defeito - nome de funcao num fonte envelhece.
+
+   Agora ela mede o COMPORTAMENTO: injeta uma lista fora de ordem e confere
+   que o que chega ao painel Sobre saiu cronologico, com o sem-data no fim.
+   Isso vale qualquer que seja a funcao que faca o trabalho, e vermelho aqui
+   significa que a home voltou a listar fora de ordem. */
+po_set_fetcher(function ($q) {
+    return json_encode([
+        ['slug' => 'sem-data', 'titulo' => 'Sem data', 'ativo' => true, 'periodo' => ''],
+        ['slug' => 'grecia',   'titulo' => 'Grecia',   'ativo' => true, 'periodo' => 'De 18/05/27 a 03/06/27'],
+        ['slug' => 'chile',    'titulo' => 'Chile',    'ativo' => true, 'periodo' => '25/11/26 a 02/12/26'],
+    ]);
+});
+$lista = po_fetch_roteiros();
+ok(array_column($lista, 'slug') === ['chile', 'grecia', 'sem-data'],
+   'a lista que alimenta o painel Sobre vem cronologica, sem-data no fim. Veio: '
+   . implode(',', array_column($lista, 'slug')));
+
+/* E o vencido nao chega la. */
+po_set_fetcher(function ($q) {
+    return json_encode([
+        ['slug' => 'passou', 'titulo' => 'Passou', 'ativo' => true, 'periodo' => 'De 01/01/26 a 10/01/26'],
+        ['slug' => 'futuro', 'titulo' => 'Futuro', 'ativo' => true, 'periodo' => 'De 01/01/28 a 10/01/28'],
+    ]);
+});
+$vivos = array_column(po_fetch_roteiros(), 'slug');
+ok($vivos === ['futuro'], 'viagem que ja terminou nao chega as telas de venda. Veio: ' . implode(',', $vivos));
 
 echo "home-index ok\n";

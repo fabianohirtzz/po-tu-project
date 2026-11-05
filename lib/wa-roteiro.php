@@ -159,29 +159,7 @@ function wa_roteiro_unico($texto, $roteiros) {
    `checkdate`, um erro de digitacao no painel mandaria a viagem para o lugar
    errado da fila em vez de para o fim dela. */
 function wa_roteiro_data_ini($roteiro, $hoje = null) {
-    if (!is_array($roteiro)) return null;
-    /* SAIDAS SEMANAIS: a data nao esta em texto nenhum, esta na lista de
-       datas do mes. Sem este caminho o roteiro le null e vai para o FIM da
-       fila, que e onde ficam as viagens que ja partiram. Sem data futura
-       cadastrada (ninguem atualizou o painel) cai na regra de sempre. */
-    if (($roteiro['status_viagem'] ?? null) === 'semanal') {
-        $prox = po_proxima_saida($roteiro, $hoje);
-        if ($prox !== null) return $prox;
-    }
-    foreach (['periodo', 'data_label', 'descricao_curta'] as $campo) {
-        $txt = (string) ($roteiro[$campo] ?? '');
-        if ($txt === '') continue;
-        if (!preg_match_all('#(\d{1,2})/(\d{1,2})/(\d{4}|\d{2})#', $txt, $ms, PREG_SET_ORDER)) continue;
-        foreach ($ms as $m) {
-            $d = (int) $m[1];
-            $mes = (int) $m[2];
-            $ano = (int) $m[3];
-            if (strlen($m[3]) === 2) $ano += 2000;
-            if (!checkdate($mes, $d, $ano)) continue;
-            return sprintf('%04d-%02d-%02d', $ano, $mes, $d);
-        }
-    }
-    return null;
+    return po_data_saida($roteiro, $hoje);
 }
 
 /* Marcador embutido no texto pre-preenchido do link wa.me do site. E a

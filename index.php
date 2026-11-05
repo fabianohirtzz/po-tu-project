@@ -38,35 +38,15 @@ function po_home_viagens_html($lista) {
 /* Data de saida (AAAA-MM-DD) tirada do texto que a cliente escreve no painel
    ("De 27/10/26 à 12/11/26"): o banco nao tem coluna de data. A primeira data
    do texto e a saida; ano com 2 digitos vira 20xx. Sem data legivel: null. */
-function po_data_saida($r) {
-    /* SAIDAS SEMANAIS: a data esta na lista de datas do mes, nao em texto.
-       Sem este caminho o roteiro devolve null, cai no '9999' de quem
-       chamou e ordena no FIM da lista - um roteiro que sai na semana que
-       vem anunciado depois de todos. Sem data futura cadastrada, volta a
-       regra de sempre. */
-    if (($r['status_viagem'] ?? null) === 'semanal') {
-        $prox = po_proxima_saida($r);
-        if ($prox !== null) return $prox;
-    }
-    foreach (['data_label', 'periodo'] as $k) {
-        $t = $r[$k] ?? '';
-        if (is_string($t) && preg_match('~(\d{1,2})/(\d{1,2})/(\d{4}|\d{2})\b~', $t, $m)) {
-            $a = strlen($m[3]) === 2 ? '20' . $m[3] : $m[3];
-            if (checkdate((int) $m[2], (int) $m[1], (int) $a)) return sprintf('%s-%02d-%02d', $a, $m[2], $m[1]);
-        }
-    }
-    return null;
-}
+/* po_data_saida e po_por_saida viviam AQUI e so serviam a lista do painel
+   "Sobre". Foram para lib/po-datas.php em 05/11/2026, quando o cliente pediu
+   ordem cronologica em todo lugar que mostra roteiro.
 
-/* Ordem cronologica (pedido do cliente, 23/10/2026): a saida mais proxima
-   primeiro; roteiro sem data legivel vai para o fim, na ordem do painel. */
-function po_por_saida($lista) {
-    $i = 0;
-    $chave = [];
-    foreach ($lista as $r) $chave[] = [po_data_saida($r) ?? '9999', $i++, $r];
-    usort($chave, function ($a, $b) { return [$a[0], $a[1]] <=> [$b[0], $b[1]]; });
-    return array_column($chave, 2);
-}
+   Elas tambem DIVERGIAM do robo: a versao daqui lia `data_label` antes de
+   `periodo`, e wa_roteiro_data_ini lia `periodo` antes - ordem de campo
+   diferente produz ordem de lista diferente na home e na conversa. Agora e
+   uma funcao so, com `periodo` primeiro, que e o que o cliente pediu e o que
+   a medicao dos 7 roteiros confirma. */
 
 function po_home_render($html, $lista) {
     if (strpos($html, PO_HOME_MARCA) === false) return $html;
@@ -79,5 +59,5 @@ if (!defined('PO_TEST')) {
     $html = po_social_render(file_get_contents(__DIR__ . '/index.html'), [
         PO_MARCA_AVALIACOES_SOBRE => po_avaliacoes_sobre_html(po_fetch_avaliacoes()),
     ]);
-    echo po_home_render($html, po_por_saida(po_fetch_roteiros()));
+    echo po_home_render($html, po_fetch_roteiros());
 }

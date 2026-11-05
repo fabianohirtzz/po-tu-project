@@ -26,5 +26,5 @@ function po_sitemap_xml($lista) {
 
 if (!defined('PO_TEST')) {
     header('Content-Type: application/xml; charset=utf-8');
-    echo po_sitemap_xml(po_fetch_roteiros());
+    echo po_sitemap_xml(po_fetch_roteiros_todos());
 }

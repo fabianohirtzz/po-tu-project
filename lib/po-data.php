@@ -121,7 +121,33 @@ function po_rest_tabela($tabela, $query, $ttl = 600) {
    Em 16/07/2026 o banco tinha 0 linhas inativas, entao "anon so ve ativos"
    passou por vacuidade: nao ha prova de que a RLS filtre. Se ela nao filtrar
    e a gente confiar, o primeiro rascunho da cliente vai pro ar e pro Google. */
+/* A LISTA de roteiros a venda: ordem cronologica, sem as viagens que ja
+   terminaram.
+
+   Esta e a UNICA leitura de lista do lado do servidor - a home, /roteiros,
+   "Outros roteiros", o llms.txt e o catalogo do robo todos saem daqui. Por
+   isso a ordem e o filtro moram AQUI e nao em cada tela: superficie nova de
+   roteiro nasce ordenada e sem viagem vencida, sem ninguem lembrar de
+   chamar nada. Era o contrario ate 05/11/2026, e o resultado era que so a
+   lista do painel Sobre e o robo ordenavam por data; a home, /roteiros e as
+   outras saiam na ordem manual do painel.
+
+   O `order=ordem.asc` continua na consulta de proposito: ele e o CRITERIO DE
+   EMPATE de po_por_saida (dois roteiros na mesma data mantem a ordem que a
+   cliente escolheu no painel), e sem ele o empate dependeria da ordem que o
+   PostgREST devolvesse. */
 function po_fetch_roteiros() {
+    return po_por_saida(po_sem_vencidos(po_fetch_roteiros_todos()));
+}
+
+/* A mesma lista COM as viagens que ja terminaram. Um chamador so: o sitemap.
+
+   O slug e a identidade estavel da viagem e a URL carrega a autoridade que a
+   edicao seguinte herda. Tirar do sitemap no dia seguinte a viagem, somado a
+   nenhum link interno apontar para ela, orfanaria a URL e jogaria fora o que
+   os 301 de 20/07 existiram para recuperar. A pagina segue respondendo 200
+   porque po_fetch_roteiro() e uma consulta separada desta lista. */
+function po_fetch_roteiros_todos() {
     $d = po_rest('select=*&ativo=eq.true&order=ordem.asc,created_at.asc');
     return $d === null ? [] : $d;
 }

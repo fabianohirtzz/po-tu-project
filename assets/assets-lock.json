@@ -49,15 +49,15 @@
     "sha": "426c0740f77436c9"
   },
   "main.js": {
-    "v": 11,
-    "sha": "25a28cdf62dbc156"
+    "v": 12,
+    "sha": "64e98182331f2ad1"
   },
   "roteiro.js": {
     "v": 5,
     "sha": "999be3231e719a90"
   },
   "roteiros-shared.js": {
-    "v": 8,
-    "sha": "f7857d6a9280833e"
+    "v": 9,
+    "sha": "d9e1612f05b88318"
   }
 }
