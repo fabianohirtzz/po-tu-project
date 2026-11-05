@@ -1334,13 +1334,13 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
       (CRLF). Custou um vermelho que dez revisoes nao viram, porque o worktree so teve LF.
 - **FLUXO DE CONVERSA, PLANO B (a aba do painel): FEITO, MERGEADO, NADA ATIVO (28/10/2026).**
   7 tarefas em TDD na branch `fluxo-painel` (19 commits, merge `1df8065`); a suite foi de
-  56 para **58** arquivos **no Git** (3 nascem, 1 morre com a aba antiga). **Atencao: o
-  runner executa 72.** A diferenca sao **14 arquivos de teste que existem so no disco**,
-  parte dos ~63 arquivos nunca commitados (`test-cadastur`, `test-faq`, `test-home-index`,
-  `test-home-slide`, `test-home-sobre`, `test-htaccess-redirects`, `test-limpa-cache`,
-  `test-rot-preenche`, `test-rot-save-erro`, `test-roteiro-preview`, `test-social`,
-  `test-status-tag`, `test-urls-limpas`, `test-vitrine`). Quem clonar o repo roda 58 e
-  **nao tem como saber que faltam 14**. Novos: `fluxo.php`,
+  56 para **58** arquivos **no Git** (3 nascem, 1 morre com a aba antiga), enquanto o
+  runner executava **72**: a diferenca eram **14 arquivos de teste que existiam so no
+  disco**, e quem clonasse o repo rodava 58 **sem ter como saber que faltavam 14**.
+  **RESOLVIDO em 05/11/2026:** o commit de baseline da branch `semanal-datas` (`94221d0`,
+  57 arquivos de outubro que estavam em producao e nunca tinham sido commitados) levou
+  esses 14 para o Git junto. **Medido depois do merge: 82 arquivos de teste no disco, 82
+  no Git, nenhum fora.** Um clone novo roda a suite inteira. Novos: `fluxo.php`,
   `painel/fluxo.js`, `painel/fluxo.css`. Plano:
   `docs/superpowers/plans/2026-10-27-fluxo-painel.md` · **pendencias, heranca e as tres
   pre-condicoes do Plano C: `docs/superpowers/reviews/2026-10-27-fluxo-painel-pendencias.md`**.
@@ -1538,8 +1538,10 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     filtre por lead ou por etapa do funil. O que ja e verdade e que **o robo nao a
     envolve nos descartados** - ele se despede sozinho e so chama o humano no caminho de
     quem qualificou. Ela pode arquivar ou silenciar a conversa no app.
-- **STATUS "SAIDAS SEMANAIS" + DATAS DO MES (05/11/2026): FEITO, NADA NO AR.** Branch
-  `semanal-datas`, 6 tarefas em TDD; a suite foi de 76 para **80** arquivos. Novos:
+- **STATUS "SAIDAS SEMANAIS" + DATAS DO MES (05/11/2026): FEITO E MERGEADO EM `main`
+  (fast-forward, 9 commits), NADA NO AR.** Branch `semanal-datas` (apagada); a suite foi
+  de 76 para **82** arquivos, e os 82 agora estao **todos no Git** (ver a correcao do
+  item de 28/10 abaixo). Novos:
   `lib/po-datas.php`, `painel/datas.js`, migration `2026-11-04-status-semanal-datas.sql`
   (**NAO rodada**), e 4 arquivos de teste. Spec:
   `docs/superpowers/specs/2026-11-04-robo-entende-frase-e-roteiro-semanal-design.md`
@@ -1595,9 +1597,44 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     cru para a cliente.
   - **Ordem de deploy** (depois da migration): `lib/po-datas.php` **antes** de `lib/po-view.php`, `lib/po-data.php`
     e `lib/wa-roteiro.php`, que passam a requere-lo; `painel/datas.js` antes do
-    `painel/app.js`; o `painel/index.html` **por ultimo**. Cache-buster: `painel.css?v=17`,
-    `app.js?v=24`, `datas.js?v=3`, `fluxo.js?v=21`, `roteiros-shared.js?v=8`,
-    `status-tag.css?v=3`.
+    `painel/app.js`; o `painel/index.html` **por ultimo**. Cache-buster, lido dos locks e
+    nao da memoria: painel `painel.css?v=17`, `app.js?v=24`, `datas.js?v=4`,
+    `fluxo.js?v=22`; **site publico** `status-tag.css?v=4`, `main.js?v=11`,
+    `historia.js?v=5`, `link.js?v=3`, `roteiros-shared.js?v=8`.
+  - **O SITE PUBLICO GANHOU LOCK DE CACHE-BUSTER** (`assets/assets-lock.json` +
+    `tests/test-cache-buster-site.mjs`), irmao do que o painel ja tinha. Ele nasceu de um
+    defeito medido em producao: o `status-tag.css` ganhou a tag "Saidas semanais" e o `?v=`
+    das paginas ficou parado, com `max-age=2592000` no ar - sem a regra `.st-tag--semanal`,
+    `--st-ico` fica indefinida, a mascara do `::before` vira declaracao invalida e a tag
+    sai como **quadrado solido** por ate 30 dias. Ele tambem exige **versao unica por
+    arquivo em todas as paginas** (o `roteiros-shared.js` ja esteve em `?v=4` em duas
+    paginas e `?v=6` em tres, ou seja metade dos visitantes rodava codigo de outra epoca).
+  - **ACHADO NO MERGE, E SO LA: `"\n"` ESCRITO APERTANDO O ENTER** (commit `17fa1f6`).
+    A suite estava verde na branch e ficou **vermelha na arvore mesclada**, com o codigo
+    identico. `lib/po-datas.php` juntava as linhas do `{datas}` com um literal apertado no
+    Enter em **quatro** pontos, e o `tests/test-po-datas.php` dividia com outro; o checkout
+    do merge materializou o **teste** em CRLF e deixou a **funcao** em LF (o worktree fica
+    misto porque o checkout so reescreve o que mudou), o `explode` parou de dividir, e a
+    linha inteira passou a ser medida como se fosse uma data.
+    **O defeito da funcao de producao estava LATENTE**, que e o lado perigoso: hoje ela
+    emite LF, mas esta a um checkout de mandar CR para o WhatsApp e de gastar **um
+    caractere a mais por linha** contra o teto de 300 do `{datas}` e o de **1024 da legenda
+    de PDF** da Cloud API - teto que a Meta aplica recusando a mensagem **inteira**, em
+    silencio. O FTP sobe os bytes que estiverem no disco na hora.
+    **E a segunda violacao desta regra depois de ela estar escrita aqui** (a primeira foi o
+    `str_replace` no-op de 02/11), entao ela parou de depender de alguem lembrar:
+    **`tests/test-fonte-escapes.php`** varre os **104 PHP** do projeto com `token_get_all`
+    e recusa string cujo conteudo e so quebra de linha crua. Tres decisoes dele, cada uma
+    medida por mutacao (10/10 mortos): **aspas simples CONTAM** (o defeito e o byte que o
+    Enter grava, nao a interpretacao da escape); **heredoc fica FORA** (la apertar Enter e
+    a unica forma correta, e heredoc com linha em branco entre duas variaveis daria falso
+    positivo); e o detector e **funcao pura testada contra fonte conhecida**, senao o ramo
+    das strings interpoladas e o filtro de heredoc nao sao exercitados por nada - os dois
+    sobreviveram a primeira rodada de mutacao.
+    **Conferido no estado que revela o bug:** os tres arquivos foram apagados e
+    rematerializados pelo `git checkout` (184/176/140 linhas CRLF) e a suite seguiu
+    **verde, 82 arquivos**. Teste que le fonte normaliza na leitura; **esta trava le bytes
+    crus de proposito**, porque o que ela mede e o byte.
   - **Falta:** rodar a migration, fazer o deploy, e a cliente cadastrar o Peru.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
