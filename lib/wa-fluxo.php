@@ -53,6 +53,19 @@ function wa_fl_call($nome, ...$args) { return call_user_func_array(wa_fl_dep($no
 /* ---------- listas fechadas ---------- */
 const WA_CARD_TIPOS    = ['texto','botoes','lista','roteiros','pdf','marca','ir_para_fluxo','humano','fim'];
 const WA_CARD_ESPERA   = ['botoes','lista','roteiros'];          // cards que param e esperam o cliente
+
+/* ATALHOS: a frase do cliente lida no proprio card, em vez de um card
+   satelite por card que espera. Lista FECHADA, como todas as listas deste
+   subsistema - tipo fora dela bloqueia a publicacao.
+
+     palavras  o cliente pediu algo nomeadamente ("atendente", "humano")
+     roteiro   a frase nomeia um roteiro A VENDA
+     destino   a frase nomeia um destino da casa que nao esta a venda
+
+   A ordem recomendada no card de boas-vindas e esta mesma: pedido explicito
+   por uma pessoa ganha de palpite, e roteiro a venda e resposta melhor que
+   "nao temos data". A ordem e DADO, no card, entao a cliente muda. */
+const WA_ATALHO_TIPOS  = ['palavras','roteiro','destino'];
 const WA_CARD_TERMINAL = ['humano','fim'];            // cards sem saida
 // Destino de "sem resposta": so card que nao espera, senao o cron de timeout
 // agendaria uma espera dentro de outra.
@@ -179,6 +192,34 @@ function wa_fluxo_campos_marca($config, $ctx) {
         }
     }
     return $campos;
+}
+
+/* Os atalhos de um card, normalizados. Lista vazia quando nao ha nenhum, e
+   nunca estoura: o `config` vem do painel e de migration, e card antigo nao
+   tem a chave.
+
+   NAO valida nada - quem valida e wa_fluxo_valida, para a cliente ver o
+   problema na tela antes de publicar em vez de o robo descobrir no meio de
+   uma conversa com o cliente esperando. */
+function wa_atalhos_do_card($card) {
+    $lista = (is_array($card) && isset($card['config']['atalhos'])) ? $card['config']['atalhos'] : null;
+    if (!is_array($lista)) return [];
+
+    $out = [];
+    foreach ($lista as $a) {
+        if (!is_array($a)) continue;
+        $palavras = [];
+        foreach ((array) ($a['palavras'] ?? []) as $p) {
+            if (is_string($p) || is_numeric($p)) $palavras[] = (string) $p;
+        }
+        $out[] = [
+            'tipo'     => (string) ($a['tipo'] ?? ''),
+            'palavras' => $palavras,
+            'destino'  => ($a['destino'] ?? '') !== '' ? (string) $a['destino'] : null,
+            'saudacao' => (string) ($a['saudacao'] ?? ''),
+        ];
+    }
+    return $out;
 }
 
 /* ---------- roteamento puro ----------
@@ -458,12 +499,21 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
     $listaDin = function ($c) { return $c['tipo'] === 'roteiros' || ($c['tipo'] === 'lista' && ($c['config']['fonte'] ?? null) === 'roteiros'); };
 
     // Saidas de um card. $com_sr inclui o "sem resposta" (so o cron o segue).
+    /* ARESTA DE ATALHO CONTA NA TRAVESSIA, e isto e o que permite o fluxo
+       desta spec publicar. O card "Sem data para este destino" e alcancavel
+       SO por atalho: sem contar a aresta, a regra 3 (inalcancavel) o reprova
+       e a cliente nao consegue publicar nada.
+
+       Entrando no alcance, ele passa a ser conferido tambem pela regra 11
+       (beco sem saida), que e o comportamento certo: card que a conversa
+       alcanca e nao consegue deixar prende o cliente. */
     $saidas = function ($c, $com_sr = true) use ($existe, $listaDin) {
         $ids = [];
         if (!$listaDin($c)) foreach ($c['opcoes'] as $o) $ids[] = $o['destino'];
         $ids[] = $c['proximo'];
         $ids[] = $c['fallback'];
         if ($com_sr) $ids[] = $c['sem_resposta'];
+        foreach (wa_atalhos_do_card($c) as $a) $ids[] = $a['destino'];
         return array_values(array_unique(array_filter($ids, $existe)));
     };
 
@@ -490,6 +540,49 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
     foreach ($C as $id => $c) {
         if ($espera($c) && !$c['lembrete_ativo'] && $c['sem_resposta'] === null) {
             $acha(2, $id, 'O card ' . $nome($id) . ' espera uma resposta, mas não tem lembrete nem destino para "sem resposta". Se o cliente calar, a conversa fica parada. Ligue o lembrete ou escolha o que acontece sem resposta.');
+        }
+    }
+
+    /* 15. A forma do atalho. Cinco problemas, todos BLOQUEIO de publicacao,
+       decididos na spec A.1. A Meta nao avisa nada disto e o robo descobriria
+       no meio de uma conversa: quem avisa e esta tela. */
+    foreach ($C as $id => $c) {
+        $vistos = [];
+        foreach (wa_atalhos_do_card($c) as $i => $a) {
+            $ond = 'No card ' . $nome($id) . ', o atalho ' . ($i + 1);
+
+            if (!in_array($a['tipo'], WA_ATALHO_TIPOS, true)) {
+                $acha(15, $id, $ond . ' tem um tipo que nao existe. Use palavras, roteiro ou destino.');
+                continue;
+            }
+            if ($a['destino'] === null || !$existe($a['destino'])) {
+                $acha(15, $id, $ond . ' aponta para um card que nao existe. Escolha para onde ele leva.');
+            }
+            if ($a['tipo'] === 'palavras') {
+                if (!$a['palavras']) {
+                    $acha(15, $id, $ond . ' e do tipo palavras e nao tem nenhuma palavra. Escreva as palavras que o cliente digitaria.');
+                }
+                foreach ($a['palavras'] as $p) {
+                    /* Conta DEPOIS de normalizar: uma palavra de 4 caracteres
+                       crus pode ter 3 depois de tirar acento e pontuacao, e
+                       fragmento curto casa por acidente. */
+                    $n = trim(wa_normaliza($p));
+                    if ($n === '' || mb_strlen($n, 'UTF-8') < 4) {
+                        $acha(15, $id, $ond . ' tem uma palavra curta demais para reconhecer sem errar. Use palavras de 4 letras ou mais.');
+                    }
+                }
+            }
+            /* Mais de um atalho de roteiro ou de destino no mesmo card: os
+               dois leriam a MESMA frase e o segundo nunca dispararia, entao
+               a cliente teria configurado algo que nao acontece. Varios
+               grupos de `palavras` sao uso legitimo (cada grupo leva a um
+               lugar diferente). */
+            if ($a['tipo'] !== 'palavras') {
+                if (isset($vistos[$a['tipo']])) {
+                    $acha(15, $id, 'O card ' . $nome($id) . ' tem mais de um atalho do mesmo tipo. So o primeiro dispararia. Deixe um.');
+                }
+                $vistos[$a['tipo']] = true;
+            }
         }
     }
 
@@ -739,6 +832,14 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
             $viz[] = [$c['proximo'], $listaDin($c) ? true : $tem];
             $viz[] = [$c['fallback'], $tem];
             $viz[] = [$c['sem_resposta'], $tem];
+            /* Atalho do tipo `roteiro` conta como "escolheu um roteiro",
+               porque ele grava o slug no contexto - e so por isso o atalho
+               pode apontar para o card de PDF. Os tipos `palavras` e
+               `destino` NAO contam: destino nao tem slug, e o PDF sairia sem
+               ter o que mandar. */
+            foreach (wa_atalhos_do_card($c) as $a) {
+                $viz[] = [$a['destino'], $a['tipo'] === 'roteiro' ? true : $tem];
+            }
             foreach ($viz as [$d, $t]) {
                 if (!$existe($d)) continue;
                 $k = $d . '|' . (int) $t;
