@@ -25,6 +25,7 @@ require_once __DIR__ . '/wa-db.php';
 require_once __DIR__ . '/wa-send.php';
 require_once __DIR__ . '/wa-roteiro.php';   // wa_normaliza / wa_mesma_palavra, para a porta `palavra`
 require_once __DIR__ . '/wa-destinos.php';  // wa_destino_unico, para o atalho `destino`
+require_once __DIR__ . '/wa-espera.php';    // wa_espera_anota, para o `marca` com +destino
 
 /* ---------- dependencias injetaveis ----------
    Usa o MESMO repositorio de dependencias do motor ($GLOBALS['WA_DEPS']).
@@ -43,6 +44,7 @@ function wa_fl_dep($nome) {
         'update'       => 'wa_db_update',
         'roteiros'     => 'po_fetch_roteiros',
         'destinos'     => 'wa_destinos_ativos',
+        'espera_anota' => 'wa_espera_anota',
         'send_text'    => 'wa_send_text',
         'send_buttons' => 'wa_send_buttons',
         'send_list'    => 'wa_send_list',
@@ -74,14 +76,23 @@ const WA_CARD_TERMINAL = ['humano','fim'];            // cards sem saida
 const WA_SEM_RESPOSTA_TIPOS = ['texto','marca','humano','fim'];
 
 /* ---------- variaveis de texto ---------- */
-const WA_FLUXO_VARS         = ['roteiro','data','datas'];
+const WA_FLUXO_VARS         = ['roteiro','data','datas','destino'];
 const WA_FLUXO_VARS_ROTEIRO = ['roteiro','data','datas'];   // as que dependem de haver roteiro no contexto
+/* {destino} depende de OUTRA coisa: de a conversa ter passado por um atalho
+   do tipo `destino`, que e o unico lugar que semeia `destino_nome`. Lista
+   propria, e nao um item a mais em WA_FLUXO_VARS_ROTEIRO, porque misturar as
+   duas bloquearia {destino} em todo card sem roteiro - que e justamente onde
+   ela serve ("ainda nao temos data para a Italia"). */
+const WA_FLUXO_VARS_DESTINO = ['destino'];
 // Maximo de caracteres de cada variavel. Vale nos dois lados: o valor real e
 // cortado nele, e a validacao conta o texto pelo pior caso com ele.
 /* {datas} vale 300: quatro meses de saidas semanais cabem, e sobram ~620
    caracteres de texto no card de PDF, cuja legenda para em 1024 na Cloud
    API. Acima disso a Meta recusa a mensagem INTEIRA, em silencio. */
-const WA_FLUXO_VAR_MAX      = ['roteiro' => 60, 'data' => 40, 'datas' => 300];
+/* {destino} vale 40: e nome de pais ou regiao, nunca frase. O teto existe
+   para a analise de pior caso nao mentir, e um nome longo cortado em 40
+   ("Emirados Arabes Unidos" tem 22) nao perde nada. */
+const WA_FLUXO_VAR_MAX      = ['roteiro' => 60, 'data' => 40, 'datas' => 300, 'destino' => 40];
 
 /* Limite de caracteres por tipo de card, contado na expansao de pior caso.
    Corpo interativo e legenda de documento: 1024. Texto simples: 4096. */
@@ -96,7 +107,14 @@ const WA_FLUXO_LIMITE = [
 ];
 
 /* ---------- card `marca`: a whitelist ---------- */
-const WA_FLUXO_CAMPOS_MARCAVEIS = ['status','qualif_data','qualif_grupo','qualif_at','interesses','espera'];
+/* `espera_destino` NAO e coluna de po_leads: e a chave que o executor
+   desvia para po_wa_espera, a tabela propria da lista de espera. Ela esta
+   nesta lista porque a lista responde "o que o card marca pode escrever", e
+   nao "quais colunas de po_leads ele pode escrever" - e porque o cinto e
+   suspensorio do executor (array_intersect_key) precisa deixa-la passar para
+   poder desvia-la. `espera` fica, para nao quebrar fluxo antigo publicado,
+   mas o `+destino` nao a escreve mais. */
+const WA_FLUXO_CAMPOS_MARCAVEIS = ['status','qualif_data','qualif_grupo','qualif_at','interesses','espera','espera_destino'];
 // `venda` e `negociacao` ficam de fora: venda e decisao humana, e negociacao
 // e o que o atalho #proposta da dona carimba.
 const WA_FLUXO_STATUS_PERMITIDOS = ['novo','atendimento','perdido'];
@@ -111,7 +129,7 @@ const WA_FLUXO_STATUS_PERMITIDOS = ['novo','atendimento','perdido'];
 
    {datas}: as proximas saidas do mes, so para roteiro semanal. Cortada no
    teto de WA_FLUXO_VAR_MAX, e o corte cai sempre numa data completa. */
-function wa_fluxo_vars_do_roteiro($r, $nome) {
+function wa_fluxo_vars_do_roteiro($r, $nome, $ctx = []) {
     $data = '';
     $datas = '';
     if (is_array($r)) {
@@ -122,6 +140,7 @@ function wa_fluxo_vars_do_roteiro($r, $nome) {
         'roteiro' => is_array($r) ? (string) ($r['titulo'] ?? '') : '',
         'data'    => $data,
         'datas'   => $datas,
+        'destino' => trim((string) (is_array($ctx) ? ($ctx['destino_nome'] ?? '') : '')),
     ];
     foreach (WA_FLUXO_VAR_MAX as $k => $max) $vars[$k] = wa_fluxo_corta($vars[$k], $max);
     return $vars;
@@ -187,10 +206,24 @@ function wa_fluxo_campos_marca($config, $ctx) {
     }
     if (!empty($config['qualif_at'])) $campos['qualif_at'] = gmdate('c');
 
+    /* ACHADO 6: `+destino` e `+roteiro` passavam pelo MESMO caminho, que
+       exigia slug. Atalho por destino NAO tem slug, entao `+destino` gravava
+       nada, em silencio - justamente o dado que justifica o pedido do
+       cliente. Agora cada um le a sua fonte, e o `+destino` sai pela chave
+       `espera_destino`, que o executor desvia para po_wa_espera.
+
+       `+destino` vale nas duas chaves da whitelist (`interesses` e `espera`),
+       porque o validador aceita as duas e o destino da escrita e o mesmo. O
+       nome da chave de saida e um so para nao existirem duas fontes da mesma
+       verdade. */
     $slug = (string) ($ctx['roteiro_slug'] ?? '');
+    $dest = trim((string) ($ctx['destino_nome'] ?? ''));
     foreach (['interesses', 'espera'] as $c) {
-        if (in_array($config[$c] ?? null, ['+roteiro', '+destino'], true) && $slug !== '') {
+        $v = $config[$c] ?? null;
+        if ($v === '+roteiro' && $slug !== '') {
             $campos[$c] = [$slug];
+        } elseif ($v === '+destino' && $dest !== '') {
+            $campos['espera_destino'] = $dest;
         }
     }
     return $campos;
@@ -423,7 +456,14 @@ function wa_fluxo_proximo($grafo, $card_id, $resposta, $ctx, $texto_cru = '') {
     }
 
     $resposta = (string) $resposta;
-    $certo = ['roteiro_slug' => $ctx['roteiro_slug'] ?? null, 'tentativas' => 0];
+    /* O contexto da rota CERTA: zera o contador de tentativas e preserva os
+       FATOS que o cliente ja disse. `destino_nome` e um desses fatos, nao um
+       contador: quem disse "quero ir pra Italia" num passo responde "Quero"
+       no seguinte, e e la que a espera e anotada. Esquece-lo aqui faz o
+       `marca` com `+destino` gravar nada, em silencio. */
+    $certo = ['roteiro_slug' => $ctx['roteiro_slug'] ?? null,
+              'destino_nome' => $ctx['destino_nome'] ?? null,
+              'tentativas' => 0];
 
     // Card `roteiros`: UNICO ramo desta funcao que le o catalogo (o contexto
     // guarda slugs, nao titulos, e casar por nome precisa dos titulos). O
@@ -901,32 +941,42 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
 
     // Cards que algum caminho alcanca SEM roteiro escolhido. Quem escolhe o
     // roteiro e a lista de roteiros (pelo proximo) ou a porta anuncio.
+    /* DOIS rastros na mesma travessia, porque sao duas perguntas diferentes:
+       "o cliente ja escolheu um ROTEIRO?" e "o cliente ja disse de qual
+       DESTINO esta falando?". Quem semeia a primeira e a lista de roteiros,
+       a porta de anuncio e o atalho `roteiro`; a segunda, SO o atalho
+       `destino`. Travessias separadas leriam o grafo duas vezes e poderiam
+       divergir num `continue`. */
     $sem_roteiro = [];
+    $sem_destino = [];
     if ($inicial_ok) {
         $ini_tem = $g['porta'] === 'anuncio';
-        $visto = [$g['inicial'] . '|' . (int) $ini_tem => true];
-        $fila = [[$g['inicial'], $ini_tem]];
+        $visto = [$g['inicial'] . '|' . (int) $ini_tem . '|0' => true];
+        $fila = [[$g['inicial'], $ini_tem, false]];
         while ($fila) {
-            [$id, $tem] = array_shift($fila);
+            [$id, $tem, $dst] = array_shift($fila);
             if (!$tem) $sem_roteiro[$id] = true;
+            if (!$dst) $sem_destino[$id] = true;
             $c = $C[$id];
             $viz = [];
-            if (!$listaDin($c)) foreach ($c['opcoes'] as $o) $viz[] = [$o['destino'], $tem];
-            $viz[] = [$c['proximo'], $listaDin($c) ? true : $tem];
-            $viz[] = [$c['fallback'], $tem];
-            $viz[] = [$c['sem_resposta'], $tem];
+            if (!$listaDin($c)) foreach ($c['opcoes'] as $o) $viz[] = [$o['destino'], $tem, $dst];
+            $viz[] = [$c['proximo'], $listaDin($c) ? true : $tem, $dst];
+            $viz[] = [$c['fallback'], $tem, $dst];
+            $viz[] = [$c['sem_resposta'], $tem, $dst];
             /* Atalho do tipo `roteiro` conta como "escolheu um roteiro",
                porque ele grava o slug no contexto - e so por isso o atalho
-               pode apontar para o card de PDF. Os tipos `palavras` e
-               `destino` NAO contam: destino nao tem slug, e o PDF sairia sem
-               ter o que mandar. */
+               pode apontar para o card de PDF. Atalho do tipo `destino` conta
+               como "disse o destino", e e o UNICO que conta: e dele que sai
+               `destino_nome`. `palavras` nao semeia nenhum dos dois. */
             foreach (wa_atalhos_do_card($c) as $a) {
-                $viz[] = [$a['destino'], $a['tipo'] === 'roteiro' ? true : $tem];
+                $viz[] = [$a['destino'],
+                          $a['tipo'] === 'roteiro' ? true : $tem,
+                          $a['tipo'] === 'destino' ? true : $dst];
             }
-            foreach ($viz as [$d, $t]) {
+            foreach ($viz as [$d, $t, $x]) {
                 if (!$existe($d)) continue;
-                $k = $d . '|' . (int) $t;
-                if (!isset($visto[$k])) { $visto[$k] = true; $fila[] = [$d, $t]; }
+                $k = $d . '|' . (int) $t . '|' . (int) $x;
+                if (!isset($visto[$k])) { $visto[$k] = true; $fila[] = [$d, $t, $x]; }
             }
         }
     }
@@ -939,10 +989,11 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
     }
 
     // 14. Variavel que chegaria crua ao cliente, ou vazia por falta de roteiro.
-    $confere_vars = function ($id, $texto, $onde) use ($acha, $nome, $sem_roteiro) {
+    $confere_vars = function ($id, $texto, $onde) use ($acha, $nome, $sem_roteiro, $sem_destino) {
         if ($texto === null || $texto === '') return;
         $lista_vars = implode(', ', array_map(function ($x) { return '{' . $x . '}'; }, WA_FLUXO_VARS));
         $sem = [];
+        $sem_dst = [];
         preg_match_all('/\{[^{}]*\}/', $texto, $m);
         foreach ($m[0] as $v) {
             $limpa = substr($v, 1, -1);
@@ -950,6 +1001,8 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
                 $acha(14, $id, 'No ' . $onde . ' do card ' . $nome($id) . ', "' . $v . '" não é uma variável válida. Use apenas ' . $lista_vars . ', em letras minúsculas e sem espaços.');
             } elseif (in_array($limpa, WA_FLUXO_VARS_ROTEIRO, true) && isset($sem_roteiro[$id])) {
                 $sem[$v] = true;
+            } elseif (in_array($limpa, WA_FLUXO_VARS_DESTINO, true) && isset($sem_destino[$id])) {
+                $sem_dst[$v] = true;
             }
         }
         // Chave solta, sem par: chegaria crua ao cliente.
@@ -958,6 +1011,9 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
         }
         foreach (array_keys($sem) as $v) {
             $acha(14, $id, 'No ' . $onde . ' do card ' . $nome($id) . ', ' . $v . ' só funciona depois que o cliente escolhe um roteiro, e existe um caminho até este card sem essa escolha.');
+        }
+        foreach (array_keys($sem_dst) as $v) {
+            $acha(14, $id, 'No ' . $onde . ' do card ' . $nome($id) . ', ' . $v . ' só funciona quando o cliente escreve o nome de um destino, e existe um caminho até este card sem isso. Chegue a ele por um atalho de destino.');
         }
     };
     foreach ($C as $id => $c) {
@@ -1191,7 +1247,7 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
         }
     }
 
-    $corpo = wa_fluxo_texto((string) ($card['texto'] ?? ''), wa_fluxo_vars_do_roteiro($roteiro, $nome));
+    $corpo = wa_fluxo_texto((string) ($card['texto'] ?? ''), wa_fluxo_vars_do_roteiro($roteiro, $nome, $ctx));
     $vazio = trim($corpo) === '';
 
     // Registra a saida (o log que separa o eco do robo do eco da dona) e
@@ -1312,7 +1368,24 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
         return $saiu(wa_fl_call('send_doc', $wa_id, $roteiro['pdf_url'], $slug . '.pdf', $corpo), 'document', $corpo, false);
 
     case 'marca':
-        $campos = wa_fluxo_campos_marca($card['config'] ?? [], ['roteiro_slug' => $roteiro !== null ? $slug : null]);
+        /* O contexto inteiro, nao so o roteiro: `+destino` le `destino_nome`,
+           que o atalho de destino semeou. Montar um contexto reduzido aqui era
+           metade do achado 6 - a outra metade era os dois acrescimos lendo o
+           mesmo campo. */
+        $campos = wa_fluxo_campos_marca($card['config'] ?? [], [
+            'roteiro_slug' => $roteiro !== null ? $slug : null,
+            'destino_nome' => $ctx['destino_nome'] ?? null,
+        ]);
+
+        /* `espera_destino` NAO e coluna de po_leads: sai da lista de campos
+           ANTES do update e vira linha em po_wa_espera. Deixa-lo passar faria
+           o PostgREST recusar o update inteiro com 400, e a marcacao de
+           status e qualificacao do mesmo card iria junto. */
+        $espera_dest = null;
+        if (isset($campos['espera_destino'])) {
+            $espera_dest = (string) $campos['espera_destino'];
+            unset($campos['espera_destino']);
+        }
         // interesses e espera ACRESCENTAM ao que a ficha ja tem (quem compara
         // dois roteiros fica com os dois). Ler com a variante estrita: um erro
         // lido como "vazio" apagaria o que estava la ao gravar por cima.
@@ -1338,6 +1411,34 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
         if ($campos && !wa_fl_call('update', 'po_leads', 'wa_id=eq.' . rawurlencode($wa_id), $campos)) {
             error_log('wa_fluxo_executa: ERRO card ' . $card_id . ': gravacao da marca falhou para ' . $wa_id . ', conversa segue');
             return $res(true, ['erro' => 'gravacao da marca falhou']);
+        }
+
+        /* A lista de espera e por LEAD_ID (uuid), nao por telefone: a tabela
+           tem chave estrangeira para po_leads e o indice unico parcial e por
+           (lead_id, destino). Por isso a ficha e lida aqui. Leitura estrita:
+           um erro lido como "nao achei" anotaria a espera num lead_id vazio -
+           ou, pior, nao anotaria e diria que anotou.
+
+           Falha NAO bloqueia a conversa, igual ao resto do `marca`: ele
+           costuma vir antes do card que fala, e bloquear deixaria o cliente
+           sem resposta ate o timeout. */
+        if ($espera_dest !== null) {
+            /* Leitura ESTRITA, e os dois desfechos dizem coisas DIFERENTES: o
+               erro vira o registro que a equipe le depois, e "nao achei a
+               ficha" manda procurar um cadastro que existe, enquanto "o banco
+               nao respondeu" manda tentar de novo. Com a variante nao estrita
+               os dois viram o mesmo [] e metade das vezes a frase mente. */
+            $l = wa_fl_call('select_estrito', 'po_leads', 'wa_id=eq.' . rawurlencode($wa_id) . '&select=id&limit=1');
+            if ($l === null) {
+                error_log('wa_fluxo_executa: ERRO card ' . $card_id . ': banco nao respondeu ao buscar a ficha para a espera de ' . $espera_dest . ', conversa segue');
+                return $res(true, ['erro' => 'banco fora ao anotar a lista de espera']);
+            }
+            $lead_id = (string) ($l[0]['id'] ?? '');
+            if ($lead_id === '') {
+                error_log('wa_fluxo_executa: ERRO card ' . $card_id . ': sem ficha para anotar a espera de ' . $espera_dest . ', conversa segue');
+                return $res(true, ['erro' => 'ficha nao encontrada para a lista de espera']);
+            }
+            wa_fl_call('espera_anota', $lead_id, $espera_dest, $slug !== '' ? $slug : null);
         }
         return $res(true);
 

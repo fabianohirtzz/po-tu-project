@@ -665,7 +665,7 @@ assert.ok(Object.keys(lim).length >= 6, 'WA_FLUXO_LIMITE lido do PHP');
 for (const [t, n] of Object.entries(lim)) assert.equal(F.poFluxoLimite(t), n, 'limite de ' + t + ' igual ao do PHP');
 for (const t of F.poFluxoTipos ? ['marca', 'ir_para_fluxo'] : []) assert.ok(!(t in lim) && F.poFluxoLimite(t) === null, t + ' sem limite nos dois lados');
 const vmax = Object.fromEntries([...php.match(/const WA_FLUXO_VAR_MAX\s*=\s*\[([^\]]*)\]/)[1].matchAll(/'(\w+)'\s*=>\s*(\d+)/g)].map(m => [m[1], Number(m[2])]));
-assert.deepEqual(Object.keys(vmax).sort(), ['data', 'datas', 'roteiro'], 'as tres variaveis do PHP');
+assert.deepEqual(Object.keys(vmax).sort(), ['data', 'datas', 'destino', 'roteiro'], 'as quatro variaveis do PHP');
 for (const [k, n] of Object.entries(vmax)) assert.equal(F.poFluxoPiorCaso('{' + k + '}'), n, '{' + k + '} vale o mesmo no PHP e no JS');
 const limLemb = Number(php.match(/wa_fluxo_tam_pior_caso\(\$c\['lembrete_texto'\]\)\) > (\d+)/)[1]);
 assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', opcoes: op(1) }).includes('data-campo="lembrete_texto" data-limite="' + limLemb + '"'),
@@ -681,9 +681,9 @@ assert.ok(/classList\.toggle\('fl-cont--estouro', ct\.estoura\)/.test(semComenta
 
 /* (7) variavel: so na lista unica poFluxoVariaveis. Fora disso, nenhum nome de variavel no fonte */
 const fora7 = semComentario.replace(pega('poFluxoVariaveis'), '');
-assert.ok(!/\{(nome|roteiro|data)\}/.test(fora7), 'nenhum {variavel} escrito a mao fora da lista unica');
-assert.ok(!/['"](nome|roteiro|data)['"]/.test(fora7), 'nenhuma lista propria de variaveis conhecidas');
-assert.ok(!/\b(nome|roteiro)\s*:\s*\d/.test(fora7), 'nenhuma tabela propria de tamanhos de variavel');
+assert.ok(!/\{(nome|roteiro|data|destino)\}/.test(fora7), 'nenhum {variavel} escrito a mao fora da lista unica');
+assert.ok(!/['"](nome|roteiro|data|destino)['"]/.test(fora7), 'nenhuma lista propria de variaveis conhecidas');
+assert.ok(!/\b(nome|roteiro|destino)\s*:\s*\d/.test(fora7), 'nenhuma tabela propria de tamanhos de variavel');
 
 /* (9) a leitura do DOM, no ponto de chamada: TODOS os rotulos, e so o que foi desenhado */
 const leGaveta = new Function(src + '; return poFluxoLeGaveta;')();
@@ -2020,6 +2020,11 @@ assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', op
   for (const x of m[1].matchAll(/'(\w+)'\s*=>\s*(\d+)/g)) srv[x[1]] = Number(x[2]);
   assert.ok(Object.keys(srv).length >= 1, 'guarda: a tabela do servidor nao esta vazia');
   assert.deepEqual(Object.fromEntries(vars.map(v => [v.nome, v.max])), srv, 'o painel conhece exatamente as variaveis (e tamanhos) do servidor');
+  /* {destino} nomeada, e nao so coberta pelo deepEqual acima: ela e a
+     variavel que a Tarefa 6 acrescentou, e e por ela que a cliente escreve
+     "ainda nao temos data para a {destino}" na gaveta. Uma assercao com o
+     nome dentro diz qual quebrou quando quebrar. */
+  assert.ok(vars.some(v => v.nome === 'destino' && v.max === 40), '{destino} no espelho do painel, com teto de 40');
   const contador = F.poFluxoContador('', 100).texto;
   const gav = F.poFluxoGaveta({ id: 'x', tipo: 'texto', titulo: 'T', texto: '' });
   const dica = (gav.match(/<p class="fl-dica">Use [^<]*<\/p>/) || [''])[0];

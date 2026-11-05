@@ -423,6 +423,95 @@ add_fluxo('f-a', 'palavra', 'ciclo', mini('a1', ['a1' => fx_card('a1', 'ir_para_
 add_fluxo('f-b', 'chamado', null, mini('b1', ['b1' => fx_card('b1', 'ir_para_fluxo', ['config' => ['fluxo' => 'f-a']])]));
 ok(wa_processar(ev('mensagem', 'ciclo')) === 'teto_passos', 'ciclo de saltos entre fluxos tambem para no teto');
 
+/* ============ O DESTINO, DE PONTA A PONTA ============
+   O pedido do cliente de 04/11/2026: "quero ir pra Italia" (destino que a
+   casa ja vendeu mas nao tem data) tem que ser reconhecido, respondido com o
+   NOME do destino e, se a pessoa aceitar, anotado na lista de espera.
+
+   Este cenario e o que amarra as tres pecas: o atalho `destino` semeia
+   `destino_nome`, a variavel {destino} o imprime, e o `marca` com `+destino`
+   o anota em po_wa_espera. Sem a terceira, o robo responde bonito e a agencia
+   nao fica com nada - que era o achado 6. */
+function fx_dst_prepara() {
+    zera();
+    /* A triagem do fixture tambem atende `mensagem_nova` e e MAIS ANTIGA, e o
+       order= fixo de wa_fluxos_ativos faz o mais antigo vencer a porta. Sem
+       desliga-la, este cenario mediria a triagem. */
+    foreach ($GLOBALS['DB']['po_wa_fluxos'] as &$f) { if (($f['id'] ?? '') === 'f-triagem') $f['ativo'] = false; }
+    unset($f);
+    $GLOBALS['DB']['po_destinos'] = [['nome' => 'Itália', 'palavras' => 'italia,roma,veneza', 'ativo' => true, 'ordem' => 1]];
+    wa_fluxo_set_deps(['destinos' => function () { return $GLOBALS['DB']['po_destinos']; }]);
+    add_fluxo('f-dst', 'mensagem_nova', null, fx_grafo_destino());
+}
+function fx_grafo_destino() {
+    return mini('d1', [
+    'd1' => fx_card('d1', 'botoes', ['texto' => 'Oi! Sobre o que quer falar?', 'fallback' => 'd1',
+        'config' => ['atalhos' => [['tipo' => 'destino', 'palavras' => [], 'destino' => 'd2', 'saudacao' => '']]],
+        'opcoes' => [['id' => 'x', 'rotulo' => 'Outra coisa', 'destino' => 'd5']]]),
+    'd2' => fx_card('d2', 'botoes', ['texto' => 'Ainda não temos data para a {destino}. Quer que eu avise quando abrir?',
+        'fallback' => 'd2',
+        'opcoes' => [['id' => 'sim', 'rotulo' => 'Quero', 'destino' => 'd3'],
+                     ['id' => 'nao', 'rotulo' => 'Não, obrigado', 'destino' => 'd5']]]),
+    'd3' => fx_card('d3', 'marca', ['config' => ['espera' => '+destino'], 'proximo' => 'd4']),
+    'd4' => fx_card('d4', 'fim', ['texto' => 'Combinado! Te aviso assim que abrir data.']),
+    'd5' => fx_card('d5', 'fim', ['texto' => 'Tudo bem.']),
+]);
+}
+
+fx_dst_prepara();
+ok(wa_processar(ev('mensagem', 'quero ir pra italia')) === 'fluxo', 'a frase com o destino entra no fluxo');
+ok(count($ENVIADAS) === 1 && $ENVIADAS[0][0] === 'buttons', 'e sai uma mensagem de botoes');
+ok($ENVIADAS[0][2] === 'Ainda não temos data para a Itália. Quer que eu avise quando abrir?',
+   'o NOME do destino aparece na frase: ' . $ENVIADAS[0][2]);
+ok(conv()['card_atual'] === 'd2', 'a conversa espera a resposta no card do destino');
+
+/* AQUI ESTA A PARTE QUE SO O FIM A PONTA PROVA: a resposta "Quero" chega numa
+   MENSAGEM NOVA, e o `destino_nome` tem que ter sobrevivido a ela. Ele nao
+   vem do grafo nem do catalogo: veio da frase anterior. */
+ok(conv()['destino_nome'] === 'Itália', 'o destino foi GRAVADO na conversa, para sobreviver a troca de mensagem');
+$ENVIADAS = [];
+ok(wa_processar(clica('sim')) === 'fluxo', 'ela aceita entrar na lista');
+ok(count($GLOBALS['ESPERAS']) === 1, 'uma linha na lista de espera (deu: ' . count($GLOBALS['ESPERAS']) . ')');
+ok($GLOBALS['ESPERAS'][0][1] === 'Itália', 'com o destino certo');
+ok($GLOBALS['ESPERAS'][0][0] === $DB['po_leads'][0]['id'], 'e amarrada ao lead pelo id');
+ok($GLOBALS['ESPERAS'][0][2] === null, 'sem roteiro de origem, porque nao havia roteiro escolhido');
+ok(!isset($DB['po_leads'][0]['espera']), 'e a coluna espera de po_leads nao foi escrita');
+/* E `espera_destino` NAO chega ao update de po_leads: nao e coluna de la. O
+   duble do banco aceita qualquer chave, mas o PostgREST de verdade recusa o
+   update INTEIRO com 400 - e levaria o status e a qualificacao do mesmo card
+   junto, em silencio. */
+ok(!array_key_exists('espera_destino', $DB['po_leads'][0]),
+   'espera_destino nao vaza para o update de po_leads (chaves: ' . implode(',', array_keys($DB['po_leads'][0])) . ')');
+
+
+ok($ENVIADAS[0][2] === 'Combinado! Te aviso assim que abrir data.', 'e a despedida sai');
+ok(conv()['estado'] === 'encerrado', 'a conversa encerra');
+
+/* AS DUAS FALHAS DA BUSCA DA FICHA DIZEM COISAS DIFERENTES. O `marca` nunca
+   bloqueia a conversa (ele costuma vir antes do card que fala), entao o unico
+   sinal que sobra e o `erro` que ele devolve - e ele e lido por gente. "Nao
+   achei a ficha" manda procurar um cadastro que existe; "banco fora" manda
+   tentar de novo. A variante nao estrita transforma os dois no mesmo []. */
+$GLOBALS['ESPERAS'] = [];
+$mk = fx_card('mk', 'marca', ['config' => ['espera' => '+destino']]);
+$gmk = mini('mk', ['mk' => $mk]);
+$ctx_dst = ['destino_nome' => 'Itália', 'tentativas' => 0];
+wa_fluxo_set_deps(['select_estrito' => function ($t, $q) { return $t === 'po_leads' ? null : fx_consulta($t, $q); }]);
+$rk = wa_fluxo_executa($gmk, 'mk', $WA, $ctx_dst, '');
+ok($rk['ok'] === true, 'banco fora na busca da ficha NAO bloqueia a conversa');
+ok($rk['erro'] === 'banco fora ao anotar a lista de espera', 'e o erro diz que o banco nao respondeu (veio: ' . (string) $rk['erro'] . ')');
+ok($GLOBALS['ESPERAS'] === [], 'e nada e anotado na lista de espera');
+wa_fluxo_set_deps(['select_estrito' => function ($t, $q) { return $t === 'po_leads' ? [] : fx_consulta($t, $q); }]);
+$rk = wa_fluxo_executa($gmk, 'mk', $WA, $ctx_dst, '');
+ok($rk['erro'] === 'ficha nao encontrada para a lista de espera', 'ficha inexistente diz outra coisa (veio: ' . (string) $rk['erro'] . ')');
+ok($GLOBALS['ESPERAS'] === [], 'e tambem nao anota nada');
+
+/* Quem recusa nao entra na lista: o `marca` nao esta nesse caminho. */
+fx_dst_prepara();
+wa_processar(ev('mensagem', 'quero ir pra italia'));
+wa_processar(clica('nao'));
+ok($GLOBALS['ESPERAS'] === [], 'quem recusa a lista nao e anotado nela');
+
 /* ============ ir_para_fluxo, de ponta a ponta ============ */
 zera();
 wa_motor_set_anuncios(['AD1' => 'turquia']);
@@ -430,15 +519,26 @@ add_fluxo('f-ponte', 'anuncio', 'AD1', mini('p1', [
     'p1' => fx_card('p1', 'texto', ['texto' => 'Vou te encaminhar.', 'proximo' => 'p2']),
     'p2' => fx_card('p2', 'ir_para_fluxo', ['config' => ['fluxo' => 'f-espera']]),
 ]));
+/* O `marca` deste fluxo usa `+roteiro`, e nao `+destino`: o que atravessa o
+   salto aqui e o `roteiro_slug` semeado pelo ANUNCIO, e `+roteiro` e quem le
+   essa fonte. Esta assercao ja esteve escrita com `+destino` gravando
+   'turquia' em `po_leads.espera` - que era exatamente o achado 6 (os dois
+   acrescimos pelo mesmo caminho, lendo o slug), e o teste sancionava o
+   defeito. O invariante que ele mede, "o contexto atravessou o salto", nao
+   mudou. */
 add_fluxo('f-espera', 'chamado', null, mini('e1', [
-    'e1' => fx_card('e1', 'marca', ['config' => ['espera' => '+destino'], 'proximo' => 'e2']),
+    'e1' => fx_card('e1', 'marca', ['config' => ['interesses' => '+roteiro'], 'proximo' => 'e2']),
     'e2' => fx_card('e2', 'fim', ['texto' => 'Avisamos quando houver data nova.']),
 ]));
 ok(wa_processar(ev('mensagem', 'oi', ['ad_id' => 'AD1'])) === 'fluxo', 'o salto roda');
 ok(count($ENVIADAS) === 2 && $ENVIADAS[1][2] === 'Avisamos quando houver data nova.', 'as mensagens dos dois fluxos saem, na ordem');
 ok(conv()['fluxo_versao_id'] === 'v-f-espera', 'entrar em outro fluxo carimba a versao DELE');
 ok(conv()['estado'] === 'encerrado', 'e o fim do outro fluxo encerra');
-ok($DB['po_leads'][0]['espera'] === ['turquia'], 'o contexto atravessou o salto: o destino foi para a lista de espera');
+ok($DB['po_leads'][0]['interesses'] === ['turquia'], 'o contexto atravessou o salto: o roteiro do anuncio virou interesse');
+/* E `+destino` NAO grava o slug: ele le `destino_nome`, que so o atalho de
+   destino semeia. Sem isso, um fluxo que oferece a lista de espera depois de
+   um anuncio anotaria a pessoa esperando um "destino" chamado turquia. */
+ok(!isset($DB['po_leads'][0]['espera']), 'e a coluna espera de po_leads nao foi escrita');
 // Salto a partir de uma conversa que ja estava em andamento (a entrada nao
 // carimbou nada nesta mensagem): o salto e quem carimba a versao do destino.
 zera();

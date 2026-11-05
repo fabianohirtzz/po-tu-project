@@ -43,6 +43,11 @@ $GRAFO = ['id' => 'f1', 'nome' => 'Teste', 'inicial' => 'c_bot', 'humano' => 'c_
                  'sem_resposta'=>'c_marca','lembrete_ativo'=>false,'lembrete_texto'=>null],
     'c_marca'=> ['id'=>'c_marca','tipo'=>'marca','texto'=>null,'opcoes'=>[],'config'=>['status'=>'atendimento'],'proximo'=>null,'fallback'=>null,
                  'sem_resposta'=>null,'lembrete_ativo'=>false,'lembrete_texto'=>null],
+    /* Lembra usando {destino}, que NAO vem do roteiro: vem de `destino_nome`,
+       gravado na conversa pelo atalho de destino. O cron manda este lembrete
+       horas depois, por fora da mensagem que semeou o destino. */
+    'c_dst'  => ['id'=>'c_dst','tipo'=>'botoes','texto'=>'Quer entrar na lista?','opcoes'=>[],'config'=>[],'proximo'=>null,'fallback'=>null,
+                 'sem_resposta'=>null,'lembrete_ativo'=>true,'lembrete_texto'=>'Ainda quer que eu avise quando abrir data para a {destino}?'],
     'c_txt'  => ['id'=>'c_txt','tipo'=>'fim','texto'=>'Vou encerrar por aqui.','opcoes'=>[],'config'=>[],'proximo'=>null,'fallback'=>null,
                  'sem_resposta'=>null,'lembrete_ativo'=>false,'lembrete_texto'=>null],
     'c_hum'  => ['id'=>'c_hum','tipo'=>'humano','texto'=>'Vou passar para a equipe.','opcoes'=>[],'config'=>[],'proximo'=>null,'fallback'=>null,
@@ -132,6 +137,25 @@ ok(count($M['conv'][$W]) === 1 && !empty($M['conv'][$W][0]['lembrete_at']), 'gra
 ok(count($M['log']) === 1 && $M['log'][0][0] === 'po_wa_mensagens' && $M['log'][0][1]['autor'] === 'robo' && $M['log'][0][1]['direcao'] === 'out',
     'o lembrete entra no log de saida do robo (senao o eco virava handoff)');
 ok($M['lead'] === [], 'lembrete nao mexe no lead');
+
+/* 2b. {destino} NO LEMBRETE. Ela vem da CONVERSA (`destino_nome`), nao do
+   catalogo de roteiros, e o cron manda o lembrete horas depois - por fora da
+   mensagem em que a pessoa disse o destino. Sem o contexto da conversa
+   chegando a montagem das variaveis, a frase sai "abrir data para a ?": o
+   robo pergunta sobre um lugar que nao nomeia, e quem le nao sabe do que ele
+   esta falando. */
+$M = varre([conv($W, 'aguardando', 'c_dst', 21, null, ['destino_nome' => 'Itália'])], $agora);
+ok($M['r']['lembretes'] === 1, 'o lembrete do card de destino sai');
+ok($M['envios'] === [[$W, 'lembrete', 'Ainda quer que eu avise quando abrir data para a Itália?']],
+    '{destino} sai do destino gravado na conversa (veio: ' . json_encode($M['envios'], JSON_UNESCAPED_UNICODE) . ')');
+
+/* E sem destino gravado a variavel some e a pontuacao fecha, como as outras -
+   nunca uma chave crua para o cliente. A publicacao disso e barrada pela
+   regra 14 do validador; aqui se mede o que acontece se um grafo antigo ja
+   estiver no ar. */
+$M = varre([conv($W, 'aguardando', 'c_dst', 21)], $agora);
+ok($M['envios'] === [[$W, 'lembrete', 'Ainda quer que eu avise quando abrir data para a?']],
+    'sem destino na conversa a variavel some, sem deixar chave crua (veio: ' . json_encode($M['envios'], JSON_UNESCAPED_UNICODE) . ')');
 
 /* 3. Cedo demais: nada, nem na borda de baixo */
 $M = varre([conv($W, 'aguardando', 'c_bot', 2), conv('+5548900000003', 'aguardando', 'c_bot', 19.9)], $agora);

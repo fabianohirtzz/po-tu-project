@@ -426,7 +426,8 @@ function poFluxoMaxOpcoes(tipo) {
 function poFluxoVariaveis() {
   return [{ nome: 'roteiro', max: 60, art: 'o', sup: 'maior' },
           { nome: 'data', max: 40, art: 'a', sup: 'maior' },
-          { nome: 'datas', max: 300, art: 'as', sup: 'maiores' }];
+          { nome: 'datas', max: 300, art: 'as', sup: 'maiores' },
+          { nome: 'destino', max: 40, art: 'o', sup: 'maior' }];
 }
 
 // "a, b e c" a partir da lista viva: fn recebe a variavel e devolve o pedaco.

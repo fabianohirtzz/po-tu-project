@@ -548,7 +548,13 @@ function wa_processar($ev) {
             wa_entrega_humana($wa_id, 'O robô perdeu o ponto da conversa (o card em que ela estava não existe mais no fluxo). Entregue para atendimento humano.');
             return 'card_perdido';
         }
+        /* `destino_nome` entra aqui porque a resposta que o usa chega numa
+           MENSAGEM NOVA: o atalho de destino o semeia num passo, e o card
+           `marca` com `+destino` - e o lembrete do cron - o leem no passo
+           seguinte. Sem ele no contexto, a espera nao seria anotada e o
+           lembrete sairia "ainda quer saber da ?". */
         $ctx = ['roteiro_slug' => $conv['roteiro_slug'] ?? null, 'tentativas' => (int) ($conv['tentativas'] ?? 0),
+                'destino_nome' => $conv['destino_nome'] ?? null,
                 'roteiros_enviados' => is_array($conv['roteiros_enviados'] ?? null) ? $conv['roteiros_enviados'] : []];
         /* Retomada: o card_atual ainda nao foi entregue (cadeia interrompida)
            ou nao e de um tipo que espera. Roteia-lo pularia o card que falhou,
@@ -713,6 +719,7 @@ function wa_fluxo_percorre($wa_id, $nome, $grafo, $versao_id, $card, $ctx, $esta
             'card_atual'   => $card,
             'tentativas'   => (int) ($ctx['tentativas'] ?? 0),
             'roteiro_slug' => $ctx['roteiro_slug'] ?? null,
+            'destino_nome' => $ctx['destino_nome'] ?? null,
             'roteiros_enviados' => array_values((array) ($ctx['roteiros_enviados'] ?? [])),
             'lembrete_at'  => null,
         ];

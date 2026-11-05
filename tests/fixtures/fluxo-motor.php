@@ -48,6 +48,7 @@ function fx_roteiros() {
 
 /* Tabelas vazias + o fluxo de triagem ligado. */
 function fx_banco_inicial() {
+    $GLOBALS['ESPERAS'] = [];
     return [
         'po_wa_conversas' => [], 'po_wa_contatos' => [], 'po_leads' => [], 'po_wa_mensagens' => [],
         'po_wa_textos' => [],
@@ -107,6 +108,14 @@ function fx_instala() {
     $consulta = function ($tabela, $query) { $GLOBALS['QUERIES'][] = [$tabela, $query]; return fx_consulta($tabela, $query); };
     wa_motor_set_deps([
         'roteiros'       => 'fx_roteiros',
+        /* A lista de espera por destino mora em tabela propria (po_wa_espera) e
+           e escrita por lib/wa-espera.php, que fala com o wa-db direto. O duble
+           registra em $ESPERAS para o teste conferir lead, destino e roteiro de
+           origem sem tocar a rede. Devolve true = criou a linha. */
+        'espera_anota'   => function ($lead_id, $destino, $slug = null) {
+            $GLOBALS['ESPERAS'][] = [$lead_id, $destino, $slug];
+            return true;
+        },
         'select'         => $consulta,
         'select_estrito' => $consulta,
         'insert' => function ($tabela, $linha) {

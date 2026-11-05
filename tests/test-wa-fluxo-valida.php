@@ -262,6 +262,57 @@ $fx_anuncio = array_merge($fx, ['gatilho' => 'anuncio']);
 $c = $base; $c[0]['texto'] = 'Sobre {roteiro} em {data}.';
 ok(!in_array(14, bloqueios($fx_anuncio, $c), true), 'regra 14: porta anuncio ja traz o roteiro');
 
+/* ---------- REVIEW FOCUS 5: {destino} num card alcancavel sem atalho `destino` ----------
+   A variavel viraria string vazia no meio da frase ("ainda nao temos data
+   para a ."). Mesma regra que ja vale para {roteiro}, com UMA diferenca que e
+   o ponto: quem semeia `destino_nome` nao e lista nem porta de anuncio - e
+   SO o atalho do tipo `destino`. Tratar as duas pela mesma lista bloquearia
+   {destino} em todo card sem roteiro, que e justamente onde ela serve. */
+$semdata = card('semdata', 'botoes', ['texto' => 'Ainda não temos data para a {destino}. Quer entrar na lista?',
+   'opcoes' => [['id' => 'sim', 'rotulo' => 'Quero', 'destino' => 'hum']],
+   'fallback' => 'ops', 'sem_resposta' => 'fim', 'lembrete_ativo' => true, 'lembrete_texto' => 'Oi?']);
+
+// (a) alcancado por uma OPCAO comum: ninguem disse qual destino e. BLOQUEIA.
+$c = $base; $c[0]['opcoes'][0]['destino'] = 'semdata'; $c[] = $semdata;
+ok(in_array(14, bloqueios($fx, $c), true), 'regra 14: {destino} em card alcancavel sem atalho de destino BLOQUEIA a publicacao');
+
+// (b) alcancado SO pelo atalho do tipo `destino`: a variavel tem valor. PASSA.
+$c = $base; $c[0]['config'] = ['atalhos' => [['tipo' => 'destino', 'palavras' => [], 'destino' => 'semdata', 'saudacao' => '']]];
+$c[] = $semdata;
+ok(!in_array(14, bloqueios($fx, $c), true), 'regra 14: depois de um atalho de destino, {destino} passa');
+
+// (c) atalho de OUTRO tipo nao semeia destino nenhum.
+foreach (['palavras', 'roteiro'] as $t) {
+    $c = $base; $c[0]['config'] = ['atalhos' => [['tipo' => $t, 'palavras' => ['italia'], 'destino' => 'semdata', 'saudacao' => '']]];
+    $c[] = $semdata;
+    ok(in_array(14, bloqueios($fx, $c), true), 'regra 14: atalho do tipo ' . $t . ' nao da valor a {destino}');
+}
+
+// (d) a porta `anuncio` traz ROTEIRO, nunca destino: ela nao salva {destino}.
+$c = $base; $c[0]['opcoes'][0]['destino'] = 'semdata'; $c[] = $semdata;
+ok(in_array(14, bloqueios($fx_anuncio, $c), true), 'regra 14: a porta anuncio nao da valor a {destino}');
+
+// (e) caminho MISTO: um chega pelo atalho de destino, outro nao. Um basta.
+$c = $base;
+$c[0]['config'] = ['atalhos' => [['tipo' => 'destino', 'palavras' => [], 'destino' => 'semdata', 'saudacao' => '']]];
+$c[1]['opcoes'][0]['destino'] = 'semdata';   // ops (fallback) tambem leva la, sem atalho
+$c[] = $semdata;
+ok(in_array(14, bloqueios($fx, $c), true), 'regra 14: um caminho que pula o atalho de destino basta para bloquear');
+
+// (f) e vale para o texto do LEMBRETE tambem, que o cron manda depois.
+$c = $base; $c[0]['config'] = ['atalhos' => [['tipo' => 'destino', 'palavras' => [], 'destino' => 'semdata', 'saudacao' => '']]];
+$sd = $semdata; $sd['lembrete_texto'] = 'Ainda quer saber da {destino}?';
+$c[] = $sd;
+ok(!in_array(14, bloqueios($fx, $c), true), 'regra 14: {destino} no lembrete passa quando o atalho semeou');
+$c = $base; $c[0]['opcoes'][0]['destino'] = 'semdata'; $c[] = $sd;
+ok(in_array(14, bloqueios($fx, $c), true), 'regra 14: e bloqueia no lembrete quando nao semeou');
+
+/* E {roteiro} continua independente: o atalho de DESTINO nao escolhe roteiro,
+   entao ele nao pode "salvar" um {roteiro} nem um card de PDF. */
+$c = $base; $c[0]['config'] = ['atalhos' => [['tipo' => 'destino', 'palavras' => [], 'destino' => 'rot2', 'saudacao' => '']]];
+$c[] = card('rot2', 'texto', ['texto' => 'A {roteiro} e boa.', 'proximo' => 'hum']);
+ok(in_array(14, bloqueios($fx, $c), true), 'regra 14: atalho de destino nao da valor a {roteiro}');
+
 // regra 8: card sem continuacao e beco, ainda que nao seja ciclo
 $c = $base; $c[0]['opcoes'][0]['destino'] = 'mudo'; $c[] = card('mudo', 'texto');
 ok(in_array(8, bloqueios($fx, $c), true), 'regra 8: texto sem proximo e beco sem saida');

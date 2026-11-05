@@ -209,7 +209,7 @@ function wa_varre_timeouts($agora = null) {
                 if ($catalogo === null) { $cat = wa_fl_call('roteiros'); $catalogo = is_array($cat) ? $cat : []; }
                 $slug = (string) ($c['roteiro_slug'] ?? '');
                 $roteiro = $slug !== '' ? wa_acha_roteiro($slug, $catalogo) : null;
-                $msg = trim(wa_fluxo_texto((string) ($card['lembrete_texto'] ?? ''), wa_fluxo_vars_do_roteiro($roteiro, $nome)));
+                $msg = trim(wa_fluxo_texto((string) ($card['lembrete_texto'] ?? ''), wa_fluxo_vars_do_roteiro($roteiro, $nome, $c)));
             }
             if ($msg !== '') {
                 $envio = wa_to_call('send_text', $wa, $msg);
