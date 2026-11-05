@@ -221,6 +221,29 @@ foreach ([$cid('14'), $cid('20')] as $k) ok(in_array($k, $mudou['opcoes'], true)
 ok($g3['cards'][$cid('01')]['texto'] !== $g2['cards'][$cid('01')]['texto'], 'o texto da boas-vindas da v3 e o da cliente, nao o da v2');
 ok($g3['cards'][$cid('06')]['texto'] === $g2['cards'][$cid('06')]['texto'], 'e card que ela nao tocou segue igual (senao a conta acima nao prova nada)');
 
+/* O RETRATO INTEIRO, POR HASH. Retrato publicado e IMUTAVEL: quem precisa de
+   outra conversa publica uma versao nova, nunca reescreve uma que ja esta no
+   banco e pode ter conversa presa a ela. Entao este hash nao envelhece, e
+   qualquer edicao neste bloco $grafo$ - uma virgula, um uuid, um texto - deixa
+   o teste vermelho.
+   Ele existe porque as contas acima medem QUANTOS campos diferem da v2, nunca
+   QUAIS: trocar o texto que a cliente escreveu por outro texto errado mantem a
+   conta em 11 e passaria despercebido. A rodada de mutacao de 05/11 provou
+   isso com dois mutantes vivos (um texto reescrito e um rotulo de botao
+   revertido ao da v2), e e este hash que os mata.
+   E o MESMO valor que o banco devolve: conferido em 05/11 contra o grafo
+   gravado em po_wa_fluxo_versoes, lido direto por PostgREST. */
+$canon = function ($x) use (&$canon) {
+    if (!is_array($x)) return $x;
+    if (array_keys($x) !== range(0, count($x) - 1)) ksort($x);
+    foreach ($x as $k => $v) $x[$k] = $canon($v);
+    return $x;
+};
+$hash_v3 = md5(json_encode($canon($g3), JSON_UNESCAPED_UNICODE));
+ok($hash_v3 === '20ca931138c257fe6333a8678b73e0ae',
+   'o retrato da v3 e exatamente o que foi publicado no banco em 05/11/2026 (md5 canonico): ' . $hash_v3);
+ok(md5(json_encode($canon($g2), JSON_UNESCAPED_UNICODE)) !== $hash_v3, 'e o da v2 e outro (senao o hash nao discrimina nada)');
+
 /* ---------- os dois cards novos ---------- */
 $d = $g3['cards'][$DESPEDIDA] ?? null;
 ok(is_array($d), 'o card "Despedida de quem recusou a lista" existe');
@@ -457,6 +480,64 @@ foreach ([$DESPEDIDA, $SEM_DATA] as $k) {
         ok(!empty($c['sem_resposta']) && in_array($g3['cards'][$c['sem_resposta']]['tipo'], WA_SEM_RESPOSTA_TIPOS, true), 'sem_resposta leva a texto, marca, humano ou fim: ' . $c['titulo']);
         ok(!empty($c['fallback']) && isset($g3['cards'][$c['fallback']]), 'e tem fallback para quem responde outra coisa: ' . $c['titulo']);
         ok($c['lembrete_ativo'] === true && trim((string) $c['lembrete_texto']) !== '', 'lembrete ligado e escrito: ' . $c['titulo']);
+    }
+}
+
+/* O CARD QUE ENTRA NO RASCUNHO E O MESMO QUE ENTRA NO RETRATO, campo por campo.
+   A v2 tinha esta trava pelo avesso (`$confere_derivacao`: o rascunho era
+   derivado do retrato pelo mesmo jsonb_each, entao nao havia como divergirem).
+   Aqui a relacao e invertida - o retrato e copia do rascunho - e os dois cards
+   novos sao o unico lugar do arquivo em que a mesma informacao e escrita DUAS
+   vezes, a mao. Divergir ali faz o painel desenhar uma conversa e o motor
+   executar outra, que e o pior modo de falha desta tela. A rodada de mutacao
+   de 05/11 achou isto com o card novo nascendo `texto` no rascunho e `botoes`
+   no retrato, com o teste verde. */
+preg_match('/insert\s+into\s+public\.po_wa_cards\s*\((.*?)\)\s*values\s*(.*?)\s*on\s+conflict/is', $cmds3, $ic);
+ok(count($ic) === 3, 'o insert dos cards novos esta no formato esperado');
+$colunas = array_map('trim', explode(',', $ic[1]));
+ok($colunas === ['id', 'fluxo_id', 'tipo', 'titulo', 'texto', 'opcoes', 'config', 'proximo', 'fallback',
+                 'sem_resposta', 'lembrete_ativo', 'lembrete_texto', 'ordem', 'x', 'y'],
+   'com as 15 colunas na ordem conhecida: ' . implode(',', $colunas));
+/* Separa as linhas e os campos respeitando a string SQL (virgula dentro de
+   texto e de JSON nao e separador, e '' e uma aspa escapada). */
+$linhas = []; $campos = []; $atual = ''; $prof = 0; $str = false;
+$bytes = str_split($ic[2]);
+for ($i = 0; $i < count($bytes); $i++) {
+    $ch = $bytes[$i];
+    if ($str) {
+        if ($ch === "'" && ($bytes[$i + 1] ?? '') === "'") { $atual .= "'"; $i++; continue; }
+        if ($ch === "'") { $str = false; continue; }
+        $atual .= $ch;
+        continue;
+    }
+    if ($ch === "'") { $str = true; continue; }
+    if ($ch === '(') { $prof++; if ($prof === 1) { $campos = []; $atual = ''; } continue; }
+    if ($ch === ')') { $prof--; if ($prof === 0) { $campos[] = trim($atual); $linhas[] = $campos; $atual = ''; } continue; }
+    if ($ch === ',' && $prof === 1) { $campos[] = trim($atual); $atual = ''; continue; }
+    if ($prof === 1) $atual .= $ch;
+}
+ok(count($linhas) === 2, 'duas linhas de card novo: ' . count($linhas));
+foreach ($linhas as $l) {
+    ok(count($l) === 15, 'a linha tem 15 campos: ' . count($l));
+    $v = array_combine($colunas, $l);
+    $nn = substr($v['id'], -2);
+    $c = $g3['cards'][$v['id']] ?? null;
+    ok(is_array($c), 'o card ' . $nn . ' do rascunho existe no retrato');
+    ok($v['fluxo_id'] === $BV, 'e pertence a triagem');
+    foreach (['tipo', 'titulo'] as $k) ok($v[$k] === $c[$k], "o card $nn tem o mesmo $k nos dois lados: '" . $v[$k] . "' x '" . $c[$k] . "'");
+    foreach (['texto', 'lembrete_texto'] as $k) {
+        $esperado = $c[$k] === null ? 'null' : $c[$k];
+        ok($v[$k] === $esperado, "o card $nn tem o mesmo $k nos dois lados");
+    }
+    foreach (['proximo', 'fallback', 'sem_resposta'] as $k) {
+        ok($v[$k] === ($c[$k] === null ? 'null' : $c[$k]), "o card $nn tem o mesmo $k nos dois lados");
+    }
+    ok($v['lembrete_ativo'] === ($c['lembrete_ativo'] ? 'true' : 'false'), "o card $nn tem o mesmo lembrete_ativo nos dois lados");
+    // opcoes e config vao como literal JSON seguido de ::jsonb: compara decodificado.
+    foreach (['opcoes', 'config'] as $k) {
+        $j = json_decode(preg_replace('/::jsonb$/', '', $v[$k]), true);
+        ok(json_last_error() === JSON_ERROR_NONE, "o $k do card $nn e JSON valido no insert");
+        ok($j == $c[$k], "o card $nn tem o mesmo $k nos dois lados");
     }
 }
 
