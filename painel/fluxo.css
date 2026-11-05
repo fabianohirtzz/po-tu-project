@@ -33,6 +33,22 @@
    ABAIXO: duas regras de mesma especificidade, vence a ultima declarada. */
 .fl-zoom{display:none}
 
+/* ---------- atalhos da gaveta (padrao: celular, uma coluna) ----------
+   O atalho e a resposta ao publico desta agencia, que tem 60+ e DIGITA em vez
+   de tocar no botao. A linha tem quatro campos e um botao, e no celular eles
+   EMPILHAM: lado a lado numa tela de 390px cada campo ficaria com ~60px, e um
+   campo de palavras com 60px nao da para escrever "atendente".
+
+   A versao em grade fica no @media de 980px, DEPOIS deste padrao - duas
+   regras de mesma especificidade, vence a ultima declarada. Invertido, o
+   celular venceria em toda largura e a grade nunca apareceria, com o teste de
+   presenca ainda verde. Foi assim que a barra do zoom ficou invisivel. */
+.fl-atalhos{border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:10px}
+.fl-atalhos legend{font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:0 6px}
+.fl-atalho{display:flex;flex-direction:column;gap:6px;padding:10px;border:1px dashed var(--border2);border-radius:8px}
+.fl-atalho select,.fl-atalho input{min-width:0}
+.fl-atalho .fl-opcao__x{align-self:flex-start}
+
 /* ---------- canvas (desktop) ---------- */
 @media (min-width:980px){
   .fl-vista--lista{display:none}
@@ -177,5 +193,9 @@ textarea.fl-campo{min-height:150px;line-height:1.5}
 @media (min-width:980px){
   .sim{inset:0 0 0 auto;width:min(460px,42vw);border-left:1px solid var(--border);padding:20px}
   .sim-conversa{min-height:260px}
+  /* A linha do atalho em GRADE, com o campo de palavras e o de saudacao
+     levando o espaco que sobra. So aqui: ver o padrao empilhado acima. */
+  .fl-atalho{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,1.1fr) auto;align-items:center;gap:8px}
+  .fl-atalho .fl-opcao__x{align-self:center}
 }
 

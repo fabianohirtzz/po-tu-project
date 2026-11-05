@@ -430,6 +430,85 @@ function poFluxoVariaveis() {
           { nome: 'destino', max: 40, art: 'o', sup: 'maior' }];
 }
 
+/* OS TRES TIPOS DE ATALHO, espelho de WA_ATALHO_TIPOS (lib/wa-fluxo.php), e
+   o teste amarra as duas listas na mesma ordem. O atalho e a resposta ao
+   publico desta agencia, que tem 60+ e DIGITA em vez de tocar no botao: em
+   vez de um card satelite por card que espera, a frase e lida no proprio
+   card.
+
+   A ORDEM e dado, nao regra: a cliente reordena na tela. A ordem recomendada
+   e esta - pedido explicito por uma pessoa ganha de palpite sobre a frase, e
+   roteiro a venda e resposta melhor que "nao temos data". */
+function poAtalhoTipos() {
+  return ['palavras', 'roteiro', 'destino'];
+}
+
+/* O rotulo de cada tipo, na lingua da cliente. Separado da lista para a
+   lista seguir sendo o espelho exato do servidor: rotulo e tela. */
+function poAtalhoRotulo(tipo) {
+  /* CURTOS DE PROPOSITO. O prefixo "quando a pessoa escreve" ja esta na
+     legenda da secao, e repeti-lo custava o fim do rotulo: num seletor de
+     236px (celular a 390) os tres saiam cortados no mesmo ponto, e a cliente
+     nao distinguia um do outro sem abrir cada um. */
+  const r = { palavras: 'estas palavras',
+              roteiro: 'nome de um roteiro à venda',
+              destino: 'nome de um destino sem data' };
+  return Object.prototype.hasOwnProperty.call(r, String(tipo)) ? r[String(tipo)] : String(tipo);
+}
+
+/* Os atalhos de um card, na forma que a tela usa. Nunca estoura: o `config`
+   vem do banco e de migration, e card antigo nao tem a chave. Mesmo porte de
+   wa_atalhos_do_card no PHP - e, como ela, NAO valida nada: quem valida e o
+   endpoint (regra 17), para a tela nunca aprovar o que o servidor recusa. */
+function poFluxoAtalhos(card) {
+  const c = card && typeof card === 'object' ? card : {};
+  const l = c.config && typeof c.config === 'object' && Array.isArray(c.config.atalhos) ? c.config.atalhos : [];
+  return l.filter(function (a) { return a && typeof a === 'object'; }).map(function (a) {
+    return {
+      tipo: String(a.tipo == null ? '' : a.tipo),
+      palavras: Array.isArray(a.palavras) ? a.palavras.map(function (p) { return String(p == null ? '' : p); }) : [],
+      destino: String(a.destino == null ? '' : a.destino),
+      saudacao: String(a.saudacao == null ? '' : a.saudacao)
+    };
+  });
+}
+
+/* Quem le a frase do cliente, e portanto quem pode ter atalho: card que
+   ESPERA uma resposta (ponto 2) e o card INICIAL do fluxo (ponto 1, onde a
+   primeira frase da conversa e lida). Nos outros o atalho seria configuracao
+   morta, e desenhar o campo faria a cliente achar que configurou algo. */
+function poFluxoTemAtalho(card, inicial) {
+  const c = card && typeof card === 'object' ? card : {};
+  const def = poFluxoTipo(c.tipo);
+  if (!def) return false;
+  if (def.espera) return true;
+  return c.id != null && inicial != null && String(c.id) === String(inicial);
+}
+
+/* A lista de atalhos vinda da TELA, limpa para gravar. Linha que a cliente
+   adicionou e nao preencheu (sem destino, sem palavra e sem saudacao) e
+   descartada: ela clicou em Adicionar e mudou de ideia, e gravar a linha
+   vazia bloquearia a publicacao por um atalho que ninguem quis.
+
+   O TIPO nao e julgado aqui. Um tipo fora da lista atravessa e e recusado no
+   Publicar, com a frase da regra 17 na tela - tela que julga diferente do
+   servidor aprova o que ele recusa. */
+function poFluxoAtalhosLimpos(lista) {
+  const l = Array.isArray(lista) ? lista : [];
+  const out = [];
+  l.forEach(function (a) {
+    const x = a && typeof a === 'object' ? a : {};
+    const destino = String(x.destino == null ? '' : x.destino).trim();
+    const saudacao = String(x.saudacao == null ? '' : x.saudacao).trim();
+    const palavras = (Array.isArray(x.palavras) ? x.palavras : [])
+      .map(function (p) { return String(p == null ? '' : p).trim(); })
+      .filter(function (p) { return p !== ''; });
+    if (destino === '' && !palavras.length && saudacao === '') return;
+    out.push({ tipo: String(x.tipo == null ? '' : x.tipo), palavras: palavras, destino: destino, saudacao: saudacao });
+  });
+  return out;
+}
+
 // "a, b e c" a partir da lista viva: fn recebe a variavel e devolve o pedaco.
 function poFluxoVarFrase(fn) {
   const l = poFluxoVariaveis().map(fn);
@@ -594,6 +673,20 @@ function poFluxoPatch(card, v) {
   if ('lembrete_ativo' in q) patch.lembrete_ativo = q.lembrete_ativo === true;
   if ('lembrete_texto' in q) patch.lembrete_texto = limpo(q.lembrete_texto);
   if (Array.isArray(q.rotulos) || Array.isArray(q.remover)) patch.opcoes = poFluxoOpcoesSem(poFluxoOpcoesComRotulos(c.opcoes, q.rotulos), q.remover);
+  /* O `config` e MESCLADO, nunca substituido: um card `lista` guarda
+     `fonte=roteiros` ali e um `marca` guarda a whitelist dele. Trocar o
+     objeto inteiro apagaria isso em silencio, e o card pararia de funcionar
+     sem ninguem ter mexido nele.
+     E so entra no patch quando MUDOU: sem essa comparacao, todo salvamento
+     de card que espera reescreveria o config a toa, e "nao ha nada para
+     salvar" deixaria de significar algo. */
+  if (Array.isArray(q.atalhos)) {
+    const novos = poFluxoAtalhosLimpos(q.atalhos);
+    if (JSON.stringify(novos) !== JSON.stringify(poFluxoAtalhos(c))) {
+      const base = c.config && typeof c.config === 'object' ? c.config : {};
+      patch.config = Object.assign({}, base, { atalhos: novos });
+    }
+  }
   return patch;
 }
 
@@ -860,7 +953,74 @@ function poFluxoResultado(modo, resp, cards) {
   return '';
 }
 
-function poFluxoGaveta(card) {
+/* A secao de atalhos da gaveta. `cards` e `inicial` vem do fluxo aberto: o
+   destino e um SELETOR com os cards, nunca um campo de texto - atalho e
+   aresta do grafo, e id digitado a mao e a forma mais facil de apontar para
+   um card que nao existe (a regra 17 bloqueia depois, com a cliente sem
+   saber o que escrever). O proprio card fica fora da lista: um atalho que
+   leva a ele mesmo nao anda. */
+function poFluxoSecaoAtalhos(card, cards, inicial) {
+  const c = card && typeof card === 'object' ? card : {};
+  if (!poFluxoTemAtalho(c, inicial)) return '';
+  const lista = Array.isArray(cards) ? cards.filter(function (x) {
+    return x && x.id != null && String(x.id) !== String(c.id);
+  }) : [];
+  const atalhos = poFluxoAtalhos(c);
+  const espera = !!(poFluxoTipo(c.tipo) || {}).espera;
+  /* QUEM DECIDE A SAUDACAO E SER O CARD DE ENTRADA, nao esperar resposta. Um
+     card pode ser as duas coisas (o de boas-vindas e): ali a saudacao SAI, e
+     dizer "aqui ela e ignorada" - como esta tela chegou a dizer - manda a
+     cliente apagar justamente o texto que o cliente le primeiro. */
+  const entrada = c.id != null && inicial != null && String(c.id) === String(inicial);
+
+  let h = '<fieldset class="fl-atalhos" data-atalhos><legend>Atalhos: quando a pessoa escreve em vez de tocar</legend>' +
+    '<p class="fl-dica">' +
+    (entrada ? 'Este é o card de entrada do fluxo: aqui o robô lê a PRIMEIRA frase da conversa. Casando um atalho, ele manda a saudação e salta direto para o card escolhido. ' : '') +
+    (espera ? 'Se a resposta não for um dos botões, o robô lê a frase e segue pelo primeiro atalho que casar. Sem casar nenhum, vai para o card de "não entendi".' : '') +
+    '</p>';
+
+  atalhos.forEach(function (a, i) {
+    const n = i + 1;
+    h += '<div class="fl-atalho" data-atalho="' + i + '">' +
+      '<select class="fl-campo" data-campo="at-tipo" aria-label="Quando o atalho ' + n + ' vale">' +
+      poAtalhoTipos().map(function (t) {
+        return '<option value="' + esc(t) + '"' + (t === a.tipo ? ' selected' : '') + '>' + esc(poAtalhoRotulo(t)) + '</option>';
+      }).join('') +
+      (poAtalhoTipos().indexOf(a.tipo) < 0 ? '<option value="' + esc(a.tipo) + '" selected>' + esc(a.tipo) + ' (não existe mais)</option>' : '') +
+      '</select>' +
+      /* O campo so vale no tipo `palavras`, e nos outros dois ele diz isso em
+         vez de sugerir palavras que o robo ignoraria. A troca do seletor
+         REDESENHA a secao, entao a linha nunca fica dizendo uma coisa e
+         valendo outra. */
+      '<input type="text" class="fl-campo" data-campo="at-palavras" value="' + esc(a.palavras.join(', ')) + '"' +
+      ' aria-label="Palavras do atalho ' + n + '" placeholder="' +
+      (a.tipo === 'palavras' ? 'atendente, pessoa, humano' : 'só vale no tipo de palavras') + '">' +
+      '<select class="fl-campo" data-campo="at-destino" aria-label="Para onde leva o atalho ' + n + '">' +
+      '<option value=""' + (a.destino === '' ? ' selected' : '') + '>escolha o card</option>' +
+      lista.map(function (x) {
+        return '<option value="' + esc(x.id) + '"' + (String(x.id) === a.destino ? ' selected' : '') + '>' + esc(x.titulo || x.id) + '</option>';
+      }).join('') +
+      (a.destino !== '' && !lista.some(function (x) { return String(x.id) === a.destino; })
+        ? '<option value="' + esc(a.destino) + '" selected>card que não existe mais</option>' : '') +
+      '</select>' +
+      '<input type="text" class="fl-campo" data-campo="at-saudacao" value="' + esc(a.saudacao) + '"' +
+      ' aria-label="Saudação do atalho ' + n + '" placeholder="' + (entrada ? 'Oi! Já te mando o roteiro.' : 'só vale no card de entrada') + '">' +
+      '<button type="button" class="fl-opcao__x" data-acao="excluir-atalho" data-i="' + i + '" aria-label="Excluir o atalho ' + n + '">Excluir</button>' +
+      '</div>';
+  });
+
+  /* A saudacao so e usada no card de ENTRADA: no meio da conversa ja houve
+     saudacao, e repeti-la soa a robo quebrado. Dizer isso na tela e o que
+     impede a cliente de escrever uma e nunca entender por que nao sai. */
+  if (atalhos.length && !entrada) {
+    h += '<p class="fl-dica">A saudação só sai quando o atalho está no card de entrada do fluxo. Aqui ela é ignorada.</p>';
+  }
+  if (!atalhos.length) h += '<p class="fl-dica">Nenhum atalho neste card.</p>';
+  h += '<button type="button" class="rep-add" data-acao="add-atalho">Adicionar atalho</button></fieldset>';
+  return h;
+}
+
+function poFluxoGaveta(card, cards, inicial) {
   const c = card && typeof card === 'object' ? card : {};
   const def = poFluxoTipo(c.tipo);
   if (!def || !poFluxoEditavel(c)) {
@@ -896,6 +1056,7 @@ function poFluxoGaveta(card) {
       '> Lembrar a pessoa se ela não responder</label>';
     h += campoTexto('lembrete_texto', 'Mensagem do lembrete', c.lembrete_texto, 4096, 4);
   }
+  h += poFluxoSecaoAtalhos(c, cards, inicial);
   h += '</div><div class="fl-gaveta__rodape"><div class="fl-gaveta__status" data-status role="status"></div>' +
     '<button type="button" class="btn btn-primary" data-acao="salvar">Salvar</button>' +
     '<button type="button" class="btn btn-ghost" data-acao="fechar">Cancelar</button></div>';
@@ -1132,6 +1293,7 @@ function poFluxoFecha() {
 function poFluxoAbre(id) {
   const card = poFluxoCardAtual(id);
   const g = document.querySelector('#fl-gaveta');
+  const f = poFluxoAtual();
   if (!card || !g || !poFluxoEditavel(card)) return;
   /* A gaveta e o simulador sao os dois `position:fixed` na mesma faixa a
      direita, e no celular o simulador ocupa a tela inteira. Sem fechar um, o
@@ -1140,7 +1302,7 @@ function poFluxoAbre(id) {
   if (typeof poSimFecha === 'function') poSimFecha();
   PO_FLUXO_CARD = String(id);
   PO_FLUXO_REMOV = [];
-  g.innerHTML = poFluxoGaveta(card);
+  g.innerHTML = poFluxoGaveta(card, f ? f.cards : [], f ? f.card_inicial : null);
   g.hidden = false;
   poFluxoMarca(id);
   // contador ao vivo: o pior caso, a cada tecla
@@ -1161,6 +1323,12 @@ function poFluxoAbre(id) {
     else if (acao === 'salvar') poFluxoGavetaSalva();
     else if (acao === 'excluir-opcao') poFluxoOpcaoExclui(g, Number(b.getAttribute('data-i')));
     else if (acao === 'desfazer') poFluxoOpcaoDesfaz(g);
+    else if (acao === 'add-atalho') poFluxoAtalhoAdd(g);
+    else if (acao === 'excluir-atalho') poFluxoAtalhoExclui(g, Number(b.getAttribute('data-i')));
+  };
+  g.onchange = function (ev) {
+    const t = ev.target;
+    if (t && t.getAttribute && t.getAttribute('data-campo') === 'at-tipo') poFluxoAtalhoTipoMuda(g);
   };
 }
 
@@ -1196,6 +1364,48 @@ function poFluxoOpcaoDesfaz(g) {
   poFluxoAvisoRedesenha(g);
 }
 
+/* ADICIONAR E EXCLUIR ATALHO redesenham a SECAO INTEIRA a partir do que esta
+   na tela, e e isso que mantem `data-atalho` contiguo - o `data-i` do botao
+   Excluir vale pela POSICAO na leitura, e com indice furado a exclusao
+   apagaria o atalho errado (o mesmo defeito que o editor de datas do painel
+   teve em 05/11, quando redesenhava a partir do banco em vez da tela).
+
+   Nada vai ao banco aqui: so o Salvar grava. */
+function poFluxoAtalhoRedesenha(g, lista) {
+  const card = PO_FLUXO_CARD === null ? null : poFluxoCardAtual(PO_FLUXO_CARD);
+  const f = poFluxoAtual();
+  const sec = g.querySelector('[data-atalhos]');
+  if (!card || !f || !sec) return;
+  const vista = Object.assign({}, card, {
+    config: Object.assign({}, card.config && typeof card.config === 'object' ? card.config : {}, { atalhos: lista })
+  });
+  sec.outerHTML = poFluxoSecaoAtalhos(vista, f.cards, f.card_inicial);
+}
+
+/* Trocar o TIPO redesenha a secao: o campo de palavras e o de saudacao dizem
+   coisas diferentes por tipo, e sem isto a linha ficaria dizendo uma coisa e
+   valendo outra ate o proximo Salvar. */
+function poFluxoAtalhoTipoMuda(g) {
+  if (PO_FLUXO_SALVANDO) return;
+  const atuais = poFluxoLeGaveta(g).atalhos;
+  if (Array.isArray(atuais)) poFluxoAtalhoRedesenha(g, atuais);
+}
+
+function poFluxoAtalhoAdd(g) {
+  if (PO_FLUXO_SALVANDO) return;
+  const atuais = poFluxoLeGaveta(g).atalhos;
+  if (!Array.isArray(atuais)) return;
+  poFluxoAtalhoRedesenha(g, atuais.concat([{ tipo: poAtalhoTipos()[0], palavras: [], destino: '', saudacao: '' }]));
+}
+
+function poFluxoAtalhoExclui(g, i) {
+  if (PO_FLUXO_SALVANDO || !Number.isInteger(i)) return;
+  const atuais = poFluxoLeGaveta(g).atalhos;
+  if (!Array.isArray(atuais) || i < 0 || i >= atuais.length) return;
+  atuais.splice(i, 1);
+  poFluxoAtalhoRedesenha(g, atuais);
+}
+
 function poFluxoStatus(html) {
   const el = document.querySelector('#fl-gaveta [data-status]');
   if (el) el.innerHTML = html;
@@ -1212,6 +1422,21 @@ function poFluxoLeGaveta(g) {
   if (lt) v.lembrete_texto = lt.value;
   const rs = g.querySelectorAll('[data-campo="rotulo"]');
   if (rs.length) v.rotulos = Array.from(rs).map(function (i) { return i.value; });
+  /* A SECAO decide, nao as linhas: com a secao desenhada e zero linhas (a
+     cliente excluiu todas), `atalhos` tem de chegar como lista VAZIA, senao
+     excluir o ultimo atalho nunca gravaria. Sem a secao (card que nao le
+     frase) a chave nem aparece - a mesma regra do resto da gaveta. */
+  if (g.querySelector('[data-atalhos]')) {
+    v.atalhos = Array.from(g.querySelectorAll('[data-atalho]')).map(function (l) {
+      const val = function (sel) { const e = l.querySelector(sel); return e ? String(e.value == null ? '' : e.value) : ''; };
+      return {
+        tipo: val('[data-campo="at-tipo"]'),
+        palavras: val('[data-campo="at-palavras"]').split(',').map(function (p) { return p.trim(); }).filter(function (p) { return p !== ''; }),
+        destino: val('[data-campo="at-destino"]').trim(),
+        saudacao: val('[data-campo="at-saudacao"]').trim()
+      };
+    });
+  }
   if (PO_FLUXO_REMOV.length) v.remover = PO_FLUXO_REMOV.slice();
   return v;
 }

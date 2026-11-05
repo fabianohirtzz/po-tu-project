@@ -34,7 +34,8 @@ const PURAS_NOMES = ['poFluxoTipos', 'poFluxoTipo', 'poFluxoOpcoes', 'poFluxoPre
                      'poFluxoPodePublicar', 'poFluxoOrdemLigar', 'poFluxoSemRepetido', 'poFluxoPainelProblemas',
                      'poFluxoEstado', 'poFluxoPorqueNao', 'poFluxoBarra', 'poFluxoResultado', 'poFluxoCardCulpado', 'poFluxoPodeLigar', 'poFluxoTextoLigar',
                      'poFluxoRemoveOpcao', 'poFluxoOpcoesSem', 'poFluxoContagem', 'poFluxoOrfaos', 'poFluxoAvisoRemocao', 'poFluxoCardFinal',
-                     'poFluxoZoomNum', 'poFluxoZoomEscada', 'poFluxoZoomPasso', 'poFluxoZoomAjuste', 'poFluxoZoomPalco', 'poFluxoZoomBarra'];
+                     'poFluxoZoomNum', 'poFluxoZoomEscada', 'poFluxoZoomPasso', 'poFluxoZoomAjuste', 'poFluxoZoomPalco', 'poFluxoZoomBarra',
+                     'poAtalhoTipos', 'poAtalhoRotulo', 'poFluxoAtalhos', 'poFluxoTemAtalho', 'poFluxoAtalhosLimpos', 'poFluxoSecaoAtalhos'];
 const F = new Function(ESC + PURAS_NOMES.map(pega).join('\n') +
   '; return {' + PURAS_NOMES.join(',') + '};')();
 
@@ -564,8 +565,15 @@ const corpoSalva = semCom(pega('poFluxoSalva')), corpoPatch = semCom(pega('poFlu
 const PROIBIDAS = /\b(id|tipo|proximo|fallback|sem_resposta|x|y)\b/;
 assert.ok(!PROIBIDAS.test(corpoSalva), 'poFluxoSalva nao cita id, tipo, setas nem posicao: ' + (corpoSalva.match(PROIBIDAS) || [])[0]);
 assert.ok(!PROIBIDAS.test(corpoPatch), 'poFluxoPatch tambem nao: ' + (corpoPatch.match(PROIBIDAS) || [])[0]);
-assert.deepEqual([...corpoPatch.matchAll(/patch\.(\w+)\s*=/g)].map(m => m[1]).sort(), ['lembrete_ativo', 'lembrete_texto', 'opcoes', 'texto'],
-  'poFluxoPatch atribui exatamente essas quatro chaves');
+/* `config` entrou na Tarefa 7 (os atalhos moram nele) e a lista segue FECHADA.
+   O que a protege nao e o tamanho: e o PROIBIDAS acima, que mantem fora id,
+   tipo, as setas e a posicao - as colunas que, escritas por engano, mudariam
+   a ESTRUTURA do grafo a partir de uma gaveta que so devia editar texto. E o
+   `config` e MESCLADO dentro da funcao, nunca substituido. */
+assert.deepEqual([...corpoPatch.matchAll(/patch\.(\w+)\s*=/g)].map(m => m[1]).sort(), ['config', 'lembrete_ativo', 'lembrete_texto', 'opcoes', 'texto'],
+  'poFluxoPatch atribui exatamente essas cinco chaves');
+assert.ok(/Object\.assign\(\{\}, base,/.test(corpoPatch),
+  'e o config e mesclado sobre o que ja estava la, nunca substituido');
 assert.ok(/\.from\('po_wa_cards'\)\.update\(patch\)\.match\(poFluxoQuem\(card\)\)\.select\(\)/.test(corpoSalva),
   'o PATCH grava SO o patch, na linha de poFluxoQuem(card), e confere a linha devolvida');
 assert.ok(/poFluxoPatch\(card, v\)/.test(corpoSalva) && /poFluxoBloqueio\(poFluxoCardFinal\(card, v\)\)/.test(corpoSalva), 'e passa pelo bloqueio (do card COMO FICARA, sem as opcoes removidas) e pelo patch');
@@ -679,8 +687,19 @@ assert.ok(/ta\.addEventListener\('input'/.test(semComentario), 'cada textarea ou
 assert.ok(/poFluxoContador\(ta\.value, Number\(ta\.getAttribute\('data-limite'\)\)\)/.test(semComentario), 'e recalcula o pior caso com o limite do PROPRIO campo');
 assert.ok(/classList\.toggle\('fl-cont--estouro', ct\.estoura\)/.test(semComentario) && /el\.textContent = ct\.texto/.test(semComentario), 'e atualiza texto e aviso');
 
-/* (7) variavel: so na lista unica poFluxoVariaveis. Fora disso, nenhum nome de variavel no fonte */
-const fora7 = semComentario.replace(pega('poFluxoVariaveis'), '');
+/* (7) variavel: so na lista unica poFluxoVariaveis. Fora disso, nenhum nome de
+   variavel no fonte.
+
+   DUAS EXCECOES, e elas nao sao variaveis: `poAtalhoTipos` e `poAtalhoRotulo`
+   guardam os TIPOS DE ATALHO, que por acidente dividem as palavras "roteiro" e
+   "destino" com duas variaveis de texto. Sao listas de outra coisa, cada uma
+   amarrada ao seu proprio espelho no PHP (WA_ATALHO_TIPOS), e a trava que vale
+   para elas e aquela. Sem recorta-las aqui, a unica saida seria renomear os
+   tipos no servidor para agradar um regex do teste. */
+const fora7 = semComentario
+  .replace(pega('poFluxoVariaveis'), '')
+  .replace(pega('poAtalhoTipos'), '')
+  .replace(pega('poAtalhoRotulo'), '');
 assert.ok(!/\{(nome|roteiro|data|destino)\}/.test(fora7), 'nenhum {variavel} escrito a mao fora da lista unica');
 assert.ok(!/['"](nome|roteiro|data|destino)['"]/.test(fora7), 'nenhuma lista propria de variaveis conhecidas');
 assert.ok(!/\b(nome|roteiro|destino)\s*:\s*\d/.test(fora7), 'nenhuma tabela propria de tamanhos de variavel');
@@ -1797,9 +1816,12 @@ assert.equal(cardR.opcoes.length, 2, 'e nunca muta o original');
   await assert.rejects(() => salvaCom(quatro, { remover: [9] }), /no máximo 3/, 'indice que nao remove nada nao libera');
 }
 
-// a leitura do DOM: remover entra por UM lugar, e nenhuma outra chave nasce
+/* a leitura do DOM: remover entra por UM lugar, e nenhuma outra chave nasce.
+   `atalhos` entrou na Tarefa 7, e a lista segue FECHADA: cada chave daqui tem
+   de ter um par em poFluxoPatch, senao a gaveta le algo que nunca e gravado -
+   e a cliente edita um campo que o Salvar ignora, sem aviso. */
 assert.deepEqual([...semCom(pega('poFluxoLeGaveta')).matchAll(/\bv\.(\w+)\s*=/g)].map(m => m[1]).sort(),
-  ['lembrete_ativo', 'lembrete_texto', 'remover', 'rotulos', 'texto'], 'a leitura da gaveta preenche so estas cinco chaves');
+  ['atalhos', 'lembrete_ativo', 'lembrete_texto', 'remover', 'rotulos', 'texto'], 'a leitura da gaveta preenche so estas seis chaves');
 assert.deepEqual(leGaveta(mk({}, {})), {}, 'sem nada removido, `remover` nem aparece');
 
 // a gaveta: um botao de excluir por opcao (e so onde ha opcao)
@@ -2057,6 +2079,255 @@ assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', op
   assert.deepEqual([...new Set([...dica.matchAll(/\{(\w+)\}/g)].map(x => x[1]))], vars.map(v => v.nome),
     'a dica cita so as variaveis vivas, na ordem');
   assert.ok(!/\bnome\b/.test(contador + dica) || vars.some(v => v.nome === 'nome'), 'nenhuma das duas fala de uma variavel que nao existe mais (nome)');
+}
+
+/* ============================================================
+   TAREFA 7: O EDITOR DE ATALHOS NA GAVETA
+
+   O atalho e a resposta ao publico desta agencia: 60+, que DIGITA em vez de
+   tocar no botao. Ate aqui ele existia no motor, no validador e no
+   simulador, e so podia ser montado por SQL - ou seja, nao existia para a
+   cliente. Esta secao e o que o torna dela.
+
+   Tres regras de desenho que este bloco trava, cada uma por um defeito que
+   ja aconteceu neste subsistema:
+   1. O `config` do card e MESCLADO, nunca substituido. Um card `lista` tem
+      `config.fonte=roteiros` e um `marca` tem a whitelist dele; trocar o
+      objeto inteiro apagaria isso em silencio, e o card pararia de funcionar
+      sem ninguem mexer nele.
+   2. O padrao do CSS vem ANTES do @media (mesma especificidade: vence a
+      ultima declarada). Foi assim que a barra de zoom ficou invisivel em
+      toda largura com dois testes verdes.
+   3. O limite de caracteres nao bloqueia o Salvar, so o Publicar - e a
+      forma do atalho quem julga e o validador (regra 17), nunca esta tela.
+============================================================ */
+
+/* ---------- os tres tipos, espelhados do PHP ---------- */
+assert.deepEqual(F.poAtalhoTipos(), ['palavras', 'roteiro', 'destino'],
+  'os tres tipos de atalho, na mesma ordem do PHP');
+{
+  const php = le('../lib/wa-fluxo.php');
+  const m = php.match(/const WA_ATALHO_TIPOS\s*=\s*\[([^\]]*)\]/);
+  assert.ok(m, 'guarda: a lista do servidor foi encontrada');
+  const srv = [...m[1].matchAll(/'([a-z_]+)'/g)].map(x => x[1]);
+  assert.deepEqual(F.poAtalhoTipos(), srv, 'a lista do painel e EXATAMENTE a do servidor, na mesma ordem');
+}
+
+/* ---------- a secao na gaveta ---------- */
+const cardsAt = [
+  { id: 'bv', tipo: 'botoes', titulo: 'Boas-vindas', texto: 'Oi?', opcoes: op(1), config: {} },
+  { id: 'pdf', tipo: 'pdf', titulo: 'Manda o PDF', texto: 'Segue.', opcoes: [], config: {} },
+  { id: 'hum', tipo: 'humano', titulo: 'Atendimento', texto: 'Ja chamo.', opcoes: [], config: {} },
+];
+{
+  const g = F.poFluxoGaveta(cardsAt[0], cardsAt, 'bv');
+  assert.ok(/data-atalhos/.test(g), 'a gaveta de um card que espera tem a secao de atalhos');
+  assert.ok(/data-acao="add-atalho"/.test(g), 'com o botao de adicionar');
+  /* Card sem atalho nenhum abre a secao SEM linha: so o convite. Desenhar
+     uma linha em branco faria a cliente achar que o card tem um atalho que
+     nao tem - e, salvo assim, ele bloquearia a publicacao pela regra 17. */
+  assert.ok(!/data-atalho="0"/.test(g), 'card sem atalhos nao desenha linha nenhuma');
+  assert.ok(/Nenhum atalho neste card/.test(g), 'e diz isso em vez de deixar um vazio');
+
+  /* Card que NAO le frase nenhuma nao ganha a secao: ali o atalho seria
+     configuracao morta, e a cliente acharia que configurou algo. */
+  assert.ok(!/data-atalhos/.test(F.poFluxoGaveta(cardsAt[1], cardsAt, 'bv')),
+    'card de PDF nao tem secao de atalhos: ninguem le frase nele');
+  /* Mas o card INICIAL tem, mesmo nao esperando resposta: e nele que a
+     PRIMEIRA frase da conversa e lida (ponto 1, Tarefa 5). */
+  const gi = F.poFluxoGaveta(Object.assign({}, cardsAt[1], { id: 'ini' }), cardsAt.concat([{ id: 'ini', tipo: 'pdf', titulo: 'Ini', texto: 'x', opcoes: [], config: {} }]), 'ini');
+  assert.ok(/data-atalhos/.test(gi), 'o card inicial tem a secao mesmo sem esperar resposta');
+}
+
+/* Um card que JA tem atalhos desenha os campos preenchidos, em ordem. */
+{
+  const c = Object.assign({}, cardsAt[0], { config: { atalhos: [
+    { tipo: 'palavras', palavras: ['atendente', 'pessoa'], destino: 'hum', saudacao: '' },
+    { tipo: 'roteiro', palavras: [], destino: 'pdf', saudacao: 'Já te mando.' },
+  ] } });
+  const g = F.poFluxoGaveta(c, cardsAt, 'bv');
+  const linhas = g.match(/data-atalho="\d+"/g) || [];
+  assert.equal(linhas.length, 2, 'duas linhas, uma por atalho');
+  assert.ok(/value="atendente, pessoa"/.test(g), 'as palavras voltam juntas, separadas por virgula');
+  assert.ok(/value="Já te mando\."/.test(g), 'a saudacao volta no campo dela');
+  assert.ok(g.indexOf('data-atalho="0"') < g.indexOf('data-atalho="1"'),
+    'na ORDEM em que a cliente os colocou: o primeiro que casa vence, entao a ordem e dado');
+
+  /* O destino sai de um SELETOR com os cards do fluxo, nao de um campo de
+     texto: atalho e aresta do grafo, e id digitado a mao e a forma mais facil
+     de apontar para um card que nao existe - que a regra 17 bloqueia depois,
+     com a cliente sem saber o que escrever. */
+  assert.ok(/data-campo="at-destino"/.test(g), 'o destino e um seletor');
+  assert.ok(/<option value="hum"[^>]*>Atendimento</.test(g), 'com os cards do fluxo, pelo TITULO que ela ve');
+  assert.ok(/<option value="hum" selected>/.test(g), 'e o destino gravado vem selecionado');
+  const sec = g.slice(g.indexOf('data-atalhos'));
+  assert.ok(!/<option value="bv"/.test(sec),
+    'o proprio card nao e opcao de destino: o atalho levaria a ele mesmo');
+
+  /* Destino que foi APAGADO do fluxo nao desaparece do seletor em silencio:
+     ele vira uma opcao que diz o que aconteceu. Sem isso o campo voltaria em
+     "escolha o card" e a cliente nao saberia que o atalho perdeu a ponta -
+     a regra 17 bloqueia a publicacao e ela nao entenderia por que. */
+  const gf = F.poFluxoGaveta(Object.assign({}, cardsAt[0], { config: { atalhos: [
+    { tipo: 'palavras', palavras: ['x'], destino: 'sumiu', saudacao: '' }] } }), cardsAt, 'bv');
+  assert.ok(/<option value="sumiu" selected>card que não existe mais</.test(gf),
+    'destino apagado do fluxo aparece dito, nao em branco');
+
+  /* Tipo que saiu da lista do servidor tambem e dito, pelo mesmo motivo. */
+  const gt = F.poFluxoGaveta(Object.assign({}, cardsAt[0], { config: { atalhos: [
+    { tipo: 'antigo', palavras: [], destino: 'hum', saudacao: '' }] } }), cardsAt, 'bv');
+  assert.ok(/<option value="antigo" selected>antigo \(não existe mais\)</.test(gt),
+    'tipo fora da lista aparece dito');
+}
+
+/* ---------- a leitura do DOM, no ponto de chamada ---------- */
+{
+  const leG = new Function(src + '; return poFluxoLeGaveta;')();
+  const campo = (v, extra) => Object.assign({ value: v }, extra);
+  const linha = mapa => ({ querySelector: sel => mapa[sel] || null });
+  const mk2 = (mapa, todos) => ({ querySelector: s => mapa[s] || null, querySelectorAll: s => todos[s] || [] });
+
+  const l0 = linha({ '[data-campo="at-tipo"]': campo('palavras'), '[data-campo="at-destino"]': campo('hum'),
+                     '[data-campo="at-palavras"]': campo(' atendente , pessoa ,, '), '[data-campo="at-saudacao"]': campo(' Oi! ') });
+  const l1 = linha({ '[data-campo="at-tipo"]': campo('roteiro'), '[data-campo="at-destino"]': campo('pdf'),
+                     '[data-campo="at-palavras"]': campo(''), '[data-campo="at-saudacao"]': campo('') });
+  const lido = leG(mk2({ '[data-campo="texto"]': campo('T'), '[data-atalhos]': {} },
+                        { '[data-atalho]': [l0, l1] }));
+  assert.deepEqual(lido.atalhos, [
+    { tipo: 'palavras', palavras: ['atendente', 'pessoa'], destino: 'hum', saudacao: 'Oi!' },
+    { tipo: 'roteiro', palavras: [], destino: 'pdf', saudacao: '' },
+  ], 'le cada linha, apara e descarta pedaco vazio entre virgulas');
+
+  /* A secao existe e esta VAZIA: a cliente excluiu todos. Isso tem de chegar
+     como lista vazia, nao como "nao mexeu" - senao excluir o ultimo atalho
+     nunca gravaria. */
+  const vazio = leG(mk2({ '[data-atalhos]': {} }, { '[data-atalho]': [] }));
+  assert.deepEqual(vazio.atalhos, [], 'secao vazia vira lista vazia, e nao ausencia');
+
+  /* Secao NAO desenhada (card de PDF): a chave nem aparece. E a mesma regra
+     do resto da gaveta - campo que nao foi desenhado nao entra. */
+  assert.ok(!('atalhos' in leG(mk2({}, {}))), 'card sem a secao nao manda a chave');
+  assert.deepEqual(leG(mk2({}, {})), {}, 'e segue devolvendo objeto vazio');
+}
+
+/* ---------- o patch: MESCLA o config, nunca o substitui ---------- */
+{
+  const antes = { id: 'l1', tipo: 'lista', config: { fonte: 'roteiros' }, opcoes: [] };
+  const p = F.poFluxoPatch(antes, { atalhos: [{ tipo: 'destino', palavras: [], destino: 'hum', saudacao: '' }] });
+  assert.equal(p.config.fonte, 'roteiros',
+    'o que ja estava no config sobrevive: um card lista sem fonte=roteiros para de montar a lista');
+  assert.deepEqual(p.config.atalhos, [{ tipo: 'destino', palavras: [], destino: 'hum', saudacao: '' }],
+    'e os atalhos entram ao lado');
+
+  /* Linha que a cliente adicionou e nao preencheu nao vira atalho: ela
+     clicou em Adicionar e mudou de ideia. */
+  const p2 = F.poFluxoPatch(antes, { atalhos: [{ tipo: 'palavras', palavras: [], destino: '', saudacao: '' }] });
+  assert.deepEqual(p2.config ? p2.config.atalhos : [], [], 'linha em branco e descartada');
+
+  /* Nada mudou: o patch nao carrega config. Sem isso, todo salvamento de
+     card que espera reescreveria o config a toa. */
+  const comAt = { id: 'x', tipo: 'botoes', config: { atalhos: [{ tipo: 'roteiro', palavras: [], destino: 'pdf', saudacao: '' }] }, opcoes: [] };
+  const p3 = F.poFluxoPatch(comAt, { atalhos: [{ tipo: 'roteiro', palavras: [], destino: 'pdf', saudacao: '' }] });
+  assert.ok(!('config' in p3), 'atalhos iguais aos que ja estao gravados nao viram patch');
+
+  /* Excluir o ultimo GRAVA a lista vazia. */
+  const p4 = F.poFluxoPatch(comAt, { atalhos: [] });
+  assert.deepEqual(p4.config.atalhos, [], 'excluir o ultimo atalho grava lista vazia');
+
+  /* A forma do atalho quem julga e o validador, nao esta tela: um tipo que
+     nao existe passa pelo patch e e recusado no Publicar, com a frase da
+     regra 17 na tela. Julgar aqui faria a tela aprovar o que o servidor
+     recusa (ou o contrario). */
+  const p5 = F.poFluxoPatch(antes, { atalhos: [{ tipo: 'inventado', palavras: ['x'], destino: 'hum', saudacao: '' }] });
+  assert.equal(p5.config.atalhos[0].tipo, 'inventado', 'o patch nao julga o tipo: quem julga e a regra 17');
+}
+
+/* ---------- a saudacao: quem decide e ser CARD DE ENTRADA ----------
+   DEFEITO QUE SO A TELA MOSTROU. A condicao era "espera resposta", e o card
+   de boas-vindas e as duas coisas: ele espera E e a entrada. A gaveta dele
+   dizia "aqui ela e ignorada" embaixo de uma saudacao que SAI - mandando a
+   cliente apagar justamente o texto que o cliente le primeiro. Os dois
+   testes de presenca passavam verdes. */
+{
+  const comAt = { config: { atalhos: [{ tipo: 'roteiro', palavras: [], destino: 'hum', saudacao: 'Oi!' }] } };
+  const entrada = F.poFluxoGaveta(Object.assign({}, cardsAt[0], comAt), cardsAt, 'bv');
+  const meio = F.poFluxoGaveta(Object.assign({}, cardsAt[0], comAt), cardsAt, 'outro');
+
+  assert.ok(!/ela é ignorada/.test(entrada),
+    'no card de ENTRADA a gaveta nao diz que a saudacao e ignorada: ali ela e o que o cliente le primeiro');
+  assert.ok(/ela é ignorada/.test(meio),
+    'e num card do meio da conversa diz, porque ali ela nao sai mesmo');
+  assert.ok(/PRIMEIRA frase/.test(entrada), 'o card de entrada explica que ali o robo le a primeira frase');
+  assert.ok(!/PRIMEIRA frase/.test(meio), 'e o do meio nao');
+  /* Um card que e entrada E espera resposta recebe as DUAS explicacoes: as
+     duas sao verdade nele. */
+  assert.ok(/não for um dos botões/.test(entrada), 'card de entrada que tambem espera explica as duas coisas');
+
+  /* O placeholder segue a mesma regra, senao ele contradiz o aviso logo
+     acima dele. */
+  assert.ok(/placeholder="Oi! Já te mando o roteiro\."/.test(entrada), 'na entrada o campo da saudacao sugere um exemplo');
+  assert.ok(/placeholder="só vale no card de entrada"/.test(meio), 'e no meio diz que ali ela nao vale');
+}
+
+/* ---------- o campo de palavras diz a verdade sobre o TIPO da linha ---------- */
+{
+  const g1 = F.poFluxoGaveta(Object.assign({}, cardsAt[0], { config: { atalhos: [
+    { tipo: 'palavras', palavras: [], destino: 'hum', saudacao: '' }] } }), cardsAt, 'bv');
+  const g2 = F.poFluxoGaveta(Object.assign({}, cardsAt[0], { config: { atalhos: [
+    { tipo: 'roteiro', palavras: [], destino: 'hum', saudacao: '' }] } }), cardsAt, 'bv');
+  assert.ok(/placeholder="atendente, pessoa, humano"/.test(g1), 'no tipo de palavras o campo sugere palavras');
+  assert.ok(/placeholder="só vale no tipo de palavras"/.test(g2),
+    'e nos outros dois ele diz que nao vale, em vez de sugerir palavras que o robo ignoraria');
+}
+
+/* ---------- trocar o tipo REDESENHA a linha, no ponto de chamada ----------
+   Sem isto a linha ficaria dizendo uma coisa (o placeholder do tipo antigo) e
+   valendo outra ate o proximo Salvar. */
+{
+  const abre = pega('poFluxoAbre');
+  /* TRAVA NO PONTO DE CHAMADA. A funcao pura aceita os tres argumentos e
+     todos os testes acima a chamam com eles - mas quem abre a gaveta de
+     verdade e esta linha, e chamando-a com o card sozinho a secao sumiria do
+     card de entrada e o seletor de destino ficaria sem nenhuma opcao, com a
+     funcao pura intacta e a suite verde. E o mesmo defeito que ja deixou o
+     filtro `wa_id` da conversa sumir: a funcao travada e o chamador livre. */
+  assert.ok(/poFluxoGaveta\(card, f \? f\.cards : \[\], f \? f\.card_inicial : null\)/.test(abre),
+    'a gaveta e aberta COM os cards do fluxo e o card inicial, nunca so com o card');
+  assert.ok(/g\.onchange = function/.test(abre), 'a gaveta ouve a troca do seletor');
+  assert.ok(/at-tipo/.test(abre) && /poFluxoAtalhoTipoMuda\(g\)/.test(abre),
+    'e so a troca do TIPO redesenha a secao');
+  const add = pega('poFluxoAtalhoAdd'), exc = pega('poFluxoAtalhoExclui');
+  assert.ok(/poFluxoAtalhoRedesenha/.test(add) && /poFluxoAtalhoRedesenha/.test(exc),
+    'adicionar e excluir passam pelo MESMO redesenho: e o que mantem data-atalho contiguo');
+  assert.ok(/PO_FLUXO_SALVANDO/.test(add) && /PO_FLUXO_SALVANDO/.test(exc),
+    'e os dois ficam parados durante o salvar, como o excluir de opcao');
+  /* O redesenho le a TELA, nunca o card gravado: ler o banco faria a linha
+     recem-digitada sumir no primeiro clique em Adicionar - o mesmo defeito
+     que o editor de datas teve em 05/11. */
+  assert.ok(/poFluxoLeGaveta\(g\)\.atalhos/.test(add), 'o Adicionar parte do que esta na tela, nao do que esta gravado');
+  assert.ok(/poFluxoLeGaveta\(g\)\.atalhos/.test(exc), 'o Excluir tambem');
+}
+
+/* ---------- CSS: o padrao vem ANTES do @media ---------- */
+{
+  const iPadrao = css.indexOf('.fl-atalho{');
+  assert.ok(iPadrao >= 0, 'a linha do atalho tem estilo proprio');
+  const iPrimeiroMq = css.indexOf('@media');
+  assert.ok(iPrimeiroMq >= 0 && iPadrao < iPrimeiroMq,
+    'e o padrao (celular) vem ANTES de qualquer @media: mesma especificidade, vence a ultima declarada');
+  assert.ok(/\.fl-atalhos\{/.test(css), 'e a secao tambem');
+}
+
+/* ---------- a trava de largura de tela segue valendo ---------- */
+/* (ja conferida acima para o arquivo todo: o fluxo.js nao le largura de tela
+   fora de poFluxoZoomAplica. Esta secao nao abriu excecao nenhuma, e e isto
+   que a assercao de cima passa a cobrir tambem.) */
+
+/* ---------- cache-buster ---------- */
+{
+  const lock = JSON.parse(le('../painel/assets-lock.json'));
+  assert.ok(lock['fluxo.js'].v >= 24, 'o ?v= do fluxo.js subiu com esta tarefa (esta em ' + lock['fluxo.js'].v + ')');
+  assert.ok(lock['fluxo.css'].v >= 10, 'e o do fluxo.css tambem (esta em ' + lock['fluxo.css'].v + ')');
 }
 
 console.log('test-fluxo-painel OK');
