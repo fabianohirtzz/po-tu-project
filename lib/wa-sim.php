@@ -271,6 +271,29 @@ function wa_sim_passo($grafos, $fluxo_id, $card_id, $resposta, $ctx, $clicou = f
         if ($card === '' || !isset($grafo['cards'][$card])) {
             return $fim('recusado', false, null, 'Este fluxo está sem card inicial.');
         }
+        /* PONTO 1, igual ao da producao: quando a conversa NASCE com uma frase
+           (a cliente escreveu a primeira mensagem em vez de so abrir a
+           simulacao), os atalhos do card inicial decidem por onde entrar, e a
+           saudacao do atalho sai ANTES do salto. Frase vazia - que e como a
+           tela abre a conversa - nao dispara nada: wa_fluxo_atalho devolve
+           null para texto vazio.
+
+           Mandar a saudacao pela funcao de envio REAL, e nao fabricar a
+           bolha, e o que mantem valendo aqui o teto de 4096 caracteres que a
+           Meta aplica recusando a mensagem inteira em silencio. */
+        $at = wa_fluxo_atalho($grafo, $grafo['cards'][$card], (string) $resposta, $ctx);
+        if ($at !== null) {
+            $saud = trim((string) $at['saudacao']);
+            if ($saud !== '') {
+                $envio = wa_fl_call('send_text', WA_SIM_FONE, $saud);
+                if (empty($envio['ok'])) {
+                    return $fim('recusado', false, $card, (string) ($envio['erro'] ?? 'a saudação deste atalho não sairia'));
+                }
+            }
+            if ($at['roteiro_slug'] !== null) $ctx['roteiro_slug'] = $at['roteiro_slug'];
+            if ($at['destino_nome'] !== null) $ctx['destino_nome'] = $at['destino_nome'];
+            $card = (string) $at['card'];
+        }
     } elseif (!isset($grafo['cards'][$card])) {
         /* Mesmo desfecho da producao (wa_processar: card_atual que nao existe
            mais na versao entrega para a humana), e nao um 500. */

@@ -615,8 +615,48 @@ function wa_processar($ev) {
             $slug = $mapa[$ev['ad_id']] ?? null;
         }
     }
-    return wa_fluxo_percorre($wa_id, $nome, $grafo, $versao_id, $inicial,
-        ['roteiro_slug' => $slug, 'tentativas' => 0], true);
+    $ctx_novo = ['roteiro_slug' => $slug, 'tentativas' => 0];
+
+    /* PONTO 1: a PRIMEIRA frase da conversa passa pelos atalhos do card
+       inicial, e pode entrar no fluxo pelo destino do atalho em vez do card
+       inicial. O ponto 2 (conversa parada num card que espera) e roteado por
+       wa_fluxo_proximo; aqui nao ha card esperando - a conversa esta
+       nascendo - entao o desvio e desta funcao.
+
+       A SAUDACAO sai ANTES do salto, e essa ordem e o ponto da regra. Pular o
+       card inicial pula a unica apresentacao que a agencia tem: sem ela, quem
+       escreve "quero o Chile" recebe um PDF como primeira mensagem da vida,
+       sem um "oi" antes. Saudacao vazia (ou so espaco) salta CALADO - e
+       decisao da cliente, por atalho, nao acidente.
+
+       Lei do envio: se a saudacao NAO saiu, a conversa nao avanca. Seguir
+       para a cadeia deixaria o cliente com o PDF e sem a apresentacao, e com
+       o estado gravado como se tudo tivesse saido. A ficha do primeiro
+       contato ja existe neste ponto (ela e criada bem antes do roteamento) e
+       segue sem card_atual: a proxima mensagem dele reabre o ponto 1 inteiro.
+
+       Mensagem sem texto (audio, foto) nao dispara nada: wa_fluxo_atalho
+       devolve null para texto vazio, e o certo e o menu. */
+    $at = wa_fluxo_atalho($grafo, $grafo['cards'][$inicial], $texto, $ctx_novo);
+    if ($at !== null) {
+        $saud = trim((string) $at['saudacao']);
+        if ($saud !== '') {
+            $envio = wa_call('send_text', $wa_id, $saud);
+            wa_registra_saida($wa_id, $envio, 'text', $saud);
+            if (empty($envio['ok']) || empty($envio['wamid'])) {
+                error_log('wa_processar: saudacao do atalho do card inicial nao saiu ('
+                    . (string) ($envio['erro'] ?? 'envio sem confirmacao') . '), a conversa nao avancou | ' . $wa_id);
+                return 'falha_envio';
+            }
+        }
+        /* O atalho que nomeia roteiro VENCE o slug semeado pelo anuncio: a
+           pessoa acabou de dizer de qual viagem quer falar. */
+        if ($at['roteiro_slug'] !== null)  $ctx_novo['roteiro_slug']  = $at['roteiro_slug'];
+        if ($at['destino_nome'] !== null)  $ctx_novo['destino_nome']  = $at['destino_nome'];
+        return wa_fluxo_percorre($wa_id, $nome, $grafo, $versao_id, $at['card'], $ctx_novo, true);
+    }
+
+    return wa_fluxo_percorre($wa_id, $nome, $grafo, $versao_id, $inicial, $ctx_novo, true);
 }
 
 /* ---------- o interpretador, do lado do motor ---------- */

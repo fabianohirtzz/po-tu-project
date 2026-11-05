@@ -292,6 +292,50 @@ ok($gg['f1']['sim_ativo'] === false && $gg['f2']['sim_ativo'] === true, 'carrega
 $sem = $gg['f1']; unset($sem['sim_ativo']);
 ok($sem === wa_fluxo_grafo_de($fluxos[0], [$cards[0], $cards[1]]), 'tirando sim_ativo, o grafo e byte a byte o do wa_fluxo_grafo_de');
 
+/* ---------- ATALHO NO PONTO 1: a primeira frase da conversa simulada ----------
+   O simulador abre a conversa sem mensagem nenhuma (resposta vazia), e nesse
+   caso ele comeca no card inicial, como sempre. Mas a cliente tem que poder
+   escrever a PRIMEIRA frase e ver o desvio - senao a tela aprovaria um
+   rascunho cujo atalho do card inicial nunca foi exercitado, que e o caminho
+   mais usado dos tres (o cliente chega escrevendo).
+
+   A saudacao aparece como BOLHA, e antes do destino: e a mesma ordem da
+   producao, e o que ela existe para provar na tela. */
+$GB = grafo('fb', [
+    card('bv',  'botoes', ['texto' => 'Oi! Sobre o que quer falar?', 'fallback' => 'ops',
+        'config' => ['atalhos' => [
+            ['tipo' => 'palavras', 'palavras' => ['atendente'], 'destino' => 'hum', 'saudacao' => ''],
+            ['tipo' => 'roteiro',  'palavras' => [], 'destino' => 'pdf', 'saudacao' => 'Oi! Já te mando o roteiro.'],
+        ]],
+        'opcoes' => [['id' => 'ver', 'rotulo' => 'Ver roteiros', 'destino' => 'rot']]]),
+    card('pdf', 'pdf',    ['texto' => 'Segue o roteiro do {roteiro}.', 'proximo' => 'fimz']),
+    card('rot', 'roteiros', ['texto' => 'Qual viagem?', 'proximo' => 'fimz', 'fallback' => 'ops']),
+    card('ops', 'texto',  ['texto' => 'Nao entendi.', 'proximo' => 'bv']),
+    card('fimz','fim',    ['texto' => 'Qualquer coisa, chama aqui.']),
+    card('hum', 'humano', ['texto' => 'Vou chamar a Lais.']),
+]);
+$gb = ['fb' => $GB];
+
+$r = wa_sim_passo($gb, 'fb', null, '', []);
+ok($r['card_id'] === 'bv' && $r['estado'] === 'aguardando', 'abrir sem mensagem comeca no card inicial, como hoje');
+ok(count($r['mensagens']) === 1, 'e sai so a bolha do card inicial');
+
+$r = wa_sim_passo($gb, 'fb', '', 'quero saber do chile', []);
+ok($r['mensagens'][0]['tipo'] === 'text' && $r['mensagens'][0]['texto'] === 'Oi! Já te mando o roteiro.',
+   'a primeira frase dispara o atalho e a SAUDACAO e a primeira bolha');
+ok($r['mensagens'][1]['tipo'] === 'document', 'e so depois dela vem o PDF do destino do atalho');
+ok($r['ctx']['roteiro_slug'] === 'chile', 'o roteiro reconhecido na frase entra no contexto');
+ok($r['estado'] === 'encerrado', 'a cadeia segue do destino do atalho ate o fim dela: ' . $r['estado']);
+
+$r = wa_sim_passo($gb, 'fb', '', 'quero um atendente', []);
+ok($r['card_id'] === 'hum' && $r['estado'] === 'humano', 'atalho de palavras na primeira frase vai direto para a humana');
+ok($r['mensagens'][0]['tipo'] === 'text' && $r['mensagens'][0]['texto'] === 'Vou chamar a Lais.',
+   'com saudacao vazia, a primeira bolha e a do destino: salta calado');
+
+$r = wa_sim_passo($gb, 'fb', '', 'bom dia', []);
+ok($r['card_id'] === 'bv' && count($r['mensagens']) === 1,
+   'frase que nao casa atalho nenhum comeca no card inicial, sem desvio');
+
 /* ---------- travas de fonte ---------- */
 
 $src = str_replace("\r\n", "\n", file_get_contents(__DIR__ . '/../lib/wa-sim.php'));
