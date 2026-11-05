@@ -70,7 +70,7 @@
     return {
       titulo: r.titulo || '',
       subtitulo: r.local_label || r.subtitulo || '',
-      data: (r.dias ? r.dias + ' dias · ' : '') + (r.data_label || r.periodo || ''),
+      data: (r.dias ? r.dias + ' dias · ' : '') + window.poQuando(r),
       desc: r.descricao_curta || '',
       img: r.capa_url || '',
       tag: window.poStatusTag ? window.poStatusTag(r) : '',

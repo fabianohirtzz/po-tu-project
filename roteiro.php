@@ -61,7 +61,7 @@ function po_hero_chips($r) {
     if (!empty($r['dias'])) {
         $chips .= '<span class="hero__chip"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>' . po_e($r['dias']) . ' dias</span>';
     }
-    $per = !empty($r['data_label']) ? $r['data_label'] : ($r['periodo'] ?? '');
+    $per = po_quando($r);
     if (!empty($per)) {
         $chips .= '<span class="hero__chip"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>' . po_e($per) . '</span>';
     }
@@ -307,7 +307,7 @@ function po_outros_roteiros($slugAtual, ?array $lista = null) {
         if (($r['slug'] ?? '') === $slugAtual) continue;
         $titulo = (string) ($r['titulo'] ?? '');
         $local  = !empty($r['local_label']) ? $r['local_label'] : (!empty($r['subtitulo']) ? $r['subtitulo'] : '');
-        $data   = !empty($r['data_label']) ? $r['data_label'] : (!empty($r['periodo']) ? $r['periodo'] : '');
+        $data   = po_quando($r);
         $badge  = !empty($r['badge']) ? $r['badge'] : (!empty($r['dias']) ? $r['dias'] . ' dias' : '');
         $img    = (string) ($r['capa_url'] ?? '');
         $href   = po_roteiro_href($r);

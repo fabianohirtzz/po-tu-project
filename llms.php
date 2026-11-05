@@ -31,7 +31,7 @@ function po_llms_txt($lista) {
     foreach ($lista as $r) {
         $partes = [];
         if (!empty($r['dias'])) $partes[] = (int) $r['dias'] . ' dias';
-        $data = !empty($r['data_label']) ? $r['data_label'] : ($r['periodo'] ?? '');
+        $data = po_quando($r);
         if ($data !== '') $partes[] = po_llms_linha($data);
         $st = $r['status_viagem'] ?? null;
         if (is_string($st) && isset(PO_STATUS_VIAGEM[$st])) $partes[] = PO_STATUS_VIAGEM[$st];

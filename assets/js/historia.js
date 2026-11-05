@@ -70,7 +70,7 @@
 
     const cards = lista.map((r) => {
       const local = r.local_label || r.subtitulo || '';
-      const data = r.data_label || r.periodo || '';
+      const data = window.poQuando(r);
       const badge = r.badge || (r.dias ? r.dias + ' dias' : '');
       const href = window.poRoteiroHref ? window.poRoteiroHref(r.slug) : ('/roteiros/' + encodeURIComponent(r.slug));
       const a = document.createElement('article');

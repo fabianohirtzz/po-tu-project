@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/po-datas.php';
 /* ============================================================
    Pereira Oliveira: camada de dados dos roteiros (server-side).
 
@@ -148,6 +149,12 @@ function po_fetch_roteiro_preview($id, $token) {
    Formatos reais no banco: "De 27/10/26 a 12/11/26", "25/11/26 a 02/12/26",
    "10/12/2025 a 21/12/2025". Pega a PRIMEIRA data. */
 function po_ano($r) {
+    /* SAIDAS SEMANAIS: o ano vem da proxima saida, senao o <title> de um
+       roteiro semanal nasce sem ano. */
+    if (is_array($r) && ($r['status_viagem'] ?? null) === 'semanal') {
+        $prox = po_proxima_saida($r);
+        if ($prox !== null) return substr($prox, 0, 4);
+    }
     $s = trim((string) (($r['data_label'] ?? '') !== '' ? $r['data_label'] : ($r['periodo'] ?? '')));
     if ($s === '') return '';
     if (preg_match('~\b\d{1,2}/\d{1,2}/(\d{4})\b~', $s, $m)) return $m[1];

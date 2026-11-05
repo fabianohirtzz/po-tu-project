@@ -579,7 +579,7 @@ function renderRoteiros(){
     <div class="rcard__img" style="background-image:url('${esc(r.capa_url||'')}')">${r.ativo?'':'<span class="rcard__off">Oculto</span>'}${STATUS_VIAGEM[r.status_viagem]?`<span class="st-tag st-tag--${r.status_viagem}">${STATUS_VIAGEM[r.status_viagem]}</span>`:''}</div>
     <div class="rcard__b">
       <div class="rcard__t">${esc(r.titulo||'(sem título)')}</div>
-      <div class="rcard__s">${esc(r.data_label||r.periodo||'—')} · ${esc(r.local_label||'')}</div>
+      <div class="rcard__s">${esc(poQuando(r)||'—')} · ${esc(r.local_label||'')}</div>
       <div class="rcard__foot"><button class="ver" data-id="${r.id}">Ver ↗</button><button class="edit" data-id="${r.id}">Editar</button><button class="del" data-id="${r.id}">Excluir</button></div>
     </div></div>`).join('');
   $$('#rot-grid .ver').forEach(b=>b.onclick=e=>{e.stopPropagation();const r=ROTEIROS.find(x=>String(x.id)===b.dataset.id);rotVer(r);});

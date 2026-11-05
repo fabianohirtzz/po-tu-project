@@ -9,6 +9,15 @@ ok(po_ano(['data_label' => '22/02/27 à 15/03/27'])    === '2027', 'po_ano dd/mm
 ok(po_ano(['data_label' => '', 'periodo' => '10/12/2025 a 21/12/2025']) === '2025', 'po_ano cai no periodo, ano com 4 digitos');
 ok(po_ano(['data_label' => 'Datas a definir']) === '', 'po_ano sem data devolve vazio');
 
+/* SAIDAS SEMANAIS: sem este caminho o <title> de um roteiro semanal nasce
+   sem ano ("Excursao Peru · Viagem em grupo..."), porque a data dele nao
+   esta em texto nenhum. */
+$semanal = ['status_viagem' => 'semanal', 'data_label' => '', 'periodo' => '',
+    'datas_texto' => [['titulo' => 'D', 'datas' => ['02/12/39', '10/12/39']]]];
+ok(po_ano($semanal) === '2039', 'po_ano do semanal vem da proxima saida');
+ok(po_ano(array_merge($semanal, ['datas_texto' => [], 'periodo' => '10/12/2040 a 21/12/2040'])) === '2040', 'semanal sem datas cai na regra de sempre');
+ok(po_ano(array_merge($semanal, ['status_viagem' => null])) === '', 'status comum ignora datas_texto');
+
 // --- fetcher injetado: nao toca a rede
 $fake = json_encode([[ 'slug' => 'turquia', 'titulo' => 'Turquia', 'ativo' => true ]]);
 $capturado = '';

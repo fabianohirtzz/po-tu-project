@@ -197,7 +197,7 @@
       subtitulo: r.subtitulo || r.local_label || '',
       local: r.local_label || r.subtitulo || '',
       badge: r.badge || (r.dias ? r.dias + ' dias' : ''),
-      data: r.data_label || r.periodo || '',
+      data: window.poQuando(r),
       desc: r.descricao_curta || '',
       img: r.capa_url || '',
       href: window.poRoteiroHref(r.slug)

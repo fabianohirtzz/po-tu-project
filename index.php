@@ -26,7 +26,7 @@ function po_home_viagens_html($lista) {
     foreach ($lista as $r) {
         $partes = [];
         if (!empty($r['dias'])) $partes[] = (int) $r['dias'] . ' dias';
-        $data = !empty($r['data_label']) ? $r['data_label'] : ($r['periodo'] ?? '');
+        $data = po_quando($r);
         if (is_string($data) && trim($data) !== '') $partes[] = trim($data);
         $h .= '<li><a href="' . po_e(po_roteiro_href($r)) . '">' . po_e($r['titulo'] ?? '') . '</a>'
             . (count($partes) ? ', ' . po_e(implode(', ', $partes)) : '')
@@ -39,6 +39,15 @@ function po_home_viagens_html($lista) {
    ("De 27/10/26 à 12/11/26"): o banco nao tem coluna de data. A primeira data
    do texto e a saida; ano com 2 digitos vira 20xx. Sem data legivel: null. */
 function po_data_saida($r) {
+    /* SAIDAS SEMANAIS: a data esta na lista de datas do mes, nao em texto.
+       Sem este caminho o roteiro devolve null, cai no '9999' de quem
+       chamou e ordena no FIM da lista - um roteiro que sai na semana que
+       vem anunciado depois de todos. Sem data futura cadastrada, volta a
+       regra de sempre. */
+    if (($r['status_viagem'] ?? null) === 'semanal') {
+        $prox = po_proxima_saida($r);
+        if ($prox !== null) return $prox;
+    }
     foreach (['data_label', 'periodo'] as $k) {
         $t = $r[$k] ?? '';
         if (is_string($t) && preg_match('~(\d{1,2})/(\d{1,2})/(\d{4}|\d{2})\b~', $t, $m)) {

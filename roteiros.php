@@ -68,13 +68,13 @@ function po_roteiros_html($lista) {
             // (o operador so cai no fallback com null/unset).
             // Mesmo problema que a data, corrigido com !empty().
             $badge = !empty($r['badge']) ? $r['badge'] : (!empty($r['dias']) ? $r['dias'] . ' dias' : '');
-            // !empty(), nao ??: no banco data_label chega como string vazia
-            // (nao null) quando so periodo esta preenchido, e '' ?? $x
-            // devolve '' (o operador so cai no fallback com null/unset).
-            // Confirmado nos 6 roteiros reais: todos tem data_label='' e
-            // periodo com a data de verdade - com ?? o card ficava sem
-            // data nenhuma, o ponto inteiro desta pagina.
-            $data  = !empty($r['data_label']) ? $r['data_label'] : ($r['periodo'] ?? '');
+            // po_quando decide: o rotulo escrito a mao quando existe, o
+            // intervalo quando nao, e a proxima saida se o roteiro for de
+            // saidas semanais. A conta inteira, e o porque de cada degrau,
+            // moram em lib/po-datas.php - aqui era um ternario que errava o
+            // caso em que o rotulo chega como string vazia, e o card ficava
+            // sem data nenhuma, que e o ponto inteiro desta pagina.
+            $data  = po_quando($r);
             $h .= '<article class="rts__card reveal">'
                 . '<a class="rts__link" href="' . $href . '">'
                 . '<div class="rts__img">' . po_status_tag($r) . '<img src="' . po_e($r['capa_url'] ?? '') . '" alt="' . po_e($r['titulo'] ?? '') . '" loading="lazy"></div>'

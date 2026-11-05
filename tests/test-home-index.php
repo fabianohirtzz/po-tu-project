@@ -53,6 +53,17 @@ ok(po_data_saida(['periodo' => 'De 27/10/26 à 12/11/26']) === '2026-10-27', 'dd
 ok(po_data_saida(['periodo' => 'De 22/02/2027 a 15/03/2027']) === '2027-02-22', 'dd/mm/aaaa');
 ok(po_data_saida(['data_label' => '', 'periodo' => '25/11/26 a 02/12/26']) === '2026-11-25', 'data_label vazio cai no periodo');
 ok(po_data_saida(['periodo' => 'Novembro de 2026']) === null, 'sem data legivel = null');
+
+/* SAIDAS SEMANAIS: a data esta na lista de datas do mes, nao em texto. Sem
+   este caminho a funcao devolve null, quem chama cai no '9999' e o roteiro
+   ordena no FIM da lista - um roteiro que sai na semana que vem anunciado
+   depois de todos. Datas em 2039/2040: fixture perto do presente vira
+   vermelho sozinho na virada do mes. */
+$semanal = ['status_viagem' => 'semanal', 'data_label' => '', 'periodo' => '',
+    'datas_texto' => [['titulo' => 'D', 'datas' => ['02/12/39', '10/12/39']]]];
+ok(po_data_saida($semanal) === '2039-12-02', 'semanal le a proxima saida de datas_texto');
+ok(po_data_saida(array_merge($semanal, ['datas_texto' => [], 'periodo' => '25/11/39 a 02/12/39'])) === '2039-11-25', 'semanal sem datas cai na regra de sempre');
+ok(po_data_saida(array_merge($semanal, ['status_viagem' => 'em_breve'])) === null, 'status comum ignora datas_texto');
 $ord = po_por_saida([
     ['titulo' => 'Vietna', 'periodo' => 'De 22/02/2027 a 15/03/2027'],
     ['titulo' => 'Sem data', 'periodo' => 'a definir'],
