@@ -152,12 +152,16 @@ button{font-family:inherit;cursor:pointer}
 .his-intro__lead{font-size:clamp(1.02rem,1.4vw,1.16rem);line-height:1.72;color:#3c3e45;max-width:46ch}
 .his-year{position:relative;justify-self:center;width:100%;text-align:center}
 .his-year__num{
-  font-family:var(--font-display);font-weight:700;line-height:.82;letter-spacing:-.02em;
-  font-size:clamp(6rem,13vw,11.5rem);
+  /* 1967 recortando a foto do grupo Ilhatur na Disney (1997, camisetas "30 anos").
+     Peso 900 e espacamento apertado: cada pixel de letra e foto aparecendo. A foto
+     e larga (1440x600) como o numero, entao as pessoas preenchem os quatro
+     algarismos; o y=38% poe os rostos na faixa do meio das letras. */
+  font-family:var(--font-display);font-weight:900;line-height:.8;letter-spacing:-.055em;
+  font-size:clamp(7rem,15.5vw,14rem);padding-right:.05em;
   color:transparent;-webkit-background-clip:text;background-clip:text;
-  background-image:url("../../images/Fotos%20antigas/turismo3.jpg");
-  background-size:cover;background-position:center 30%;
-  filter:saturate(.9) contrast(1.05);-webkit-text-fill-color:transparent;
+  background-image:url("../../images/Fotos%20antigas/turismo2.jpg");
+  background-size:cover;background-position:center 38%;
+  filter:saturate(1.05) contrast(1.08);-webkit-text-fill-color:transparent;
   text-shadow:0 24px 60px rgba(34,30,20,.14);
 }
 .his-year__label{font-family:var(--font-mono);font-size:.78rem;letter-spacing:.36em;text-transform:uppercase;
@@ -327,6 +331,7 @@ button{font-family:inherit;cursor:pointer}
 .ft__social svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8}
 /* glifos que são desenhados por preenchimento (WhatsApp), não por traço */
 .ft__social svg.ic-fill,.sheet__social svg.ic-fill{fill:currentColor;stroke:none}
+.ft__credit{display:flex;flex-direction:column;gap:2px;line-height:1.5}
 .ft__credit a{color:rgba(255,255,255,.72);text-decoration:underline;text-underline-offset:2px;transition:.15s}
 .ft__credit a:hover{color:#fff}
 
@@ -346,7 +351,9 @@ button{font-family:inherit;cursor:pointer}
 }
 @media(max-width:860px){
   .his-intro{grid-template-columns:1fr;gap:34px}
-  .his-year{order:-1;max-width:340px;justify-self:start}
+  .his-year{order:-1;max-width:none;justify-self:stretch}
+  /* celular: o 1967 ocupa a largura toda da tela */
+  .his-year__num{font-size:clamp(5.5rem,30vw,12rem)}
   .his-founder{grid-template-columns:1fr;gap:30px}
   .his-founder__photo{max-width:320px}
   .tl{--tl-gutter:64px}
@@ -375,3 +382,81 @@ button{font-family:inherit;cursor:pointer}
   .rot-track{transition:none}
   .rot-card{transform:none!important}
 }
+
+/* ============================================================ PROVA SOCIAL (lib/po-social.php)
+   Avaliacoes do Google e posts do Instagram, montados pelo nossa-historia.php.
+   As estrelas e o selo tambem existem no style.css (painel Sobre da home). */
+.po-stars{display:inline-flex;gap:2px;vertical-align:middle}
+.po-stars svg{width:16px;height:16px}
+.po-stars .on{fill:#F5B400}
+.po-stars .off{fill:#d9d4c7}
+
+.rev-sec{background:var(--his-paper);padding:clamp(64px,9vw,120px) 0;border-top:1px solid var(--his-line)}
+.rev-sec__head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;
+  margin-bottom:clamp(30px,4vw,52px)}
+.rev-sec__head h2,.ig__head h2{font-family:var(--font-display);font-weight:700;font-size:clamp(1.7rem,3vw,2.6rem);
+  letter-spacing:-.015em;margin:10px 0 0;max-width:18ch}
+.rev-sec__head p,.ig__head p{color:#4a4c53;font-size:1.02rem;max-width:46ch;margin:14px 0 0;line-height:1.6}
+.rev-selo{display:inline-flex;align-items:center;gap:12px;padding:12px 18px;border-radius:14px;
+  background:var(--his-print);border:1px solid var(--his-line);box-shadow:0 8px 22px rgba(34,30,20,.08);
+  transition:transform .2s var(--ease)}
+.rev-selo:hover{transform:translateY(-2px)}
+.rev-selo__g{width:30px;height:30px;flex:0 0 auto}
+.rev-selo > span{display:flex;flex-direction:column;gap:6px;font-size:.92rem;line-height:1.1}
+.rev-grid{columns:3 300px;column-gap:22px}
+.rev{break-inside:avoid;margin:0 0 22px;padding:24px 24px 20px;background:var(--his-print);
+  border:1px solid var(--his-line);border-radius:16px;box-shadow:0 10px 26px rgba(34,30,20,.07)}
+.rev__t{margin:14px 0 18px}
+.rev__t p{margin:0;font-size:.98rem;line-height:1.7;color:#3c3e45}
+.rev__a{display:flex;flex-direction:column;gap:3px;font-size:.92rem}
+.rev__a span{font-family:var(--font-mono);font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--his-ink-soft)}
+.rev-sec__mais{margin:14px 0 0;text-align:center}
+.btn--ghost-ink{background:transparent;color:var(--his-ink);border:1.5px solid var(--his-ink);box-shadow:none}
+.btn--ghost-ink:hover{background:var(--his-ink);color:#fff}
+
+.ig{background:var(--his-print);padding:clamp(64px,9vw,120px) 0;border-top:1px solid var(--his-line)}
+.ig__head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;
+  margin-bottom:clamp(30px,4vw,48px)}
+.btn--ig{background:linear-gradient(45deg,#F58529,#DD2A7B 45%,#8134AF 75%,#515BD4);
+  box-shadow:0 12px 28px rgba(221,42,123,.28)}
+/* Carrossel de reels 9:16 (lib/po-social.php + assets/js/insta-feed.js). So capas
+   na grade; a previa muda toca no hover e o video com som abre no visualizador. */
+.ig__nav{align-self:flex-end}
+.ig__grid{display:grid;grid-auto-flow:column;grid-auto-columns:clamp(150px,19vw,224px);gap:14px;
+  overflow-x:auto;scroll-snap-type:x mandatory;padding:4px 2px 14px;scrollbar-width:thin;
+  overscroll-behavior-x:contain}
+.ig__item{position:relative;display:block;aspect-ratio:9/16;overflow:hidden;border-radius:14px;
+  background:var(--his-kraft);scroll-snap-align:start;box-shadow:0 12px 28px rgba(34,30,20,.14)}
+.ig__item img,.ig__prev{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.ig__item img{transition:transform .5s var(--ease)}
+.ig__item:hover img{transform:scale(1.04)}
+.ig__prev{opacity:0;transition:opacity .3s var(--ease);pointer-events:none}
+.ig__item.is-tocando .ig__prev{opacity:1}
+.ig__play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:54px;height:54px;border-radius:50%;
+  display:grid;place-items:center;background:rgba(10,12,16,.45);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
+  transition:opacity .25s var(--ease)}
+.ig__play svg{width:22px;height:22px;fill:#fff;margin-left:3px}
+.ig__item.is-tocando .ig__play{opacity:0}
+.ig__item:focus-visible{outline:3px solid var(--brand-azul);outline-offset:3px}
+.ig__follow{margin:26px 0 0;text-align:center}
+
+.ig-lb{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;gap:clamp(8px,2vw,28px);
+  padding:16px;background:rgba(8,10,14,.9)}
+.ig-lb[hidden]{display:none}
+.ig-lb__fig{margin:0;display:flex;flex-direction:column;align-items:center;gap:14px}
+.ig-lb__video{display:block;height:min(82vh,780px);aspect-ratio:9/16;max-width:calc(100vw - 32px);border-radius:14px;background:#000;object-fit:contain}
+.ig-lb__link{color:#fff;font-family:var(--font-display);font-weight:600;text-decoration:underline;text-underline-offset:4px}
+.ig-lb__close,.ig-lb__nav{display:grid;place-items:center;border:0;border-radius:50%;background:rgba(255,255,255,.14);color:#fff}
+.ig-lb__close{position:absolute;top:16px;right:16px;width:46px;height:46px;font-size:1.8rem;line-height:1}
+.ig-lb__nav{width:48px;height:48px;flex:0 0 auto}
+.ig-lb__nav svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2}
+.ig-lb__close:hover,.ig-lb__nav:hover{background:rgba(255,255,255,.26)}
+html.ig-lb-aberto{overflow:hidden}
+@media(max-width:640px){
+  .ig-lb__nav{position:absolute;bottom:18px}
+  .ig-lb__nav--prev{left:calc(50% - 60px)} .ig-lb__nav--next{right:calc(50% - 60px)}
+  .ig-lb__video{height:auto;width:calc(100vw - 32px);max-height:72vh}
+}
+@media(prefers-reduced-motion:reduce){.ig__item img,.ig__prev,.ig__play,.rev-selo{transition:none}}
+.rev__top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.rev__g{width:20px;height:20px;flex:0 0 auto}

@@ -15,8 +15,8 @@ ok(strpos($x, '<?xml') === 0, 'comeca com a declaracao xml');
 ok(strpos($x, 'https://pereiraoliveiraturismo.com.br/roteiros/turquia') !== false, 'lista o roteiro');
 ok(strpos($x, 'https://pereiraoliveiraturismo.com.br/roteiros</loc>') !== false, 'lista a pagina mae');
 ok(strpos($x, 'https://pereiraoliveiraturismo.com.br/</loc>') !== false, 'lista a home');
-ok(strpos($x, '/nossa-historia.html') !== false, 'lista a historia');
-ok(strpos($x, '/contato.html') !== false, 'lista o contato');
+ok(strpos($x, '/nossa-historia</loc>') !== false, 'lista a historia (endereco limpo, sem .html)');
+ok(strpos($x, '/contato</loc>') !== false, 'lista o contato (endereco limpo)');
 ok(strpos($x, '<lastmod>2026-07-16</lastmod>') !== false, 'lastmod vem do updated_at');
 
 // as 5 estaticas morreram: nao podem reaparecer

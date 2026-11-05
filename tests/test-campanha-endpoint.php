@@ -461,6 +461,8 @@ foreach ([
     // 00 morre em silencio: wa_camp_ddi_suspeito() passa a receber null sempre.
     // E a conferencia que o CLAUDE.md manda fazer antes do primeiro disparo pago.
     'payload_import' => 'sem esta coluna o alerta de numero estrangeiro morre calado',
+    'status'      => 'sem esta coluna quem perdeu por data nunca entra na transmissao',
+    'qualif_data' => 'sem esta coluna quem perdeu por data nunca entra na transmissao',
 ] as $col => $porque) {
     ok(in_array($col, $cols, true),
        'o select= da base carrega "' . $col . '" (' . $porque . '). Veio: ' . $ms[1]);

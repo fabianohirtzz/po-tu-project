@@ -166,11 +166,6 @@ button{font-family:inherit;cursor:pointer}
 .hero__inner{position:relative;z-index:2;height:100%;
   width:min(100% - 48px,1180px);margin-inline:auto;
   display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:clamp(56px,9vh,110px)}
-.hero__crumb{font-family:var(--font-mono);font-size:.74rem;letter-spacing:.12em;text-transform:uppercase;
-  color:rgba(255,255,255,.72);display:flex;align-items:center;gap:9px;margin-bottom:22px}
-.hero__crumb a{color:rgba(255,255,255,.72);transition:.15s}
-.hero__crumb a:hover{color:#fff}
-.hero__crumb svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;opacity:.6}
 .hero__title{font-family:var(--font-display);font-weight:700;letter-spacing:-.02em;
   font-size:clamp(2.6rem,7vw,5.6rem);line-height:.98;margin:0;
   text-shadow:0 4px 40px rgba(0,0,0,.4)}
@@ -529,6 +524,7 @@ a.cta__contact:hover b{color:var(--wa)}
 .ft__social svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8}
 /* glifos que são desenhados por preenchimento (WhatsApp), não por traço */
 .ft__social svg.ic-fill,.sheet__social svg.ic-fill{fill:currentColor;stroke:none}
+.ft__credit{display:flex;flex-direction:column;gap:2px;line-height:1.5}
 .ft__credit a{color:rgba(255,255,255,.72);text-decoration:underline;text-underline-offset:2px;transition:.15s}
 .ft__credit a:hover{color:#fff}
 
@@ -557,8 +553,6 @@ a.cta__contact:hover b{color:var(--wa)}
   .tl{--tl-gutter:82px}
 }
 @media(max-width:640px){
-  /* celular: sem breadcrumb (Início > Roteiros > nome) */
-  .hero__crumb{display:none}
   .hero__title{font-size:clamp(2.3rem,10vw,3.4rem)}
   .hero__actions .btn{flex:1 1 auto;justify-content:center}
   .form__grid{grid-template-columns:1fr}

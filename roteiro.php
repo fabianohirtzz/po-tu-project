@@ -9,6 +9,22 @@
 
 require_once __DIR__ . '/lib/po-data.php';
 require_once __DIR__ . '/lib/po-view.php';
+require_once __DIR__ . '/lib/po-auth.php';
+
+/* Faixa fixa da pre-visualizacao do painel. Estilo inline de proposito: so
+   existe nesta resposta, que nunca e cacheada nem vista por visitante. Fica
+   embaixo a esquerda para nao brigar com o header nem com o WhatsApp. */
+function po_preview_faixa($r) {
+    $oculto = empty($r['ativo']);
+    $msg = $oculto
+        ? 'Este roteiro está <b>oculto</b>: só você vê esta página. Para publicar, marque "Ativo no site" no painel.'
+        : 'Publicado em <a href="' . po_e(po_roteiro_href($r)) . '" style="color:#fff;text-decoration:underline">' . po_e(po_roteiro_href($r)) . '</a>.';
+    return '<div role="status" style="position:fixed;left:16px;bottom:16px;z-index:9999;max-width:min(520px,calc(100vw - 110px));'
+        . 'background:#14181f;color:#fff;border-radius:12px;padding:12px 16px;font:500 .86rem/1.45 \'DM Sans\',system-ui,sans-serif;'
+        . 'box-shadow:0 12px 30px rgba(0,0,0,.35);border-left:4px solid #FFC72C">'
+        . '<b style="display:block;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:#FFC72C;margin-bottom:3px">Pré-visualização do painel</b>'
+        . $msg . '</div>';
+}
 
 function po_arr($a) { return is_array($a) ? $a : []; }
 
@@ -149,13 +165,13 @@ function po_roteiro_html($r, ?array $outros = null) {
     $slug    = (string) ($r['slug'] ?? '');
     $h = '';
 
-    /* HERO. Breadcrumb trocado de relativo (index.html) para absoluto de
-       raiz: esta pagina vive em /roteiros/<slug>, um nivel a mais de path. */
+    /* HERO. Sem trilha "Inicio > Roteiros > nome" desde 22/10/2026, a pedido
+       do cliente: o menu do topo ja leva a Inicio e a Roteiros. */
     $h .= '<section class="hero" id="topo"><div class="hero__media">'
         . '<div class="hero__poster" style="background-image:url(\'' . $capaCss . '\')"></div>'
         . po_hero_video($r)
         . '</div><div class="hero__scrim"></div><div class="hero__inner">'
-        . '<p class="hero__crumb"><a href="/">Início</a><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg><a href="/roteiros">Roteiros</a><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg><span>' . po_e($titulo) . '</span></p>'
+        . po_status_tag($r, 'hero__status')
         . '<h1 class="hero__title">' . po_e($titulo) . '</h1>'
         . (!empty($r['subtitulo']) ? '<p class="hero__sub">' . po_e($r['subtitulo']) . '</p>' : '')
         . '<div class="hero__meta">' . po_hero_chips($r) . '</div>'
@@ -295,7 +311,7 @@ function po_outros_roteiros($slugAtual, ?array $lista = null) {
         $badge  = !empty($r['badge']) ? $r['badge'] : (!empty($r['dias']) ? $r['dias'] . ' dias' : '');
         $img    = (string) ($r['capa_url'] ?? '');
         $href   = po_roteiro_href($r);
-        $out .= '<article class="rot-card">'
+        $out .= '<article class="rot-card">' . po_status_tag($r)
             . '<div class="rot-card__img" style="background-image:url(\'' . po_css_url($img) . '\')"></div>'
             . '<div class="rot-card__body">'
             . '<div class="rot-card__title"><h3>' . po_e($titulo) . '</h3><span class="rot-card__badge">' . po_e($badge) . '</span></div>'
@@ -348,6 +364,14 @@ function po_lightbox_html() {
 /* JSON-LD TouristTrip. offers so sai com preco de verdade: preco inventado
    no schema, ou divergente do que a pagina mostra, e violacao de diretriz
    do Google. */
+/* Status da viagem -> schema.org/ItemAvailability, para o Google ler o mesmo
+   que a tag diz na pagina. Em breve e em viagem nao mudam a oferta. */
+function po_disponibilidade($r) {
+    $s = $r['status_viagem'] ?? '';
+    if ($s === 'esgotado') return 'SoldOut';
+    if ($s === 'ultimas_vagas') return 'LimitedAvailability';
+    return 'InStock';
+}
 function po_roteiro_jsonld($r) {
     $j = [
         '@context'    => 'https://schema.org',
@@ -373,7 +397,7 @@ function po_roteiro_jsonld($r) {
                 '@type'         => 'Offer',
                 'price'         => $num,
                 'priceCurrency' => $moeda,
-                'availability'  => 'https://schema.org/InStock',
+                'availability'  => 'https://schema.org/' . po_disponibilidade($r),
                 'url'           => po_url(po_roteiro_href($r)),
             ];
         }
@@ -382,8 +406,19 @@ function po_roteiro_jsonld($r) {
 }
 
 if (!defined('PO_TEST')) {
-    $slug = isset($_GET['slug']) ? (string) $_GET['slug'] : '';
-    $r    = $slug === '' ? null : po_fetch_roteiro($slug);
+    /* Pre-visualizacao: o botao "Ver" do painel posta o token do login e o ID.
+       Login invalido cai no 404 de sempre, sem dizer que o roteiro existe. */
+    $previa = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['preview_id']);
+    if ($previa) {
+        $cfg = po_config();
+        $tok = po_auth_token();
+        $r   = po_auth_ok($cfg['SUPABASE_URL'], $cfg['SUPABASE_ANON_KEY'], $tok)
+            ? po_fetch_roteiro_preview((string) $_POST['preview_id'], $tok)
+            : null;
+    } else {
+        $slug = isset($_GET['slug']) ? (string) $_GET['slug'] : '';
+        $r    = $slug === '' ? null : po_fetch_roteiro($slug);
+    }
     if (!$r) {
         // 404 DE VERDADE. Servir 200 com "nao encontrado" cria soft-404:
         // o Google indexa a pagina de erro.
@@ -395,12 +430,18 @@ if (!defined('PO_TEST')) {
     $desc = trim((string) ($r['descricao_curta'] ?? ''));
     if ($desc === '') $desc = 'Viagem em grupo para ' . $r['titulo'] . ' com saída de Florianópolis e acompanhamento da Pereira Oliveira Turismo, desde 1967.';
     header('Content-Type: text/html; charset=utf-8');
+    if ($previa) {
+        // rascunho nunca pode ficar em cache nem ser indexado
+        header('Cache-Control: no-store, private');
+        header('X-Robots-Tag: noindex, nofollow');
+    }
     echo po_head([
+        'noindex'     => $previa,
         'title'       => po_titulo_seo($r),
         'description' => mb_substr($desc, 0, 155),
         'canonical'   => po_url(po_roteiro_href($r)),
         'og_image'    => $r['capa_url'] ?? po_url('/assets/images/roteiro-grecia.jpg'),
-        'css'         => ['/assets/css/roteiro.css?v=8'],
+        'css'         => ['/assets/css/roteiro.css?v=12', '/assets/css/status-tag.css?v=3', '/assets/css/cadastur.css?v=2'],
         'jsonld'      => po_roteiro_jsonld($r),
     ]);
     echo po_header();
@@ -410,6 +451,7 @@ if (!defined('PO_TEST')) {
     echo '<main id="rt-main">' . po_roteiro_html($r) . '</main>';
     echo po_footer();
     echo po_wa_float();
+    if ($previa) echo po_preview_faixa($r);
     // #lb (lightbox da galeria): assets/js/roteiro.js procura este id; sem ele
     // a galeria fica sem clique, em silencio (ver comentario em po_lightbox_html()).
     echo po_lightbox_html();

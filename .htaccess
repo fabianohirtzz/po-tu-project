@@ -2,8 +2,11 @@
 # Pereira Oliveira Turismo — site estático (produção cPanel)
 # ============================================================
 
-# index.html tem prioridade sobre qualquer index.php remanescente
-DirectoryIndex index.html index.php
+# Home = index.php (22/10/2026): ele le o index.html e acrescenta a lista de
+# proximas viagens do banco no painel "Sobre". Antes a ordem era invertida para
+# proteger contra o index.php do WordPress antigo, que nao existe mais no
+# servidor (conferido por FTP em 22/10/2026).
+DirectoryIndex index.php index.html
 
 # Página de erro personalizada
 ErrorDocument 404 /404.html
@@ -37,18 +40,51 @@ RewriteRule ^roteiros/?$              /roteiros.php [L]
 RewriteRule ^roteiros/([a-z0-9-]+)/?$ /roteiro.php?slug=$1 [L,QSA]
 RewriteRule ^sitemap\.xml$           /sitemap.php [L]
 
+# --- URLs sem .html (22/10/2026, pedido do cliente) ---
+# 1) Quem chega pelo endereco antigo (.html) leva 301 para o limpo. A condicao
+#    olha THE_REQUEST (o que o navegador pediu), e nao o caminho interno: assim
+#    o rewrite de volta para o arquivo, logo abaixo, nunca vira loop.
+RewriteCond %{THE_REQUEST} \s/+index\.html[\s?#] [NC]
+RewriteRule ^ / [R=301,L]
+RewriteCond %{THE_REQUEST} \s/+(nossa-historia|contato|politica-de-privacidade|link)\.html[\s?#] [NC]
+RewriteRule ^ /%1 [R=301,L]
+# 2) Barra no fim vira redirect (rewrite com barra quebraria os caminhos
+#    relativos da pagina: assets/... resolveria contra /contato/).
+RewriteRule ^(nossa-historia|contato|politica-de-privacidade)/$ /$1 [R=301,L]
+# 3) O endereco limpo serve a pagina. Nossa Historia passa pelo PHP, que
+#    acrescenta as avaliacoes do Google e os videos do Instagram.
+RewriteRule ^nossa-historia$ /nossa-historia.php [L]
+RewriteRule ^contato$ /contato.html [L]
+RewriteRule ^politica-de-privacidade$ /politica-de-privacidade.html [L]
+
+# --- GEO (22/10/2026): FAQ e resumo para IA, servidos por PHP ---
+RewriteRule ^perguntas-frequentes/?$ /faq.php [L]
+RewriteRule ^llms\.txt$              /llms.php [L]
+
 # --- SEO fase 1: 301 do site WordPress antigo (eram 404 sem redirect) ---
 # destino proximo quando o roteiro existe; /roteiros quando o roteiro morreu
 RedirectMatch 301 ^/turquia/?$               /roteiros/turquia
-RedirectMatch 301 ^/india-nepal/?$           /roteiros/caminhos-da-india
 RedirectMatch 301 ^/japao-dubai-cingapura/?$ /roteiros/coreia-do-sul-japao-dubai
-RedirectMatch 301 ^/tesouros-asiaticos\.html$ /roteiros/tesouros-asiaticos
+# versao antiga do mesmo roteiro (a capa no banco ainda e japaodoha-capa.jpg)
+RedirectMatch 301 ^/japao-e-doha/?$          /roteiros/coreia-do-sul-japao-dubai
+# Caminhos da India e Tesouros Asiaticos sairam do ar (ocultos, 404): apontar
+# para o roteiro deixava o redirect terminando em 404. Vao para a lista.
+RedirectMatch 301 ^/india-nepal/?$           /roteiros
+RedirectMatch 301 ^/tesouros-asiaticos\.html$ /roteiros
+# Roteiros do WordPress que o Search Console listou em 404 (22/10/2026)
+RedirectMatch 301 ^/(grecia-terra-mar|mercados-de-natal-com-cruzeiro-pelo-rio-reno-e-concerto-de-andre|china-imperial|encantos-da-italia|corsega-joias-da-franca-e-italia|marrocos-lisboa|tunisia-e-malta|escandinavia|vietna-completo-e-singapura)/?$ /roteiros
+# Restos tecnicos do WordPress: 410 (removido para sempre) tira do Google mais
+# rapido que 404. Nada do site atual vive nesses caminhos.
+RedirectMatch 410 ^/(feed|comments/feed)(/.*)?$
+RedirectMatch 410 ^/(author|wp-includes|wp-content|wp-json|wp-admin)(/.*)?$
+RedirectMatch 410 ^/(xmlrpc|wp-login)\.php$
 RedirectMatch 301 ^/(nossos-roteiros|europa|africa|asia-oriente-medio|america-do-sul|oceania|america-do-norte-caribe|outros-destinos)/?$ /roteiros
 RedirectMatch 301 ^/(marrocos|capitais-imperiais|cruzeiro-pelo-danubio|viagem-transiberiana|terra_santa-jordania|rota-romantica-alemanha|expresso-luzes-do-norte)/?$ /roteiros
 RedirectMatch 301 ^/(grecia-terra-mar|mercados-de-natal|floracao-das-cerejeiras|encantos-do-mediterraneo)\.html$ /roteiros
 RedirectMatch 301 ^/roteiro\.html$ /roteiros
-RedirectMatch 301 ^/(nossa-historia|sobre-nos)/?$ /nossa-historia.html
-RedirectMatch 301 ^/contato/?$                    /contato.html
+# /nossa-historia e /contato agora SAO os enderecos (ver "URLs sem .html");
+# o redirect deles para o .html saiu, senao seria loop.
+RedirectMatch 301 ^/sobre-nos/?$ /nossa-historia
 RedirectMatch 301 ^/(blog|dicas-de-viagem|6-dicas-para-uma-viagem-mais-proveitosa|meu-primeiro-post-do-blog)/?$ /
 RedirectMatch 301 ^/(en|es)(/.*)?$ /
 

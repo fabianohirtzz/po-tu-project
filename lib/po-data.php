@@ -36,13 +36,16 @@ function po_cache_dir() {
 
 /* GET no Supabase, com cache em disco. TTL curto: o painel edita e a
    cliente quer ver a mudanca no site sem esperar. */
-function po_http_get($url, $ttl = 600) {
+/* $token: le como o usuario logado do painel (pre-visualizacao) em vez da anon.
+   Leitura com token NUNCA passa pelo cache em disco: o cache e compartilhado e
+   serviria o rascunho para a proxima requisicao anonima da mesma URL. */
+function po_http_get($url, $ttl = 600, $token = null) {
     if ($GLOBALS['PO_FETCHER']) {
         $f = $GLOBALS['PO_FETCHER'];
-        return $f($url);
+        return $token === null ? $f($url) : $f($url, $token);
     }
     $file = po_cache_dir() . '/' . sha1($url) . '.json';
-    if (is_file($file) && (time() - filemtime($file)) < $ttl) {
+    if ($token === null && is_file($file) && (time() - filemtime($file)) < $ttl) {
         $c = @file_get_contents($file);
         if ($c !== false) return $c;
     }
@@ -54,7 +57,7 @@ function po_http_get($url, $ttl = 600) {
         CURLOPT_TIMEOUT        => 8,
         CURLOPT_HTTPHEADER     => [
             'apikey: ' . $cfg['SUPABASE_ANON_KEY'],
-            'Authorization: Bearer ' . $cfg['SUPABASE_ANON_KEY'],
+            'Authorization: Bearer ' . ($token === null ? $cfg['SUPABASE_ANON_KEY'] : $token),
             'Accept: application/json',
         ],
     ]);
@@ -62,6 +65,9 @@ function po_http_get($url, $ttl = 600) {
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
+    if ($token !== null) {
+        return ($body === false || $code < 200 || $code >= 300) ? null : $body;
+    }
     if ($body === false || $code < 200 || $code >= 300) {
         error_log('PO roteiros fetch falhou (' . $code . ')');
         // Supabase fora do ar: serve cache velho em vez de pagina vazia.
@@ -84,9 +90,27 @@ function po_cache_write($file, $body) {
     if (!@rename($tmp, $file)) { @unlink($tmp); }
 }
 
+/* Apaga o cache dos roteiros. Chamada por limpa-cache.php depois que o painel
+   salva ou exclui um roteiro: sem isso o site levava ate 10 min para mostrar a
+   mudanca (status novo, roteiro ocultado). Devolve quantos arquivos apagou. */
+function po_cache_limpa() {
+    $n = 0;
+    foreach (glob(po_cache_dir() . '/*.json') ?: [] as $f) {
+        if (@unlink($f)) $n++;
+    }
+    return $n;
+}
+
 function po_rest($query, $ttl = 600) {
+    return po_rest_tabela('po_roteiros', $query, $ttl);
+}
+
+/* Mesma leitura (anon, cache em disco) para outras tabelas publicas do site:
+   po_avaliacoes e po_instagram (lib/po-social.php). O nome da tabela vem do
+   codigo, nunca de entrada. */
+function po_rest_tabela($tabela, $query, $ttl = 600) {
     $cfg = po_config();
-    $body = po_http_get(rtrim($cfg['SUPABASE_URL'], '/') . '/rest/v1/po_roteiros?' . $query, $ttl);
+    $body = po_http_get(rtrim($cfg['SUPABASE_URL'], '/') . '/rest/v1/' . $tabela . '?' . $query, $ttl);
     if ($body === null) return null;
     $d = json_decode($body, true);
     return is_array($d) ? $d : null;
@@ -104,6 +128,20 @@ function po_fetch_roteiros() {
 function po_fetch_roteiro($slug) {
     $d = po_rest('select=*&ativo=eq.true&slug=eq.' . rawurlencode($slug) . '&limit=1');
     return (is_array($d) && count($d)) ? $d[0] : null;
+}
+
+/* Pre-visualizacao do painel: o roteiro por ID, ativo ou nao, lido com o
+   token de quem esta logado. Quem libera o rascunho e a RLS do banco (o
+   mesmo acesso que o painel ja tem para listar os ocultos), nao este codigo.
+   O ID e conferido como UUID antes de entrar na URL do PostgREST: um valor
+   livre ali poderia carregar filtros a mais. */
+function po_fetch_roteiro_preview($id, $token) {
+    if (!is_string($id) || !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $id)) return null;
+    if (!is_string($token) || trim($token) === '') return null;
+    $cfg  = po_config();
+    $body = po_http_get(rtrim($cfg['SUPABASE_URL'], '/') . '/rest/v1/po_roteiros?select=*&id=eq.' . $id . '&limit=1', 0, trim($token));
+    $d    = $body === null ? null : json_decode($body, true);
+    return (is_array($d) && count($d) && is_array($d[0])) ? $d[0] : null;
 }
 
 /* Ano da viagem, para o <title> ("Excursao Turquia 2026 ...").

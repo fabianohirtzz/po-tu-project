@@ -80,7 +80,7 @@ function camp_leads() {
     $todos = [];
     for ($i = 0; $i < 100; $i++) {      // teto de 100 mil leads; a base tem ~790
         $p = wa_db_select_estrito('po_leads',
-            'select=id,nome,telefone,wa_id,cliente,revisado,opt_out_at,payload_import'
+            'select=id,nome,telefone,wa_id,cliente,revisado,opt_out_at,payload_import,status,qualif_data'
             . '&order=created_at.asc&offset=' . ($i * CAMP_PAGINA) . '&limit=' . CAMP_PAGINA);
         if ($p === null) return null;
         foreach ($p as $l) $todos[] = $l;

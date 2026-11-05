@@ -47,6 +47,7 @@
     var meta = [r.badge, r.periodo].filter(Boolean).map(esc).join(' · ');
     return '<li class="lk-card">' +
       '<a class="lk-card__img" href="' + esc(href) + '" tabindex="-1" aria-hidden="true">' +
+        (window.poStatusTag ? window.poStatusTag(r) : '') +
         '<img src="' + esc(r.capa_url || '') + '" alt="" loading="lazy" decoding="async">' +
       '</a>' +
       '<div class="lk-card__body">' +

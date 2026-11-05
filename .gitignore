@@ -23,3 +23,9 @@ Thumbs.db
 po-export.json
 crm-clients*.json
 scratchpad/
+
+# capas do Instagram baixadas pelo insta-capa.php (conteudo do servidor, nao codigo)
+images/insta/
+
+# scratch do Supabase CLI
+supabase/.temp/

@@ -90,7 +90,10 @@ if ($slug === '') fail(400, 'Slug do roteiro ausente.');
 // Lista fechada: o tipo entra no nome do arquivo e no glob da limpeza.
 // Qualquer valor fora daqui poderia fazer um tipo apagar os vídeos do outro.
 $tipo = strtolower(trim((string) ($_POST['tipo'] ?? 'insta')));
-if (!in_array($tipo, ['insta', 'capa'], true)) fail(400, 'Tipo de vídeo inválido.');
+// "feed" (22/10/2026): reels da secao Instagram da Nossa Historia (aba Prova
+// social do painel). Ali o "slug" e o id do item (ig-<8 hex>), unico por video,
+// entao a limpeza <slug>-feed-*.mp4 so alcanca as versoes antigas DAQUELE item.
+if (!in_array($tipo, ['insta', 'capa', 'feed'], true)) fail(400, 'Tipo de vídeo inválido.');
 
 $action = (string) ($_POST['action'] ?? 'chunk');
 

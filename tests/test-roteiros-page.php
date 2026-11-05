@@ -43,4 +43,21 @@ $sem_badge = [
 $h_sem = po_roteiros_html($sem_badge);
 ok(strpos($h_sem, '<span class="rts__badge">') === false, 'nenhuma tag badge quando badge e dias vazios');
 
+// Status da viagem sobre a capa do card, igual a home
+ok(strpos($h, 'st-tag') === false, 'sem status, sem tag no card');
+$lista[0]['status_viagem'] = 'em_viagem';
+$h_st = po_roteiros_html($lista);
+ok(strpos($h_st, '<div class="rts__img"><span class="st-tag st-tag--em_viagem">Em viagem</span>') !== false, 'tag dentro da capa do card');
+ok(substr_count($h_st, 'st-tag--') === 1, 'so o roteiro com status ganha tag');
+
+/* A capa do card. Em 22/10/2026 a edicao que pos a tag colou o <img> no
+   atributo e o HTML saiu <imgsrc="...">: as fotos sumiram de /roteiros e o
+   teste acima, que so olhava a tag, passou verde. Confere a foto de cada card,
+   com e sem status. */
+foreach ([$h, $h_st] as $html) {
+    ok(strpos($html, '<img src="https://x/a.jpg"') !== false, 'capa do 1o card vira <img src> de verdade');
+    ok(strpos($html, '<img src="https://x/b.jpg"') !== false, 'capa do 2o card vira <img src> de verdade');
+    ok(strpos($html, '<imgsrc') === false, 'nada de <imgsrc');
+}
+
 echo "roteiros-page ok\n";

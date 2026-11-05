@@ -31,6 +31,19 @@ function wa_camp_telefone($lead) {
     return wa_e164($lead['telefone'] ?? '');
 }
 
+/* Perdeu por DATA (23/10/2026, pedido do cliente): o robo perguntou se a data
+   da saida servia, a pessoa disse que nao, e o motor gravou status 'perdido'
+   com qualif_data=false (wa-motor.php). Ela queria viajar, so nao naquela
+   data: e publico do proximo roteiro. Entra SEM passar pela Revisao, porque o
+   lead veio dela mesma (WhatsApp/site), nao de agenda importada - a Revisao
+   existe para separar pessoa de empresa nas agendas. O #perdeu manual NAO
+   conta (nao diz o motivo), e quem voltou ao atendimento deixa de contar.
+   A politica de privacidade ja cobre: aviso de roteiro para quem "ja pediu
+   informacao", por legitimo interesse, com o SAIR como contrapartida. */
+function wa_camp_perdeu_data($lead) {
+    return ($lead['status'] ?? null) === 'perdido' && ($lead['qualif_data'] ?? null) === false;
+}
+
 /* Devolve null quando a pessoa entra, ou o MOTIVO de ficar de fora.
    A ordem das checagens e o que define em qual balde a pessoa aparece no
    resumo, e o balde e o que a cliente le para conferir as defesas:
@@ -43,8 +56,13 @@ function wa_camp_telefone($lead) {
    3) telefone por ultimo. */
 function wa_camp_motivo_fora($lead) {
     if (!empty($lead['opt_out_at']))            return 'saiu';
-    if (($lead['cliente']  ?? null) !== true)   return 'nao_cliente';
-    if (($lead['revisado'] ?? null) !== true)   return 'nao_revisado';
+    if (wa_camp_perdeu_data($lead)) {
+        // Marcado "Nao e cliente" na Revisao continua valendo: e decisao dela.
+        if (($lead['revisado'] ?? null) === true && ($lead['cliente'] ?? null) !== true) return 'nao_cliente';
+    } else {
+        if (($lead['cliente']  ?? null) !== true)   return 'nao_cliente';
+        if (($lead['revisado'] ?? null) !== true)   return 'nao_revisado';
+    }
     $f = wa_camp_telefone($lead);
     if ($f === null)                            return 'sem_telefone';
     // Fixo entra na ficha mas NAO no disparo (spec 8): template para fixo e
@@ -90,7 +108,9 @@ function wa_camp_publico($leads) {
     $publico = [];
     $vistos  = [];
     $resumo  = ['total' => 0, 'duplicados' => 0, 'saiu' => 0, 'nao_cliente' => 0,
-                'nao_revisado' => 0, 'sem_telefone' => 0, 'sem_celular' => 0];
+                'nao_revisado' => 0, 'sem_telefone' => 0, 'sem_celular' => 0,
+                // informativo: dos que ENTRAM, quantos vieram por perder uma data
+                'perdeu_data' => 0];
 
     // Primeira passada: os numeros que sairam, em qualquer ficha da base.
     $saiu = wa_camp_saiu_fones($leads);
@@ -105,6 +125,7 @@ function wa_camp_publico($leads) {
         if (isset($saiu[$fone])) { $resumo['saiu']++; continue; }
         if (isset($vistos[$fone])) { $resumo['duplicados']++; continue; }
         $vistos[$fone] = true;
+        if (wa_camp_perdeu_data($l)) $resumo['perdeu_data']++;
         $publico[] = [
             'lead_id' => $l['id']   ?? null,
             'wa_id'   => $fone,

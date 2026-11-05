@@ -35,6 +35,36 @@ ok(wa_camp_motivo_fora($x) === 'sem_telefone', 'sem telefone fica de fora');
 $x = $base; $x['telefone'] = '+554832220000';
 ok(wa_camp_motivo_fora($x) === 'sem_celular', 'fixo fica de fora do disparo');
 
+/* Perdeu por DATA (23/10/2026, pedido do cliente): o robo perguntou a data,
+   a pessoa disse que nao pode, e o lead foi para "Perdido". Ela queria
+   viajar, so nao naquela saida, entao recebe a oferta do proximo roteiro sem
+   precisar passar pela Revisao (o lead veio dela mesma, pelo WhatsApp ou
+   pelo site, nao de agenda importada). */
+$perdeu = ['cliente'=>false, 'revisado'=>false, 'opt_out_at'=>null, 'status'=>'perdido',
+           'qualif_data'=>false, 'telefone'=>null, 'wa_id'=>'+5548999990009', 'id'=>'P1', 'nome'=>'Perdeu Data'];
+ok(wa_camp_perdeu_data($perdeu), 'status perdido + qualif_data false = perdeu por data');
+ok(wa_camp_motivo_fora($perdeu) === null, 'quem perdeu por data entra, mesmo sem ser cliente revisado');
+
+$x = $perdeu; $x['opt_out_at'] = '2026-10-01T00:00:00Z';
+ok(wa_camp_motivo_fora($x) === 'saiu', 'SAIR vale tambem para quem perdeu por data');
+
+$x = $perdeu; $x['qualif_data'] = null;
+ok(!wa_camp_perdeu_data($x) && wa_camp_motivo_fora($x) === 'nao_cliente',
+   'perdido por outro motivo (#perdeu, sem resposta da data) NAO entra');
+
+$x = $perdeu; $x['status'] = 'atendimento';
+ok(!wa_camp_perdeu_data($x), 'retomou o atendimento: nao e mais "perdeu por data"');
+
+$x = $perdeu; $x['revisado'] = true; $x['cliente'] = false;
+ok(wa_camp_motivo_fora($x) === 'nao_cliente', 'marcado "Nao e cliente" na Revisao continua de fora');
+
+$x = $perdeu; $x['wa_id'] = null; $x['telefone'] = '+554832220000';
+ok(wa_camp_motivo_fora($x) === 'sem_celular', 'fixo continua fora, mesmo perdendo por data');
+
+$r = wa_camp_publico([$base, $perdeu]);
+ok($r['resumo']['total'] === 2 && $r['resumo']['perdeu_data'] === 1,
+   'o resumo conta quantos entraram por terem perdido uma data');
+
 /* wa_id vence telefone: e o numero com que o WhatsApp JA falou. */
 $x = $base; $x['wa_id'] = '+5548988880002'; $x['telefone'] = '+5548999990001';
 ok(wa_camp_telefone($x) === '+5548988880002', 'wa_id tem prioridade sobre telefone');

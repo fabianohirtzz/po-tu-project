@@ -75,4 +75,24 @@ console.log('test-gaveta OK');
 assert.ok(!/venda_at\s*[:=]\s*new Date\(\)/.test(src),
   'venda_at nunca e carimbado inline, nem por objeto literal nem por atribuicao');
 
+
+/* "Perdeu so pela data" (23/10/2026): marcado na gaveta de um lead Perdido,
+   grava qualif_data=false, a MESMA coluna que o robo grava quando a pessoa
+   responde que a data nao serve. E o que poe o lead na transmissao. */
+const marcou = poPatchGaveta({ven:'0', orc:'0', status:'perdido', origem:'site', pdata:true},
+  {ven:0, vendaAt:null, perdeuData:false}, AGORA);
+assert.equal(marcou.qualif_data, false, 'marcado: grava qualif_data=false');
+const desmarcou = poPatchGaveta({ven:'0', orc:'0', status:'perdido', origem:'site', pdata:false},
+  {ven:0, vendaAt:null, perdeuData:true}, AGORA);
+assert.equal(desmarcou.qualif_data, null, 'desmarcado: limpa o motivo');
+const outro = poPatchGaveta({ven:'0', orc:'0', status:'atendimento', origem:'site', pdata:true},
+  {ven:0, vendaAt:null, perdeuData:false}, AGORA);
+assert.ok(!('qualif_data' in outro), 'fora de Perdido nao toca qualif_data (o robo grava true no qualificado)');
+const nada = poPatchGaveta({ven:'0', orc:'0', status:'perdido', origem:'site', pdata:false},
+  {ven:0, vendaAt:null, perdeuData:false}, AGORA);
+assert.ok(!('qualif_data' in nada), 'perdido sem marcar e sem marca antiga: nao mexe');
+const html = readFileSync(new URL('../painel/index.html', import.meta.url), 'utf8');
+assert.ok(/id="e-pdata"/.test(html), 'a caixa existe na gaveta');
+assert.ok(/pdata:\$\('#e-pdata'\)\.checked/.test(src), 'o Salvar le a caixa (trava no ponto de chamada)');
+assert.ok(/perdeuData:r\.qualif_data===false/.test(src), 'o lead carrega a marca do banco');
 console.log('test-gaveta (ponto de chamada) OK');

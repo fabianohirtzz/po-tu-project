@@ -32,6 +32,8 @@ assert.ok(/23/.test(r),  'mostra quantos entram');
 assert.ok(/615/.test(r), 'mostra quantos ficaram sem telefone');
 assert.ok(/saiu|SAIR/i.test(r), 'nomeia o balde de quem pediu para sair');
 assert.ok(/revis/i.test(r), 'nomeia o balde de quem falta revisar');
+assert.ok(/7 delas perderam uma data/.test(F.resumo({total:23, perdeu_data:7})), 'diz quantos entraram por perder uma data');
+assert.ok(!/perderam/.test(r), 'sem ninguem que perdeu data, a frase nao aparece');
 
 /* Nada dispara com publico vazio, nem sem o custo calculado. E a trava que
    impede o clique que gasta sem avisar. */

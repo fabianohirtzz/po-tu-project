@@ -25,6 +25,20 @@
     if (p && p.catch) p.catch(function () {});
   })();
 
+  /* ---------- painel "Sobre" (#sobre) ----------
+     Abre e fecha por :target no CSS, sem depender daqui. O JS so acrescenta o
+     Esc e leva o foco para o painel. Fechar e navegar para #inicio: so mudar o
+     hash atualiza o :target (history.replaceState nao atualiza). */
+  (function painelSobre() {
+    const sobre = document.getElementById('sobre');
+    if (!sobre) return;
+    const foco = () => { if (location.hash === '#sobre') sobre.querySelector('.about__panel').focus({ preventScroll: true }); };
+    sobre.querySelector('.about__panel').tabIndex = -1;
+    window.addEventListener('hashchange', foco);
+    foco();
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && location.hash === '#sobre') location.hash = 'inicio'; });
+  })();
+
   const track = document.getElementById('rail-track');
   const panel = document.getElementById('panel');
   const els = {
@@ -59,6 +73,7 @@
       data: (r.dias ? r.dias + ' dias · ' : '') + (r.data_label || r.periodo || ''),
       desc: r.descricao_curta || '',
       img: r.capa_url || '',
+      tag: window.poStatusTag ? window.poStatusTag(r) : '',
       href: window.poRoteiroHref ? window.poRoteiroHref(r.slug) : ('/roteiros/' + encodeURIComponent(r.slug))
     };
   }
@@ -86,12 +101,21 @@
     return list.slice().sort((a, b) => tripTime(a.data) - tripTime(b.data));
   }
 
+  /* O que um clique num card faz. Card lateral vem para o centro; o do centro
+     abre o roteiro. O carrossel tambem se arrasta, e o navegador dispara um
+     click no fim do arraste do mouse: esse click e ignorado, senao arrastar
+     abriria o roteiro (e antes fazia o carrossel voltar ao card de origem). */
+  function slideClique(o) {
+    if (o.arrastouHa < 400) return 'nada';
+    return o.i === o.active ? 'abrir' : 'focar';
+  }
+
   function initSlider(ROTEIROS) {
     // sem roteiros (banco fora do ar) a home fica só com a chamada institucional:
     // melhor não ter carrossel do que anunciar viagem que não existe mais.
     if (!track || !ROTEIROS.length) { revelarPainel(); return; }
     const N = ROTEIROS.length;
-    let active = 0, autoTimer = null;
+    let active = 0, autoTimer = null, arrastouEm = -Infinity;
     const AUTOPLAY_MS = 5200;
 
     const slides = ROTEIROS.map((r, i) => {
@@ -105,9 +129,16 @@
       const dLabel = days
         ? '<span class="d-days">' + days + '</span><span class="d-sep"> · </span><span class="d-date">' + date + '</span>'
         : '<span class="d-date">' + date + '</span>';
-      s.innerHTML = '<img src="' + r.img + '" alt="' + (r.subtitulo || r.titulo) + '">' +
-        '<div class="slide__label"><div class="t">' + (r.subtitulo || r.titulo) + '</div><div class="d">' + dLabel + '</div></div>';
-      s.addEventListener('click', () => { if (i !== active) go(i); });
+      s.innerHTML = r.tag + '<img src="' + r.img + '" alt="' + (r.subtitulo || r.titulo) + '">' +
+        '<div class="slide__label"><a class="t" href="' + r.href + '">' + (r.subtitulo || r.titulo) + '</a><div class="d">' + dLabel + '</div></div>';
+      // imagem e titulo do card do centro abrem o roteiro; o titulo e <a> de
+      // verdade (teclado, Ctrl+clique), o resto do card navega por aqui
+      s.addEventListener('click', (e) => {
+        const acao = slideClique({ i, active, arrastouHa: Date.now() - arrastouEm });
+        if (acao === 'focar') { e.preventDefault(); go(i); }
+        else if (acao === 'nada') e.preventDefault();
+        else if (!e.target.closest('a')) location.href = r.href;
+      });
       track.appendChild(s);
       return s;
     });
@@ -129,6 +160,8 @@
         s.style.zIndex = g.z_index;
         s.style.pointerEvents = dist > 2 ? 'none' : 'auto';
         s.classList.toggle('is-active', pos === 0);
+        // o titulo dos cards laterais esta invisivel: fora do Tab
+        s.querySelector('a.t').tabIndex = pos === 0 ? 0 : -1;
       });
       updatePanel();
     }
@@ -163,7 +196,7 @@
     window.addEventListener('pointerup', (e) => {
       if (dragX === null) return;
       const dx = e.clientX - dragX; dragX = null;
-      if (Math.abs(dx) > 55) { dx < 0 ? next() : prev(); } else { startAuto(); }
+      if (Math.abs(dx) > 55) { arrastouEm = Date.now(); dx < 0 ? next() : prev(); } else { startAuto(); }
     });
 
     render(); startAuto();

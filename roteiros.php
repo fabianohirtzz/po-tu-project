@@ -77,7 +77,7 @@ function po_roteiros_html($lista) {
             $data  = !empty($r['data_label']) ? $r['data_label'] : ($r['periodo'] ?? '');
             $h .= '<article class="rts__card reveal">'
                 . '<a class="rts__link" href="' . $href . '">'
-                . '<div class="rts__img"><img src="' . po_e($r['capa_url'] ?? '') . '" alt="' . po_e($r['titulo'] ?? '') . '" loading="lazy"></div>'
+                . '<div class="rts__img">' . po_status_tag($r) . '<img src="' . po_e($r['capa_url'] ?? '') . '" alt="' . po_e($r['titulo'] ?? '') . '" loading="lazy"></div>'
                 . '<div class="rts__body">'
                 . ($badge ? '<span class="rts__badge">' . po_e($badge) . '</span>' : '')
                 . '<h2 class="rts__h">' . po_e($r['titulo'] ?? '') . '</h2>'
@@ -100,7 +100,7 @@ if (!defined('PO_TEST')) {
         'description' => 'Excursões em grupo com coordenador brasileiro, datas fixas e saída de Florianópolis. A Pereira Oliveira organiza viagens desde 1967.',
         'canonical'   => po_url('/roteiros'),
         'og_image'    => po_url('/assets/images/roteiro-grecia.jpg'),
-        'css'         => ['/assets/css/roteiro.css?v=7', '/assets/css/roteiros.css?v=1'],
+        'css'         => ['/assets/css/roteiro.css?v=12', '/assets/css/roteiros.css?v=3', '/assets/css/status-tag.css?v=3', '/assets/css/cadastur.css?v=2'],
         'jsonld'      => po_roteiros_jsonld($lista),
     ]);
     echo po_header();

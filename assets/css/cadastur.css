@@ -1,0 +1,28 @@
+/* Selo do Cadastur (Ministerio do Turismo). Arquivo unico, carregado por toda
+   pagina que tem o rodape (.ft__cad) ou o selo (.cad-selo), como o
+   status-tag.css. O logo e branco (extraido do certificado): so vai sobre
+   fundo escuro ou sobre o azul do proprio Cadastur, nunca sobre papel claro. */
+
+/* rodape escuro: logo + uma linha, sob as redes sociais */
+.ft__cad{display:inline-flex;flex-direction:column;align-items:flex-start;gap:8px;margin-top:24px;text-decoration:none}
+/* align-items:flex-start: no padrao stretch a coluna esticava o logo ate a
+   largura da frase de baixo */
+.ft__cad img{height:22px;width:auto;display:block}
+.ft__cad span{font-size:.74rem;line-height:1.4;color:rgba(255,255,255,.55);transition:color .18s}
+.ft__cad:hover span{color:#fff}
+
+/* selo em fundo claro (Contato, FAQ): cartao no azul do certificado */
+.cad-selo{display:flex;align-items:center;gap:18px;padding:16px 20px;border-radius:14px;
+  background:linear-gradient(120deg,#2b80c2,#5cb2df);color:#fff;text-decoration:none;
+  box-shadow:0 10px 24px -14px rgba(20,90,150,.7);transition:transform .18s,box-shadow .18s}
+.cad-selo:hover{transform:translateY(-2px);box-shadow:0 14px 28px -14px rgba(20,90,150,.8)}
+.cad-selo img{height:25px;width:auto;flex-shrink:0;display:block}
+.cad-selo span{font-size:.8rem;line-height:1.4;color:rgba(255,255,255,.85);
+  padding-left:18px;border-left:1px solid rgba(255,255,255,.35)}
+.cad-selo b{display:block;font-size:.92rem;font-weight:600;color:#fff}
+.cta__cad{margin-top:30px;max-width:460px}
+.faq__cad{max-width:860px;margin:40px auto 0}
+@media (max-width:480px){
+  .cad-selo{flex-direction:column;align-items:flex-start;gap:12px}
+  .cad-selo span{padding-left:0;border-left:none}
+}

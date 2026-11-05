@@ -192,6 +192,10 @@ button{font-family:inherit;cursor:pointer}
   transition:opacity .5s var(--ease);
 }
 .slide__label .t{font-family:var(--font-display);font-weight:600;font-size:1.15rem;line-height:1.2}
+/* o titulo e <a> (abre o roteiro): sem a cor/sublinhado de link. Sem mexer no display,
+   que o celular usa para esconder o titulo */
+.slide__label a.t{color:inherit;text-decoration:none}
+.slide.is-active .slide__label a.t:hover{text-decoration:underline;text-underline-offset:3px}
 .slide__label .d{font-size:.82rem;opacity:.85;margin-top:5px}
 .slide:not(.is-active) .slide__label{opacity:0}
 .slide.is-active{filter:none}
@@ -206,6 +210,21 @@ button{font-family:inherit;cursor:pointer}
 }
 .rail__nav button:hover{background:var(--brand-grad);border-color:transparent;transform:scale(1.05)}
 .rail__nav svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2.2}
+
+/* Computador, notebook e tablet deitado (>960px), 23/10/2026: as setas ficavam
+   por cima do fundo do card. Card + setas viram uma coluna, e a altura do card
+   (--ch) sai da altura da tela, descontando o header fixo (~120px em cima) e a
+   linha das setas (52px + 18px de vao): 100vh - 280px. A largura segue a
+   proporcao 350/560 do card, limitada a 26vw para os laterais caberem.
+   Ate 960px vale o bloco de baixo, que ja empilha as setas sob o card. */
+@media(min-width:961px){
+  .rail{--ch:clamp(300px,calc(100vh - 280px),620px);--cw:min(26vw,calc(var(--ch) * .625));
+    flex-direction:column;gap:18px}
+  .rail__track{height:var(--ch);max-height:none;flex:none}
+  .slide{height:var(--ch);margin-top:calc(var(--ch) / -2);
+    width:var(--cw);margin-left:calc(var(--cw) / -2)}
+  .rail__nav{position:static;transform:none;left:auto;bottom:auto}
+}
 
 /* ============================================================ RESPONSIVO */
 @media(max-width:960px){
@@ -287,3 +306,60 @@ button{font-family:inherit;cursor:pointer}
   .rail__track{height:min(40vh,320px)}
   .slide{height:min(40vh,320px);margin-top:calc(min(40vh,320px) / -2)}
 }
+
+/* ---------- Sobre (painel institucional da home) ----------
+   Link discreto, mas visivel e clicavel: se ficar invisivel vira "texto oculto"
+   para o Google. Abre por :target (#sobre), entao funciona sem JavaScript. */
+.about-link{position:fixed;left:24px;bottom:22px;z-index:45;font-size:.78rem;letter-spacing:.02em;
+  color:rgba(255,255,255,.62);text-decoration:underline;text-underline-offset:3px;
+  text-decoration-color:rgba(255,255,255,.28);transition:color .2s var(--ease)}
+.about-link:hover,.about-link:focus-visible{color:#fff}
+.about{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;padding:16px}
+.about:target{display:flex}
+.about__scrim{position:absolute;inset:0;background:rgba(6,9,14,.72);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.about__panel{position:relative;width:min(760px,100%);max-height:min(88vh,920px);overflow:auto;overscroll-behavior:contain;
+  background:#F6F5F2;color:#22242B;border-radius:20px;padding:46px 52px 40px;box-shadow:0 30px 80px rgba(0,0,0,.45)}
+.about__close{position:absolute;top:14px;right:18px;width:40px;height:40px;display:grid;place-items:center;
+  font-size:1.7rem;line-height:1;color:#22242B;border-radius:50%;transition:background .2s}
+.about__close:hover{background:rgba(34,36,43,.08)}
+.about__kicker{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:#6C6E75;margin:0 0 10px}
+.about__body h2{font-size:clamp(1.6rem,3.2vw,2.2rem);line-height:1.12;letter-spacing:-.01em;margin:0 0 18px}
+.about__body h3{font-size:1.12rem;line-height:1.3;margin:28px 0 8px;color:#22242B}
+.about__body p,.about__body li{font-size:1rem;line-height:1.7;color:#3c3e45;margin:0}
+.about__body ul{margin:0;padding-left:1.2em}
+/* texto justificado, SEM hifenizar (pedidos do cliente, 23/10/2026).
+   A citacao das avaliacoes fica alinhada a esquerda: e curta e em cartao estreito. */
+.about__body p{text-align:justify;hyphens:manual;-webkit-hyphens:manual}
+.about__body .rev__t p,.about__body .rev-selo p{text-align:left}
+.about__body li+li{margin-top:4px}
+.about__links{display:flex;flex-wrap:wrap;align-items:center;gap:10px 22px;margin-top:32px;padding-top:24px;border-top:1px solid rgba(34,36,43,.12)}
+.about__links a{color:#1d7fa8;font-weight:600;font-size:.95rem}
+.about__links .about__btn{display:inline-flex;align-items:center;padding:12px 22px;border-radius:999px;
+  background:var(--brand-grad);color:#fff;font-family:var(--font-display)}
+@media (max-width:640px){
+  .about-link{left:16px;bottom:16px;font-size:.74rem}
+  .about{padding:10px}
+  .about__panel{padding:52px 22px 28px;max-height:92vh;border-radius:16px}
+}
+/* lista automatica de proximas viagens no painel (index.php) */
+.about__viagens{margin:0;padding-left:1.2em}
+.about__viagens a{color:#1d7fa8;font-weight:600}
+.about__viagens .about__st{margin-left:8px;vertical-align:2px;box-shadow:none;font-size:.58rem;padding:3px 8px}
+/* avaliacoes do Google no painel Sobre (lib/po-social.php). Estrelas e selo
+   tambem existem no historia.css (secao da Nossa Historia). */
+.po-stars{display:inline-flex;gap:2px;vertical-align:middle}
+.po-stars svg{width:15px;height:15px}
+.po-stars .on{fill:#F5B400}
+.po-stars .off{fill:#d9d4c7}
+.about__body .rev-selo{display:inline-flex;align-items:center;gap:12px;margin:4px 0 18px;padding:10px 16px;border-radius:12px;
+  background:#fff;border:1px solid rgba(34,36,43,.12);color:#22242B}
+.rev-selo__g{width:28px;height:28px;flex:0 0 auto}
+.about__body .rev-selo > span{display:flex;flex-direction:column;gap:6px;font-size:.9rem;line-height:1.1}
+.about__revs{display:grid;gap:12px}
+.about__revs .rev{margin:0;padding:16px 18px;background:#fff;border:1px solid rgba(34,36,43,.1);border-radius:12px}
+.about__revs .rev__t{margin:8px 0 10px}
+.about__revs .rev__t p{font-size:.95rem}
+.about__revs .rev__a{display:flex;gap:8px;align-items:baseline;font-size:.88rem}
+.about__revs .rev__a span{font-size:.72rem;color:#6C6E75;text-transform:uppercase;letter-spacing:.06em}
+.rev__top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.rev__g{width:20px;height:20px;flex:0 0 auto}

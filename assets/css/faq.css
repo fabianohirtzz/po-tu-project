@@ -1,0 +1,32 @@
+/* Perguntas frequentes (faq.php). Usa os tokens e o .btn do roteiro.css e o
+   .rts-hero do roteiros.css; aqui so o acordeao. <details> nativo: abre sem
+   JavaScript e o texto da resposta fica no HTML para busca e IA. */
+.faq{padding:8px 0 96px}
+/* pagina centralizada (pedido do cliente): titulo, lista e chamada no eixo */
+.faq-hero .wrap{text-align:center}
+.faq-hero .sec__eyebrow{justify-content:center}
+.faq-hero .rts-hero__h,.faq-hero .rts-hero__lead{margin-inline:auto}
+/* titulo em 2 linhas no desktop, quebrando em "grupo / com a Pereira Oliveira"
+   (pedido do cliente). O 16ch do .rts-hero__h quebrava em 3. */
+.faq-br{display:none}
+@media (min-width:900px){
+  .faq-hero .rts-hero__h{max-width:none}
+  .faq-br{display:inline}
+}
+.faq__item,.faq__cta{max-width:860px;margin-inline:auto}
+.faq__item{border-bottom:1px solid var(--line)}
+.faq__item:first-child{border-top:1px solid var(--line)}
+.faq__q{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:20px;
+  padding:22px 4px;font-family:var(--font-display);font-weight:600;font-size:1.12rem;line-height:1.35;color:var(--ink)}
+.faq__q::-webkit-details-marker{display:none}
+.faq__q::after{content:"";flex:0 0 auto;width:12px;height:12px;border-right:2px solid var(--brand-azul,#1FA8DD);
+  border-bottom:2px solid var(--brand-azul,#1FA8DD);transform:rotate(45deg) translateY(-3px);transition:transform .25s ease}
+.faq__item[open] .faq__q::after{transform:rotate(-135deg) translateY(-3px)}
+.faq__q:hover{color:var(--brand-azul,#1FA8DD)}
+.faq__q:focus-visible{outline:2px solid var(--brand-azul,#1FA8DD);outline-offset:2px;border-radius:6px}
+.faq__a{padding:0 4px 24px}
+.faq__a p{margin:0;max-width:68ch;font-size:1rem;line-height:1.7;color:#3c3e45}
+.faq__cta{margin-top:56px;padding:32px;border-radius:18px;background:var(--surface);border:1px solid var(--line);text-align:center}
+.faq__cta p{margin:0 0 18px;font-family:var(--font-display);font-weight:700;font-size:1.3rem;color:var(--ink)}
+.faq__actions{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
+@media (prefers-reduced-motion:reduce){.faq__q::after{transition:none}}

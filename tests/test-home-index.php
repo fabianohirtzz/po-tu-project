@@ -1,0 +1,67 @@
+<?php
+/* Home montada pelo servidor (index.php), 22/10/2026.
+
+   O painel "Sobre" da home lista as proximas viagens. Escrita a mao no
+   index.html, a lista envelheceria (e a regra do projeto proibe dado de
+   roteiro no index.html por isso). O index.php le o index.html e troca o
+   marcador pela lista do banco, com o mesmo cache de 10 min que o painel limpa
+   ao salvar: roteiro novo entra e roteiro oculto sai na hora. */
+define('PO_TEST', 1);
+require __DIR__ . '/../lib/po-data.php';
+require __DIR__ . '/../lib/po-view.php';
+require __DIR__ . '/../index.php';
+
+function ok($cond, $msg) { if (!$cond) { fwrite(STDERR, "ASSERT: $msg\n"); exit(1); } }
+
+$html = file_get_contents(__DIR__ . '/../index.html');
+ok(substr_count($html, PO_HOME_MARCA) === 1, 'index.html tem o marcador exatamente uma vez');
+ok(strpos($html, PO_HOME_MARCA) > strpos($html, 'id="sobre"'), 'o marcador fica dentro do painel Sobre');
+
+$lista = [
+    ['slug' => 'turquia', 'titulo' => 'Turquia com Antália', 'dias' => 17, 'periodo' => 'De 27/10/26 à 12/11/26', 'status_viagem' => 'esgotado'],
+    ['slug' => 'chile', 'titulo' => 'Chile <b>e</b> Atacama', 'dias' => 8, 'data_label' => '25/11/26 a 02/12/26'],
+];
+$out = po_home_render($html, $lista);
+ok(strpos($out, PO_HOME_MARCA) === false, 'o marcador some da pagina servida');
+ok(strpos($out, '<a href="/roteiros/turquia">Turquia com Antália</a>') !== false, 'cada viagem com link para a pagina dela');
+ok(strpos($out, '17 dias, De 27/10/26 à 12/11/26') !== false, 'dias e periodo em texto');
+ok(strpos($out, 'st-tag--esgotado') !== false, 'status da viagem na lista');
+ok(strpos($out, 'Chile &lt;b&gt;e&lt;/b&gt; Atacama') !== false, 'titulo vem escapado (dado do painel/importador)');
+ok(strlen($out) > strlen($html), 'a lista entrou');
+
+// banco fora do ar (lista vazia): home inteira de pe, com caminho para os roteiros
+$vazio = po_home_render($html, []);
+ok(strpos($vazio, 'href="/roteiros"') !== false && strpos($vazio, PO_HOME_MARCA) === false, 'sem banco: aponta para /roteiros');
+ok(strpos($vazio, 'id="p-title"') !== false && strpos($vazio, '</html>') !== false, 'sem banco: o resto da home intacto');
+
+// marcador ausente (alguem apagou do index.html): serve a home como esta
+ok(po_home_render('<html>sem marca</html>', $lista) === '<html>sem marca</html>', 'sem marcador nao mexe em nada');
+
+// trava no ponto de chamada: a busca e a que filtra ativo=true
+$src = file_get_contents(__DIR__ . '/../index.php');
+ok(strpos($src, 'po_fetch_roteiros()') !== false, 'index.php usa po_fetch_roteiros (so ativos)');
+
+// e o servidor entrega o PHP em / e em /index.html
+$ht = str_replace("\r", "", file_get_contents(__DIR__ . "/../.htaccess")); // CRLF no Windows
+ok(preg_match('/^DirectoryIndex index\.php index\.html$/m', $ht) === 1, '/ serve o index.php primeiro');
+// desde as URLs limpas (22/10/2026), /index.html leva 301 para / (que e o index.php)
+ok(preg_match('~RewriteCond %\{THE_REQUEST\} .*index\\\\\.html.*\n\s*RewriteRule \^ / \[R=301,L\]~', $ht) === 1, '/index.html redireciona para /');
+
+// ordem cronologica pela data de saida (23/10/2026, pedido do cliente). O banco
+// nao tem coluna de data: ela sai do texto do periodo, como a cliente escreve.
+ok(po_data_saida(['periodo' => 'De 27/10/26 à 12/11/26']) === '2026-10-27', 'dd/mm/aa');
+ok(po_data_saida(['periodo' => 'De 22/02/2027 a 15/03/2027']) === '2027-02-22', 'dd/mm/aaaa');
+ok(po_data_saida(['data_label' => '', 'periodo' => '25/11/26 a 02/12/26']) === '2026-11-25', 'data_label vazio cai no periodo');
+ok(po_data_saida(['periodo' => 'Novembro de 2026']) === null, 'sem data legivel = null');
+$ord = po_por_saida([
+    ['titulo' => 'Vietna', 'periodo' => 'De 22/02/2027 a 15/03/2027'],
+    ['titulo' => 'Sem data', 'periodo' => 'a definir'],
+    ['titulo' => 'Turquia', 'periodo' => 'De 27/10/26 à 12/11/26'],
+    ['titulo' => 'Oriente', 'periodo' => 'De 18/03/27 à 09/04/27'],
+    ['titulo' => 'Chile', 'periodo' => '25/11/26 a 02/12/26'],
+]);
+ok(array_column($ord, 'titulo') === ['Turquia', 'Chile', 'Vietna', 'Oriente', 'Sem data'],
+   'mais proxima primeiro; sem data vai para o fim. Veio: ' . implode(',', array_column($ord, 'titulo')));
+ok(strpos($src, 'po_por_saida(po_fetch_roteiros())') !== false, 'o painel Sobre usa a ordem cronologica');
+
+echo "home-index ok\n";

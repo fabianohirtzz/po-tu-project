@@ -70,5 +70,35 @@ $aninhado = array_merge($r, [
 $ha = po_roteiro_html($aninhado, []);
 ok(is_string($ha) && strlen($ha) > 0, 'campos aninhados (array onde a pagina espera texto) nao disparam warning');
 
+/* Status da viagem: tag colorida no hero, a cor sai da classe do valor.
+   Esgotado tambem tem que chegar ao Google: InStock com a viagem lotada
+   seria o schema contradizendo a pagina. */
+ok(strpos($h, 'st-tag') === false, 'sem status, sem tag');
+$esg = array_merge($r, ['status_viagem' => 'esgotado']);
+$he = po_roteiro_html($esg, []);
+ok(strpos($he, 'class="st-tag st-tag--esgotado hero__status">Vagas esgotadas</span>') !== false, 'esgotado vira tag vermelha no hero');
+ok(po_roteiro_jsonld($esg)['offers']['availability'] === 'https://schema.org/SoldOut', 'esgotado vira SoldOut no json-ld');
+ok(po_roteiro_jsonld($r)['offers']['availability'] === 'https://schema.org/InStock', 'sem status segue InStock');
+ok(po_roteiro_jsonld(array_merge($r, ['status_viagem' => 'ultimas_vagas']))['offers']['availability'] === 'https://schema.org/LimitedAvailability', 'ultimas vagas vira LimitedAvailability');
+ok(strpos(po_roteiro_html(array_merge($r, ['status_viagem' => 'ultimas_vagas']), []), 'st-tag--ultimas_vagas hero__status">Últimas vagas<') !== false, 'ultimas vagas no hero');
+ok(strpos(po_roteiro_html(array_merge($r, ['status_viagem' => 'em_breve']), []), 'st-tag--em_breve hero__status">Em breve<') !== false, 'em breve');
+ok(strpos(po_roteiro_html(array_merge($r, ['status_viagem' => 'em_viagem']), []), 'st-tag--em_viagem hero__status">Em viagem<') !== false, 'em viagem');
+// valor fora da lista (nao deveria passar do check do banco) nao vira tag nem injeta classe
+ok(strpos(po_roteiro_html(array_merge($r, ['status_viagem' => '"><script>']), []), 'st-tag') === false, 'valor desconhecido nao emite tag');
+
+// sem trilha "Inicio > Roteiros > nome" no hero (pedido do cliente, 22/10/2026)
+ok(strpos($h, 'hero__crumb') === false, 'hero sem trilha de navegacao');
+
+// "Outros roteiros" tambem mostra o status de cada viagem
+$outros = po_outros_roteiros('turquia', [
+    ['slug' => 'turquia', 'titulo' => 'T', 'status_viagem' => 'em_breve'],
+    ['slug' => 'chile', 'titulo' => 'Chile', 'capa_url' => 'https://x/c.jpg', 'status_viagem' => 'esgotado'],
+    ['slug' => 'japao', 'titulo' => 'Japao', 'capa_url' => 'https://x/j.jpg'],
+]);
+ok(substr_count($outros, 'class="rot-card"') === 2, 'outros pula o atual');
+ok(strpos($outros, '<span class="st-tag st-tag--esgotado">Vagas esgotadas</span>') !== false, 'outros mostra a tag');
+ok(substr_count($outros, 'st-tag--') === 1, 'so quem tem status ganha tag');
+ok(strpos($outros, 'st-tag--em_breve') === false, 'a tag do roteiro atual nao vaza para a lista');
+
 restore_error_handler();
 echo "roteiro-page ok\n";

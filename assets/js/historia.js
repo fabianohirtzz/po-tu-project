@@ -76,6 +76,7 @@
       const a = document.createElement('article');
       a.className = 'rot-card';
       a.innerHTML =
+        (window.poStatusTag ? window.poStatusTag(r) : '') +
         '<div class="rot-card__img" style="background-image:url(\'' + (r.capa_url || '') + '\')"></div>' +
         '<div class="rot-card__body">' +
           '<div class="rot-card__title"><h3>' + (r.titulo || '') + '</h3><span class="rot-card__badge">' + badge + '</span></div>' +
