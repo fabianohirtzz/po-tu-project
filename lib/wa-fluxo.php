@@ -211,7 +211,7 @@ function wa_fluxo_ordena_roteiros($roteiros, $hoje = null) {
     $hoje = $hoje === null ? gmdate('Y-m-d') : (string) $hoje;
     $lista = [];
     foreach (array_values((array) $roteiros) as $i => $r) {
-        $d = wa_roteiro_data_ini($r);
+        $d = wa_roteiro_data_ini($r, $hoje);
         if ($d !== null && strcmp($d, $hoje) < 0) $d = null;
         $lista[] = ['i' => $i, 'd' => $d, 'r' => $r];
     }

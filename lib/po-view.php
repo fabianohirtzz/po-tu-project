@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/po-datas.php';
 /* Chrome compartilhado das paginas PHP. O markup e porte 1:1 do antigo
    template client-side de roteiro (header e menu mobile) e das antigas
    paginas estaticas de roteiro (head/footer/botao flutuante), ja apagados

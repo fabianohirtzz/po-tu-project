@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/po-datas.php';
 /* ============================================================
    Descobre de qual roteiro o cliente esta falando.
 
@@ -137,8 +138,16 @@ function wa_match_roteiros($texto, $roteiros) {
    e a partida. Data impossivel (31/02) e descartada e a busca continua - sem
    `checkdate`, um erro de digitacao no painel mandaria a viagem para o lugar
    errado da fila em vez de para o fim dela. */
-function wa_roteiro_data_ini($roteiro) {
+function wa_roteiro_data_ini($roteiro, $hoje = null) {
     if (!is_array($roteiro)) return null;
+    /* SAIDAS SEMANAIS: a data nao esta em texto nenhum, esta na lista de
+       datas do mes. Sem este caminho o roteiro le null e vai para o FIM da
+       fila, que e onde ficam as viagens que ja partiram. Sem data futura
+       cadastrada (ninguem atualizou o painel) cai na regra de sempre. */
+    if (($roteiro['status_viagem'] ?? null) === 'semanal') {
+        $prox = po_proxima_saida($roteiro, $hoje);
+        if ($prox !== null) return $prox;
+    }
     foreach (['periodo', 'data_label', 'descricao_curta'] as $campo) {
         $txt = (string) ($roteiro[$campo] ?? '');
         if ($txt === '') continue;

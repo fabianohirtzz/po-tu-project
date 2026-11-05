@@ -24,6 +24,34 @@ ok(wa_roteiro_data_ini(['periodo' => '', 'descricao_curta' => 'De 22/02/27 à 15
 ok(wa_roteiro_data_ini(['periodo' => '', 'data_label' => '10/01/28', 'descricao_curta' => '01/02/28']) === '2028-01-10', 'data_label vem antes da descricao curta');
 ok(wa_roteiro_data_ini(['periodo' => '25/11/26 a 02/12/26', 'descricao_curta' => '01/01/26']) === '2026-11-25', 'o periodo vence a descricao curta');
 
+/* ---------- roteiro SEMANAL: a data vem de datas_texto ---------- */
+/* O Peru sai toda semana e nao tem periodo unico. Sem este caminho ele le
+   null e vai para o FIM da lista, que e onde ficam as viagens que ja
+   partiram - um roteiro que sai na semana que vem anunciado no fim da fila. */
+$semanal = ['status_viagem' => 'semanal', 'periodo' => '', 'data_label' => '',
+    'datas_texto' => [['titulo' => 'Datas de Dezembro', 'datas' => ['02/12/39', '10/12/39']]]];
+ok(wa_roteiro_data_ini($semanal, '2039-11-01') === '2039-12-02', 'semanal le a proxima saida de datas_texto');
+ok(wa_roteiro_data_ini($semanal, '2039-12-05') === '2039-12-10', 'e e a proxima FUTURA, nao a primeira da lista');
+
+/* Sem nenhuma data futura, volta a regra de sempre. */
+$venceu = array_merge($semanal, ['periodo' => 'De 02/12/39 a 10/12/39']);
+ok(wa_roteiro_data_ini($venceu, '2039-12-20') === '2039-12-02', 'semanal com datas vencidas cai na busca por texto');
+ok(wa_roteiro_data_ini(array_merge($semanal, ['datas_texto' => []]), '2039-11-01') === null, 'semanal sem datas e sem texto: null, o fim da fila');
+
+/* O $hoje tem de ATRAVESSAR a ordenacao ate aqui. Se wa_fluxo_ordena_roteiros
+   chamar wa_roteiro_data_ini sem ele, a proxima saida e calculada contra o dia
+   real da maquina enquanto o corte de data passada usa o $hoje recebido: os
+   dois lados medem dias diferentes e a ordem sai errada. Aqui o semanal parte
+   em 10/12 (a de 02/12 ja passou) e tem de vir ANTES do roteiro de 20/12. */
+$ord = wa_fluxo_ordena_roteiros([
+  ['slug' => 'outro', 'periodo' => '20/12/39 a 28/12/39'],
+  array_merge($semanal, ['slug' => 'peru']),
+], '2039-12-05');
+ok(array_column($ord, 'slug') === ['peru', 'outro'], 'o $hoje atravessa a ordenacao: ' . implode(',', array_column($ord, 'slug')));
+
+/* Status diferente de semanal nao olha datas_texto. */
+ok(wa_roteiro_data_ini(array_merge($semanal, ['status_viagem' => 'em_breve']), '2039-11-01') === null, 'status comum ignora datas_texto');
+
 /* Sem data que o parser leia, e com data impossivel. */
 ok(wa_roteiro_data_ini(['periodo' => 'Fevereiro de 2027']) === null, 'mes escrito em palavra nao e data');
 ok(wa_roteiro_data_ini(['periodo' => '']) === null, 'periodo vazio');
