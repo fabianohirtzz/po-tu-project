@@ -15,6 +15,15 @@
     return '/roteiros/' + encodeURIComponent(slug);
   };
 
+  // Status da viagem como tag colorida na capa. Mesma lista de PO_STATUS_VIAGEM
+  // (lib/po-view.php). Valor fora da lista nao emite nada: a chave vira classe.
+  var STATUS_VIAGEM = { semanal: 'Saídas semanais', em_breve: 'Em breve', ultimas_vagas: 'Últimas vagas', esgotado: 'Vagas esgotadas', em_viagem: 'Em viagem' };
+  window.poStatusTag = function (r) {
+    var k = r && r.status_viagem;
+    if (typeof k !== 'string' || !Object.prototype.hasOwnProperty.call(STATUS_VIAGEM, k)) return '';
+    return '<span class="st-tag st-tag--' + k + '">' + STATUS_VIAGEM[k] + '</span>';
+  };
+
   var _client = null;
   window.poClient = function () {
     if (_client) return _client;

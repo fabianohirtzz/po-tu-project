@@ -548,7 +548,7 @@ function renderTimeline(rows){
 /* ============================================================ ROTEIROS — grid */
 /* Status da viagem: vira tag colorida na capa (home, /roteiros, hero, aqui).
    Mesma lista de PO_STATUS_VIAGEM (lib/po-view.php) e do check do banco. */
-const STATUS_VIAGEM=Object.assign(Object.create(null),{em_breve:'Em breve',ultimas_vagas:'Últimas vagas',esgotado:'Vagas esgotadas',em_viagem:'Em viagem'});
+const STATUS_VIAGEM=Object.assign(Object.create(null),{semanal:'Saídas semanais',em_breve:'Em breve',ultimas_vagas:'Últimas vagas',esgotado:'Vagas esgotadas',em_viagem:'Em viagem'});
 function pubHref(slug){return '../roteiros/'+encodeURIComponent(slug);}
 $('#rot-refresh').onclick=async()=>{await reloadRoteiros();toast('Lista de roteiros atualizada. O site já reflete os ativos.');};
 /* "Ver" abre a PRÉ-VISUALIZAÇÃO: POST com o token do login e o id. A página

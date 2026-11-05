@@ -272,6 +272,7 @@ tbody tr:last-child td{border-bottom:none}
 .rcard__off{position:absolute;top:8px;left:8px;background:rgba(20,26,34,.8);color:#fff;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:5px}
 /* status da viagem: mesmas cores do site (style.css / roteiro.css) */
 .rcard__img .st-tag{position:absolute;top:8px;right:8px;font-size:.6rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:5px}
+.st-tag--semanal{background:#1FA8DD;color:#2C2B2B}
 .st-tag--em_breve{background:#FFC72C;color:#2C2B2B}
 .st-tag--ultimas_vagas{background:#F07C1A;color:#2C2B2B}
 .st-tag--em_viagem{background:#1E8E3E;color:#fff}

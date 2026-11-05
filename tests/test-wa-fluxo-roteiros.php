@@ -19,6 +19,17 @@ $v = wa_fluxo_roteiros_venda($cat);
    fim. Ver tests/test-wa-roteiro-ordem.php. */
 ok(array_column($v,'slug') === ['chile','vietna','peru'], 'so o que esta a venda, em ordem de data: ' . implode(',', array_column($v,'slug')));
 
+/* TRAVA, nao correcao: um roteiro que sai TODA SEMANA sumir da lista do robo
+   e o pior defeito possivel do status 'semanal'. wa_fluxo_roteiros_venda so
+   exclui 'esgotado' e 'em_viagem', entao isto ja passa hoje - existe para
+   ficar vermelho no dia em que alguem acrescentar 'semanal' aquela lista. */
+$comSemanal = array_merge($cat, [
+  ['slug'=>'peru-semanal','titulo'=>'Peru Completo','periodo'=>'','ativo'=>true,'status_viagem'=>'semanal'],
+]);
+$vs = array_column(wa_fluxo_roteiros_venda($comSemanal), 'slug');
+ok(in_array('peru-semanal', $vs, true), 'roteiro semanal continua a venda: ' . implode(',', $vs));
+ok(!in_array('turquia', $vs, true) && !in_array('japao', $vs, true), 'esgotado e em_viagem seguem fora: ' . implode(',', $vs));
+
 $txt = wa_fluxo_lista_roteiros($v);
 ok(strpos($txt, '1.') === 0, 'numera a partir de 1');
 ok(strpos($txt, 'Peru') !== false && strpos($txt, '3.') !== false, 'em_breve entra mesmo sem data');

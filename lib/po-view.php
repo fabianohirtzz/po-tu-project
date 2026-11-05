@@ -25,6 +25,35 @@ function po_e($s) {
 function po_url($path) { return PO_BASE . '/' . ltrim((string) $path, '/'); }
 function po_roteiro_href($r) { return '/roteiros/' . rawurlencode($r['slug']); }
 
+/* Status da viagem (po_roteiros.status_viagem). A chave vira a classe de cor
+   (st-tag--<chave>), entao so sai tag para valor desta lista: qualquer outra
+   coisa nao emite nada, nem classe. Mesma lista em roteiros-shared.js. */
+const PO_STATUS_VIAGEM = [
+    'semanal'       => 'Saídas semanais',
+    'em_breve'      => 'Em breve',
+    'ultimas_vagas' => 'Últimas vagas',
+    'esgotado'      => 'Vagas esgotadas',
+    'em_viagem'     => 'Em viagem',
+];
+function po_status_tag($r, $extra = '') {
+    $k = $r['status_viagem'] ?? null;
+    if (!is_string($k) || !isset(PO_STATUS_VIAGEM[$k])) return '';
+    return '<span class="st-tag st-tag--' . $k . ($extra ? ' ' . $extra : '') . '">' . PO_STATUS_VIAGEM[$k] . '</span>';
+}
+
+/* Cadastur (Ministerio do Turismo): a agencia e cadastrada como Agencia de
+   Turismo. O link e o do QR code do proprio certificado, a consulta publica
+   oficial; a validade (25/03/2027) NAO vai para o site, para nao publicar data
+   vencida se ninguem atualizar. O cadastro e da EMPRESA: nao autoriza chamar
+   o acompanhante de "guia" (guia tem Cadastur proprio, de pessoa fisica).
+   Mesmo markup copiado no rodape das paginas .html (test-cadastur.php). */
+const PO_CADASTUR_URL = 'https://cadastur.turismo.gov.br/cadastur/#!/public/qrcode/05622878000182';
+function po_cadastur_selo($extra = '') {
+    return '<a class="cad-selo' . ($extra ? ' ' . $extra : '') . '" href="' . PO_CADASTUR_URL . '" target="_blank" rel="noopener">'
+        . '<img src="/assets/images/cadastur.png" alt="Cadastur" width="150" height="25" loading="lazy" decoding="async">'
+        . '<span><b>Agência de turismo cadastrada no Ministério do Turismo</b>Consulte o cadastro oficial</span></a>';
+}
+
 /* Sanitiza uma URL antes dela entrar num atributo style="...url('...')".
    po_e() escapa aspas para a entidade &#039;, mas o parser de HTML DECODIFICA
    a entidade antes do CSS ler o atributo style - ou seja, a entidade nao
@@ -117,9 +146,10 @@ function po_header() {
     <a href="/" class="hd__logo" aria-label="Pereira Oliveira Turismo"><img src="/assets/images/logo.png" alt="Pereira Oliveira Turismo"></a>
     <nav class="hd__nav">
       <a href="/">Início</a>
-      <a href="/nossa-historia.html">Nossa História</a>
+      <a href="/nossa-historia">Nossa História</a>
       <a href="/roteiros">Roteiros</a>
-      <a href="/contato.html">Contato</a>
+      <a href="/perguntas-frequentes">FAQ</a>
+      <a href="/contato">Contato</a>
     </nav>
     <div class="hd__actions">
       <a class="hd__cta" href="#contato">
@@ -139,9 +169,10 @@ function po_header() {
     <nav class="sheet__panel">
       <button class="sheet__close" id="sheet-close" aria-label="Fechar menu">×</button>
       <a href="/">Início</a>
-      <a href="/nossa-historia.html">Nossa História</a>
+      <a href="/nossa-historia">Nossa História</a>
       <a href="/roteiros">Roteiros</a>
-      <a href="/contato.html">Contato</a>
+      <a href="/perguntas-frequentes">FAQ</a>
+      <a href="/contato">Contato</a>
       <a class="hd__cta" href="#contato">
         <svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4-8 5-8-5V6l8 5 8-5v2Z"/></svg>
         Contato
@@ -182,21 +213,23 @@ function po_footer() {
             <svg class="ic-fill" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18a8 8 0 0 1-4.1-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8 8 0 1 1 12 20Zm4.4-6c-.2-.1-1.4-.7-1.6-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.5 6.5 0 0 1-1.9-1.2 7.3 7.3 0 0 1-1.4-1.7c-.1-.2 0-.4.1-.5l.4-.5c.1-.2.2-.3.3-.5 0-.2 0-.3 0-.5l-.8-1.9c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.2.3-.9.9-.9 2.1 0 1.2.9 2.4 1 2.6.1.2 1.7 2.7 4.2 3.8.6.3 1 .4 1.4.5.6.2 1.1.2 1.5.1.5-.1 1.4-.6 1.6-1.1.2-.6.2-1 .1-1.1Z"/></svg>
           </a>
         </div>
+        <a class="ft__cad" href="https://cadastur.turismo.gov.br/cadastur/#!/public/qrcode/05622878000182" target="_blank" rel="noopener"><img src="/assets/images/cadastur.png" alt="Cadastur" width="132" height="22" loading="lazy" decoding="async"><span>Agência cadastrada no Ministério do Turismo</span></a>
       </div>
       <div>
         <h4>Navegar</h4>
         <div class="ft__links">
           <a href="/">Início</a>
-          <a href="/nossa-historia.html">Nossa História</a>
+          <a href="/nossa-historia">Nossa História</a>
           <a href="/roteiros">Roteiros</a>
-          <a href="/contato.html">Contato</a>
-          <a href="/politica-de-privacidade.html">Política de Privacidade</a>
+          <a href="/contato">Contato</a>
+          <a href="/perguntas-frequentes">Perguntas frequentes</a>
+          <a href="/politica-de-privacidade">Política de Privacidade</a>
         </div>
       </div>
       <div>
         <h4>Contato</h4>
         <div class="ft__links">
-          <a href="/contato.html">Fale conosco</a>
+          <a href="/contato">Fale conosco</a>
           <a href="tel:+5548996048882">(48) 99604-8882</a>
           <a href="https://instagram.com/pereiraoliveiraturismo" target="_blank" rel="noopener">@pereiraoliveiraturismo</a>
           <a href="https://maps.google.com/?q=Rua+Almirante+Lamego+1090+Florianópolis" target="_blank" rel="noopener">Rua Almirante Lamego 1090, sala 801, Centro, Florianópolis/SC</a>
@@ -204,9 +237,8 @@ function po_footer() {
       </div>
     </div>
     <div class="ft__bottom">
+      <span class="ft__credit"><span>✈️ Sites prontos para decolar.</span><span>Desenvolvido por: <a href="https://www.freelainhome.com.br/" target="_blank" rel="noopener">Freela In Home</a>.</span></span>
       <span>© Pereira Oliveira Consultoria em Turismo e Viagens LTDA · CNPJ 05.622.878/0001-82</span>
-      <span class="ft__credit">Desenvolvido por <a href="https://www.freelainhome.com.br/" target="_blank" rel="noopener">Freela In Home</a></span>
-      <span>Florianópolis · Santa Catarina</span>
     </div>
   </footer>
 
