@@ -53,11 +53,13 @@ if (!in_array($modo, ['conferir', 'criar', 'listar', 'ensaio'], true)) {
     tfail(400, 'Modo inválido.');
 }
 
-/* Quantas variaveis o texto deve ter. Vem da tela porque a transmissao usa
-   uma ({{1}} = nome) e um aviso operacional pode nao usar nenhuma. O padrao
-   e 1: e o caso que custa dinheiro se estiver errado. */
-$exemplo   = tpost('exemplo');
-$exemplos  = $exemplo === '' ? [] : [$exemplo];
+/* Quantas variaveis o texto deve ter: UMA POR EXEMPLO, e a tela manda os
+   exemplos separados por virgula. A transmissao de hoje usa uma ({{1}} =
+   nome), a da lista de espera usa duas ({{2}} = destino), e um aviso
+   operacional pode nao usar nenhuma.
+   Quem separa e wa_tpl_exemplos, nunca este arquivo: tela que julga diferente
+   do envio aprova o que a Meta recusa. */
+$exemplos  = wa_tpl_exemplos(tpost('exemplo'));
 /* Sem trim, ao contrario dos outros campos: espaco ou quebra de linha nas
    pontas E um dos defeitos que a Meta recusa, entao aparar aqui esconderia o
    problema da tela e a recusa voltaria da Meta horas depois. */

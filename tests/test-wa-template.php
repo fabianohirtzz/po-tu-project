@@ -258,6 +258,45 @@ ok(wa_tpl_aprovado('po_novidade') === null, 'Meta fora devolve null, nao false')
 ok(wa_tpl_idioma('po_novidade') === null, 'e o idioma tambem vem null');
 
 /* ============================================================
+   UM EXEMPLO POR VARIAVEL
+   A aba Modelos nasceu quando todo modelo da casa tinha UMA variavel
+   ({{1}} = nome), e o endpoint montava a lista de exemplos com um item fixo.
+   O primeiro modelo de duas variaveis ("abriu data para a Italia") era, por
+   isso, impossivel de submeter pela tela: o texto tem 2 variaveis, a lista
+   tinha 1 exemplo, e wa_tpl_problemas recusava - com razao, porque a Meta
+   recusaria igual, so que horas depois e por e-mail.
+
+   Separador por VIRGULA, que e o mesmo da casa em `palavras` e em
+   `gatilho_valor`. Pura, entao se exercita sem rede.
+============================================================ */
+ok(wa_tpl_exemplos('') === [], 'campo vazio e nenhum exemplo (modelo sem variavel)');
+ok(wa_tpl_exemplos('   ') === [], 'so espaco tambem');
+ok(wa_tpl_exemplos('Maria') === ['Maria'], 'um exemplo continua sendo um exemplo (a tela de antes nao quebra)');
+ok(wa_tpl_exemplos('Ana, Itália') === ['Ana', 'Itália'], 'dois exemplos, aparados');
+ok(wa_tpl_exemplos('Ana,Itália,Março') === ['Ana', 'Itália', 'Março'], 'tres, sem espaco');
+ok(wa_tpl_exemplos('Ana, , Itália') === ['Ana', 'Itália'], 'entrada vazia no meio nao vira exemplo vazio: a Meta recusa exemplo em branco');
+ok(wa_tpl_exemplos('Ana,') === ['Ana'], 'virgula sobrando no fim tambem nao');
+/* A ordem e DADO: o primeiro exemplo e de {{1}}, o segundo de {{2}}. Trocar a
+   ordem faz a Meta revisar "Oi Italia, abriu data para a Ana". */
+ok(wa_tpl_exemplos('Ana, Itália')[0] === 'Ana', 'a ordem e preservada: o primeiro e o de {{1}}');
+
+/* E o casamento que isto existe para permitir: duas variaveis, dois exemplos. */
+$corpo2 = 'Oi {{1}}, tudo bem? Boa notícia: abriu data nova para {{2}}, o destino que você pediu para a gente avisar. Quer que eu te mande o roteiro completo, com o dia a dia da viagem e os valores?';
+ok(wa_tpl_problemas($corpo2, count(wa_tpl_exemplos('Ana, Itália'))) === [],
+   'o texto de duas variaveis passa com dois exemplos: ' . json_encode(wa_tpl_problemas($corpo2, 2), JSON_UNESCAPED_UNICODE));
+ok(wa_tpl_problemas($corpo2, count(wa_tpl_exemplos('Ana'))) !== [],
+   'e com um exemplo so ele e recusado AQUI, e nao pela Meta horas depois');
+
+/* O ENDPOINT TEM DE USAR A FUNCAO, nao remontar a lista por conta propria: a
+   tela que julga diferente do envio aprova o que a Meta recusa, que e a regra
+   que este subsistema inteiro existe para honrar. */
+$tsrc = str_replace("\r\n", "\n", file_get_contents(__DIR__ . '/../templates.php'));
+ok(preg_match('/\$exemplos\s*=\s*wa_tpl_exemplos\(/', $tsrc) === 1,
+   'o templates.php monta os exemplos pela funcao travada, uma vez so');
+ok(strpos($tsrc, "[\$exemplo]") === false,
+   'e nao existe mais a lista de UM item fixo, que era o que impedia o modelo de duas variaveis');
+
+/* ============================================================
    ASSERCAO DE FONTE
    A trava fica no PONTO DE CHAMADA. Se a validacao sair de dentro de
    wa_tpl_cria e ficar so na tela, existe caminho que submete sem ela.

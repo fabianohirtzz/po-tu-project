@@ -139,6 +139,28 @@ function wa_tpl_problemas($corpo, $esperadas = 1) {
     return $p;
 }
 
+/* UM EXEMPLO POR VARIAVEL, separados por virgula - o mesmo separador que a
+   casa usa em `palavras` e em `gatilho_valor`.
+
+   Ela existe porque a aba Modelos nasceu quando todo modelo tinha UMA
+   variavel ({{1}} = nome) e o endpoint montava a lista com um item fixo. O
+   primeiro modelo de duas variaveis era, por isso, impossivel de submeter
+   pela tela: 2 variaveis contra 1 exemplo, e wa_tpl_problemas recusava com
+   razao (a Meta recusaria igual, so que horas depois e por e-mail).
+
+   A ORDEM E DADO: o primeiro exemplo e o de {{1}}, o segundo o de {{2}}.
+   Entrada vazia nao vira exemplo em branco, que a Meta tambem recusa.
+
+   Pura. */
+function wa_tpl_exemplos($csv) {
+    $out = [];
+    foreach (explode(',', (string) $csv) as $x) {
+        $x = trim($x);
+        if ($x !== '') $out[] = $x;
+    }
+    return $out;
+}
+
 /* ------------------------------------------------------------
    Os componentes do template. O exemplo e OBRIGATORIO quando ha variavel: a
    Meta usa ele para revisar e recusa sem ele.
