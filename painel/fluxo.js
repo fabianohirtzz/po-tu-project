@@ -98,6 +98,7 @@ function poFluxoCard(card, porId, inicial) {
   if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg); } catch (e) { cfg = null; } }
   const dinamica = c.tipo === 'lista' && !!cfg && typeof cfg === 'object' && cfg.fonte === 'roteiros';
   if (c.proximo) saidas.push(saida(dinamica ? 'Depois de escolher' : 'Depois', c.proximo));
+  if (poFluxoSemanal(c)) saidas.push(saida('Se o roteiro tiver saídas semanais', poFluxoSemanal(c)));
   if (c.fallback) saidas.push(saida('Não entendeu', c.fallback));
   if (c.sem_resposta) saidas.push(saida('Sem resposta', c.sem_resposta));
 
@@ -117,6 +118,15 @@ function poFluxoCard(card, porId, inicial) {
     (saidas.length ? '<ul class="fl-saidas">' + saidas.join('') + '</ul>' : '') +
     (editavel ? '<button type="button" class="fl-card__editar">Editar texto</button>' : '') +
     '</article>';
+}
+
+/* O desvio do roteiro de saidas semanais (`config.se_semanal`), ou null. E uma
+   saida do card como `proximo`: entra na lista, na seta e no alcance. */
+function poFluxoSemanal(c) {
+  let cfg = c && c.config;
+  if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg); } catch (e) { cfg = null; } }
+  const d = cfg && typeof cfg === 'object' ? cfg.se_semanal : null;
+  return d == null || d === '' ? null : String(d);
 }
 
 // A coluna de cards de um fluxo. O card inicial vem marcado.
@@ -169,6 +179,9 @@ function poFluxoCanvas(fluxo) {
     });
     [c.proximo, c.fallback, c.sem_resposta].forEach(function (d) {
       if (d != null && d !== '') saidas.push(16 + (porId[d] ? String(porId[d].titulo || '').length : 24));
+    });
+    [poFluxoSemanal(c)].forEach(function (d) {
+      if (d != null) saidas.push(36 + (porId[d] ? String(porId[d].titulo || '').length : 24));
     });
     let h = 28 + 20 + 28 * Math.ceil(String(c.titulo || '(sem título)').length / 20);
     const previa = poFluxoPrevia(c.texto);
@@ -228,7 +241,7 @@ function poFluxoCanvas(fluxo) {
     if (c.id == null) return;
     const destinos = [];
     poFluxoOpcoes(c.opcoes).forEach(function (o) { destinos.push(o.destino); });
-    destinos.push(c.proximo, c.fallback, c.sem_resposta);
+    destinos.push(c.proximo, c.fallback, c.sem_resposta, poFluxoSemanal(c));
     destinos.filter(function (d) {
       return d != null && d !== '' && Object.prototype.hasOwnProperty.call(pos, d);
     }).forEach(function (d) {
@@ -627,7 +640,7 @@ function poFluxoOrfaos(card_id, opcoes_depois, cards, inicial) {
   todos.forEach(function (c) {
     const dele = String(c.id) === String(card_id);
     poFluxoOpcoes(dele ? opcoes_depois : c.opcoes).forEach(function (o) { marca(o.destino); });
-    marca(c.proximo); marca(c.fallback); marca(c.sem_resposta);
+    marca(c.proximo); marca(c.fallback); marca(c.sem_resposta); marca(poFluxoSemanal(c));
   });
   const vistos = Object.create(null);
   const saida = [];

@@ -35,7 +35,8 @@ const PURAS_NOMES = ['poFluxoTipos', 'poFluxoTipo', 'poFluxoOpcoes', 'poFluxoPre
                      'poFluxoEstado', 'poFluxoPorqueNao', 'poFluxoBarra', 'poFluxoResultado', 'poFluxoCardCulpado', 'poFluxoPodeLigar', 'poFluxoTextoLigar',
                      'poFluxoRemoveOpcao', 'poFluxoOpcoesSem', 'poFluxoContagem', 'poFluxoOrfaos', 'poFluxoAvisoRemocao', 'poFluxoCardFinal',
                      'poFluxoZoomNum', 'poFluxoZoomEscada', 'poFluxoZoomPasso', 'poFluxoZoomAjuste', 'poFluxoZoomPalco', 'poFluxoZoomBarra',
-                     'poAtalhoTipos', 'poAtalhoRotulo', 'poFluxoAtalhos', 'poFluxoTemAtalho', 'poFluxoAtalhosLimpos', 'poFluxoSecaoAtalhos'];
+                     'poAtalhoTipos', 'poAtalhoRotulo', 'poFluxoAtalhos', 'poFluxoTemAtalho', 'poFluxoAtalhosLimpos', 'poFluxoSecaoAtalhos',
+                     'poFluxoSemanal'];
 const F = new Function(ESC + PURAS_NOMES.map(pega).join('\n') +
   '; return {' + PURAS_NOMES.join(',') + '};')();
 
@@ -2330,4 +2331,30 @@ const cardsAt = [
   assert.ok(lock['fluxo.css'].v >= 10, 'e o do fluxo.css tambem (esta em ' + lock['fluxo.css'].v + ')');
 }
 
+
+/* ---------- desvio do roteiro de saidas semanais (09/11/2026) ----------
+   `config.se_semanal` e uma saida como o `proximo`: aparece na lista do card,
+   vira seta no canvas e conta no alcance (senao o card do Peru, alcancado so
+   por ele, apareceria como orfao). */
+{
+  assert.equal(F.poFluxoSemanal({ config: { se_semanal: 'sem' } }), 'sem');
+  assert.equal(F.poFluxoSemanal({ config: '{"se_semanal":"sem"}' }), 'sem', 'config em texto (como vem do banco)');
+  assert.equal(F.poFluxoSemanal({ config: {} }), null);
+  assert.equal(F.poFluxoSemanal({}), null);
+  const cMarca = { id: 'm', tipo: 'marca', titulo: 'Marca interesse', proximo: 'dt', config: { se_semanal: 'sem' } };
+  const mapa = { dt: { id: 'dt', titulo: 'A data serve?' }, sem: { id: 'sem', titulo: 'Saídas semanais' } };
+  const html = F.poFluxoCard(cMarca, mapa);
+  assert.ok(html.includes('Se o roteiro tiver saídas semanais') && html.includes('Saídas semanais'), 'o card lista o desvio');
+  const canvas = F.poFluxoCanvas({ card_inicial: 'm', cards: [
+    Object.assign({ x: 0, y: 0 }, cMarca),
+    { id: 'dt', tipo: 'botoes', titulo: 'A data serve?', x: 320, y: 0 },
+    { id: 'sem', tipo: 'botoes', titulo: 'Saídas semanais', x: 320, y: 400 }] });
+  const semDesvio = F.poFluxoCanvas({ card_inicial: 'm', cards: [
+    Object.assign({ x: 0, y: 0 }, cMarca, { config: {} }),
+    { id: 'dt', tipo: 'botoes', titulo: 'A data serve?', x: 320, y: 0 },
+    { id: 'sem', tipo: 'botoes', titulo: 'Saídas semanais', x: 320, y: 400 }] });
+  assert.ok(conta(canvas, '<path') === conta(semDesvio, '<path') + 1, 'o desvio vira uma seta a mais no canvas');
+  const cards = [cMarca, { id: 'x', tipo: 'botoes', opcoes: [{ id: 'o', rotulo: 'O', destino: 'sem' }] }, { id: 'sem', tipo: 'botoes' }];
+  assert.deepEqual(F.poFluxoOrfaos('x', [], cards, 'm'), [], 'o desvio conta como entrada: tirar o botao nao deixa o card orfao');
+}
 console.log('test-fluxo-painel OK');

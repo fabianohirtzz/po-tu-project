@@ -449,6 +449,15 @@ function wa_fluxo_proximo($grafo, $card_id, $resposta, $ctx, $texto_cru = '') {
 
     // Card que nao espera nunca olha a resposta.
     if (!in_array($tipo, WA_CARD_ESPERA, true)) {
+        /* Desvio do roteiro de SAIDAS SEMANAIS (09/11/2026): o Peru sai toda
+           semana e nao tem data para confirmar. Quem sabe se o roteiro e
+           semanal e o executor (que le o catalogo); aqui so se le a marca que
+           ele deixou no contexto. Motivo 'proximo' de proposito: motor e
+           simulador seguem andando sem um caso a mais. */
+        $semanal = $card['config']['se_semanal'] ?? null;
+        if (!empty($ctx['roteiro_semanal']) && $semanal !== $card_id && $existe($semanal)) {
+            return ['card' => $semanal, 'ctx' => $ctx, 'motivo' => 'proximo'];
+        }
         if ($existe($card['proximo'] ?? null)) {
             return ['card' => $card['proximo'], 'ctx' => $ctx, 'motivo' => 'proximo'];
         }
@@ -643,6 +652,9 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
         $ids[] = $c['fallback'];
         if ($com_sr) $ids[] = $c['sem_resposta'];
         foreach (wa_atalhos_do_card($c) as $a) $ids[] = $a['destino'];
+        // O desvio do roteiro semanal e saida de verdade: o card das saidas
+        // semanais e alcancado SO por ele.
+        $ids[] = $c['config']['se_semanal'] ?? null;
         return array_values(array_unique(array_filter($ids, $existe)));
     };
 
@@ -662,6 +674,20 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
             if ($c[$k] !== null && !$existe($c[$k])) {
                 $acha(1, $id, 'No card ' . $nome($id) . ', ' . $rot . ' aponta para um card que não existe mais.');
             }
+        }
+    }
+
+    /* 18. O desvio do roteiro de saidas semanais (`config.se_semanal`). So vale
+       em card que NAO espera: no que espera, quem decide o caminho e a
+       resposta, e o desvio seria ignorado em silencio. */
+    foreach ($C as $id => $c) {
+        if (!array_key_exists('se_semanal', $c['config'])) continue;
+        $d = $c['config']['se_semanal'];
+        if ($d === null || $d === '') continue;
+        if ($espera($c) || in_array($c['tipo'], WA_CARD_TERMINAL, true) || $c['tipo'] === 'ir_para_fluxo') {
+            $acha(18, $id, 'O card ' . $nome($id) . ' tem um caminho para roteiro de saídas semanais, mas esse caminho só funciona em card que segue sozinho para o próximo.');
+        } elseif (!$existe($d) || $d === $id) {
+            $acha(18, $id, 'No card ' . $nome($id) . ', o caminho para roteiro de saídas semanais não leva a nenhum outro card que exista.');
         }
     }
 
@@ -910,6 +936,8 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
     foreach ($C as $id => $c) {
         if ($c['tipo'] !== 'marca') continue;
         foreach ($c['config'] as $k => $v) {
+            // Caminho, nao campo da ficha: quem confere e a regra 18.
+            if ($k === 'se_semanal') continue;
             if (!in_array($k, WA_FLUXO_CAMPOS_MARCAVEIS, true)) {
                 $acha(10, $id, 'O card ' . $nome($id) . ' tenta mudar o campo "' . $k . '", que um fluxo não pode alterar.');
             } elseif ($k === 'status' && !in_array($v, WA_FLUXO_STATUS_PERMITIDOS, true)) {
@@ -1252,6 +1280,10 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
             $ctx['roteiro_slug'] = null;
         }
     }
+    // A marca que o desvio `se_semanal` le no roteador. Anotada a cada card,
+    // nunca guardada na conversa: o roteiro pode mudar de status entre duas
+    // mensagens, e o executor e quem tem o catalogo na mao.
+    $ctx['roteiro_semanal'] = $roteiro !== null && ($roteiro['status_viagem'] ?? null) === 'semanal';
 
     $corpo = wa_fluxo_texto((string) ($card['texto'] ?? ''), wa_fluxo_vars_do_roteiro($roteiro, $nome, $ctx));
     $vazio = trim($corpo) === '';
