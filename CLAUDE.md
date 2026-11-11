@@ -1762,6 +1762,62 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     navegador: 7 cards na mesma ordem, requisicao real ao projeto
     `euzmbswywwhmicjlszqw` (nao mock), zero erro de console. O robo segue desligado
     (webhook 403, cron 403, campanha 401, `fluxo.php` 401, `lib/` servindo 0 bytes).
+- **AJUSTES DA REUNIAO DE 09/11 COM A LAIS (11/11/2026).** Branch `robo-frase`,
+  commits `bb95b16`, `9b67a51`, `4f4cbf3`, `60025bc`; suite em **94** arquivos.
+  - **A BRANCH `robo-frase` NAO ESTAVA PUBLICADA**, ao contrario do que parecia:
+    a triagem por hash em 11/11 achou `lib/wa-espera.php` **ausente** no servidor e
+    `wa-motor`/`wa-sim`/`wa-timeout`/`fluxo.css`/`simulador.js` diferentes (o
+    painel servia `fluxo.js?v=22`). As migrations de 05/11 ja tinham rodado. Foi
+    tudo publicado em 11/11, conferido arquivo a arquivo por hash.
+  - **Caminho do roteiro de SAIDAS SEMANAIS (Peru).** Card que NAO espera pode ter
+    `config.se_semanal` (id de card); o executor anota `roteiro_semanal` no contexto
+    (ele tem o catalogo) e o roteador desvia, com motivo `proximo` (motor e
+    simulador seguem sem caso novo). Regra **18** do validador (desvio so em card
+    que nao espera, para card que existe e nao e ele mesmo); a regra 10 pula a
+    chave porque ela e caminho, nao campo da ficha. No painel e saida do card,
+    seta no canvas e conta no alcance (`poFluxoSemanal`). No rascunho: "Marca
+    interesse" desvia para **"Saidas semanais: o roteiro atende?"** (023) e
+    "Repete: o roteiro atende?" (024), botoes "Falar com a equipe" (-> 008, que
+    qualifica, -> "A Lais assume") e "Ver outros roteiros" (-> "Qual viagem?").
+    **Ficou DENTRO da triagem, nao em fluxo separado:** "Ver outros roteiros" volta
+    para a triagem, e dois fluxos que saltam um para o outro nunca poderiam ser
+    ligados (a regra 11 exige o destino do salto ja ligado). Medido no simulador
+    com o grafo real: Peru -> PDF -> card novo; Chile segue em "A data serve?".
+    **Antes disto o Peru receberia "programada para na data prevista".**
+  - **Coluna "Lista de espera" no funil** (status `espera`, antes de Perdido). O
+    card "Anota o destino na espera" grava `status: espera`, entao quem toca em
+    "Sim, tenho interesse" cai sozinho nela. **O robo nunca troca o status de quem
+    esta em `negociacao` ou `venda`** (`WA_FLUXO_STATUS_INTOCAVEIS`); se a leitura
+    do status falhar, vale a regra antiga do marca (grava e segue).
+  - **Clique simples no card do funil abre a gaveta** (era duplo clique, e a
+    cliente achava que nada acontecia). No celular segue o menu de etapas.
+  - **A gaveta mostra o que o robo sabe:** link do WhatsApp, "Roteiro de interesse"
+    (o NOME), "Roteiros que pediu" e a lista de espera ativa. O marca `+roteiro`
+    passou a gravar `po_leads.roteiro` com o nome: `WA_FLUXO_CAMPOS_DERIVADOS`,
+    lista fechada **separada** da whitelist do config (a cliente nao configura
+    isso; a trava de "nada fora da whitelist" confere as duas). Lead de anuncio
+    mostra "Anuncio <ad_id>" em Campanha (o motor ja gravava `ad_id`/`ctwa_clid`).
+  - **Transmissao segmentada.** Seletor "Quem recebe": todos os clientes, quem
+    **pediu um roteiro** (slug em `interesses` pelo robo, ou o nome em `roteiro`
+    pelo formulario do site) ou a **lista de espera** de um destino. Quem entra por
+    segmento PEDIU, entao nao passa pela Revisao; SAIR (por numero, de qualquer
+    ficha), fixo e "Nao e cliente" seguem valendo. **O segmento fica gravado em
+    `po_wa_campanhas.segmento` e a reserva le de la, nunca da tela** (ela recalcula
+    o publico a cada pedaco). Segmento ilegivel e **recusado, nunca vira "todos"**.
+    Quem esta na lista de espera tambem entra em "todos", como quem perdeu pela data.
+  - **Local de saida do roteiro:** campo "Saida" na gaveta do roteiro, linha em
+    destaque so no hero da pagina do roteiro (nada na home nem nos cards).
+    **Coluna nova `po_roteiros.saida`: migration `2026-11-11-roteiro-saida.sql`
+    tem que rodar no SQL Editor ANTES de publicar o painel** (o salvamento manda
+    `saida` em todo roteiro; sem a coluna a aba Roteiros para de salvar).
+  - **No ar em 11/11:** robo e motor (`lib/wa-*`), funil e gaveta (painel
+    `app.js?v=25`, `funil.js?v=2`, `fluxo.js?v=25`), backend da transmissao, e o
+    lado do site da saida (`roteiro.css?v=13` em todas as paginas). **Fora do ar
+    ate a migration da saida:** `painel/app.js?v=26`, `campanhas.js?v=3` e o
+    `painel/index.html` que pede os dois.
+  - **Rascunho do fluxo alterado por REST com a service_role** (o MCP do Supabase
+    estava fora): so cards novos e chaves novas no `config` de dois cards, com o
+    resto conferido identico antes/depois. Nada publicado, nada ligado.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro
