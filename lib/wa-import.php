@@ -41,8 +41,11 @@ function wa_import_tem_marcador($nome, $padroes = null) {
    grafia varia entre os dois aparelhos", entao marcador no comeco e no meio
    sao caso esperado, nao exotico - e a versao anterior so o removia quando
    ele estava no fim ('/\bpo\b\s*$/'), deixando "PO - Joao Silva" e
-   "Maria PO Turquia" entrarem com o marcador dentro do nome que o robo usa
-   para cumprimentar a pessoa no WhatsApp.
+   "Maria PO Turquia" entrarem com o marcador dentro do nome da ficha.
+   (CORRECAO 11/11/2026: o robo NAO usa o nome da pessoa em mensagem nenhuma,
+   porque o nome do perfil do WhatsApp muitas vezes nem e nome. O marcador
+   sai so para a ficha ficar limpa; o nome original fica em payload_import,
+   e a aba Revisao o mostra.)
 
    Duas regras, nesta ordem:
 
@@ -58,8 +61,8 @@ function wa_import_tem_marcador($nome, $padroes = null) {
       regra: um nome inteiro nao pode evaporar por causa de um numero.
 
    O custo conhecido: "Maria Silva 2" (duas Marias na agenda) perde o
-   "Silva". Preferi isso a manter a poluicao, porque o nome vai para a
-   saudacao do robo e o original continua guardado em payload_import.
+   "Silva". Preferi isso a manter a poluicao, e o original continua guardado
+   em payload_import.
 
    Nome sem marcador nenhum ("Poliana", "Porto Alegre", "Campos", "Apolo",
    "Napoleao") atravessa intacto: o marcador so casa com \b...\b. */

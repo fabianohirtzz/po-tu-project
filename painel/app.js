@@ -126,6 +126,8 @@ function mapRow(r){
     /* Triagem dos contatos importados (spec 8.1). origemImport vazio = lead do
        formulario do site, que nunca passa pela fila de revisao. */
     origemImport:r.origem_import||'',revisado:r.revisado===true,cliente:r.cliente===true,
+    // o cartao da agenda: a Revisao mostra o nome original, com o PO/CIASC
+    agendaRaw:(r.payload_import&&typeof r.payload_import.raw==='string')?r.payload_import.raw:'',
     interesses:Array.isArray(r.interesses)?r.interesses:[],
     // perdeu por data (robo ou caixa da gaveta): entra na transmissao
     perdeuData:r.qualif_data===false};
@@ -207,6 +209,7 @@ if($('#rev-cliente'))$('#rev-cliente').onclick=()=>poRevMarcar(true);
 if($('#rev-naocliente'))$('#rev-naocliente').onclick=()=>poRevMarcar(false);
 if($('#rev-todos'))$('#rev-todos').onchange=e=>poRevAplicaTodos($$('#rev-rows .rev-chk'),e.target.checked);
 if($('#rev-revisados'))$('#rev-revisados').onchange=()=>poRenderRevisao();
+if($('#rev-marcador'))$('#rev-marcador').onchange=()=>poRenderRevisao();
 
 $$('#orig-filter .chip').forEach(c=>c.onclick=()=>{$$('#orig-filter .chip').forEach(x=>x.classList.remove('active'));c.classList.add('active');F.orig=c.dataset.orig;renderLeads();if($('#view-clientes').classList.contains('on'))poRenderClientes();if($('#view-funil').classList.contains('on'))poRenderFunil();});
 

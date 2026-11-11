@@ -26,7 +26,7 @@ const ESC = 'function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,' +
 const LOTE_SRC = (src.match(/var PO_REV_LOTE\s*=\s*\d+;/) || [])[0];
 assert.ok(LOTE_SRC, 'PO_REV_LOTE definido no revisao.js');
 
-const PURAS = ESC + LOTE_SRC + pega('poRevFiltra') + pega('poLinhaRevisaoContato') +
+const PURAS = ESC + LOTE_SRC + pega('poRevFiltra') + pega('poRevNomeAgenda') + pega('poRevMarcador') + pega('poLinhaRevisaoContato') +
   pega('poRevChkPendente') + pega('poRevAplicaTodos') + pega('poRevContaRevisados') +
   pega('poRevConfirmaTexto') + pega('poRevLotes') + pega('poRevResultadoTexto');
 
@@ -455,5 +455,33 @@ assert.ok(!/A agenda tem médico, fornecedor e família/.test(painel),
 /* O cache-buster mora em tests/test-cache-buster.mjs, amarrado ao SHA de cada
    arquivo. Aqui ficavam pinos no numero (['app.js', 8]), que exigiam edicao
    manual a cada mudanca e nao sabiam dizer se o conteudo tinha mexido. */
+
+
+/* ---------- o nome como esta NA AGENDA, e a etiqueta PO/CIASC (11/11/2026) ----------
+   O importador tira o marcador do nome (o robo cumprimenta por ele), e a Lais
+   nao conseguia ver na Revisao quem veio marcado com PO e quem veio do CIASC. */
+{
+  const c2 = new Function(ESC + pega('poRevNomeAgenda') + pega('poRevMarcador') + pega('poRevPorMarcador') +
+    pega('poLinhaRevisaoContato') + '; return {poRevNomeAgenda, poRevMarcador, poRevPorMarcador, poLinhaRevisaoContato};')();
+  const raw = 'BEGIN:VCARD\nVERSION:3.0\nN:Exemplo;Ana;;;\nFN:Ana Exemplo - Cliente PO\nitem1.TEL:+5548999990001\nEND:VCARD';
+  assert.equal(c2.poRevNomeAgenda(raw), 'Ana Exemplo - Cliente PO', 'le o FN do cartao guardado');
+  assert.equal(c2.poRevNomeAgenda(raw.replace(/\n/g, '\r\n')), 'Ana Exemplo - Cliente PO', 'cartao com CRLF');
+  assert.equal(c2.poRevNomeAgenda('{"nome":"X"}'), '', 'ficha do CRM (JSON) nao tem nome de agenda');
+  assert.equal(c2.poRevNomeAgenda(null), '', 'sem cartao, vazio');
+  assert.equal(c2.poRevMarcador('Ana Exemplo - Cliente PO'), 'PO');
+  assert.equal(c2.poRevMarcador('Joao Exemplo Ciasc'), 'CIASC');
+  assert.equal(c2.poRevMarcador('Poliana Souza'), '', '"Po" dentro de palavra nao e marcador');
+  const ls = [{ id: '1', agendaRaw: raw }, { id: '2', agendaRaw: 'FN:Joao CIASC' }, { id: '3', agendaRaw: '' }];
+  assert.deepEqual(c2.poRevPorMarcador(ls, 'PO').map(l => l.id), ['1'], 'filtro so PO');
+  assert.deepEqual(c2.poRevPorMarcador(ls, 'CIASC').map(l => l.id), ['2'], 'filtro so CIASC');
+  assert.equal(c2.poRevPorMarcador(ls, '').length, 3, 'sem filtro, todos');
+  const h = c2.poLinhaRevisaoContato({ id: '1', nome: 'Ana Exemplo', agendaRaw: raw.replace('Ana Exemplo', '<b>Ana'), revisado: false });
+  assert.ok(h.includes('rev-agenda') && h.includes('&lt;b&gt;Ana'), 'o nome da agenda aparece, escapado');
+  assert.ok(h.includes('rev-mk--po'), 'a etiqueta PO aparece na linha');
+  const html = readFileSync(new URL('../painel/index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="rev-marcador"'), 'o filtro existe na tela');
+  const app = readFileSync(new URL('../painel/app.js', import.meta.url), 'utf8');
+  assert.ok(/agendaRaw:/.test(app), 'a carga dos leads guarda o cartao da agenda');
+}
 
 console.log('test-revisao OK');

@@ -54,8 +54,34 @@ function poRevFiltra(leads, incluirRevisados) {
   });
 }
 
+/* O nome como esta NA AGENDA ("Ana Silva - Cliente PO"). O importador tira o
+   marcador do nome para a ficha ficar limpa (o robo nao usa nome), mas e o
+   marcador que diz a Lais de onde o contato veio (11/11/2026). O cartao
+   inteiro ficou guardado em payload_import.raw; ficha do CRM guarda JSON ali,
+   e entao nao ha nome de agenda. */
+function poRevNomeAgenda(raw) {
+  const m = String(raw == null ? '' : raw).match(/(?:^|\n)(?:[A-Za-z0-9-]+\.)?FN[^:\r\n]*:([^\r\n]*)/);
+  return m ? m[1].trim() : '';
+}
+
+/* PO, CIASC ou nada. Mesmas regras do lib/wa-import.php: "PO" como palavra
+   inteira (nao casa "Poliana") e CIASC em qualquer posicao. */
+function poRevMarcador(nomeAgenda) {
+  const n = String(nomeAgenda || '');
+  if (/(^|[^\p{L}\p{N}])po([^\p{L}\p{N}]|$)/iu.test(n)) return 'PO';
+  if (/ciasc/i.test(n)) return 'CIASC';
+  return '';
+}
+
+function poRevPorMarcador(leads, marcador) {
+  if (!marcador) return leads || [];
+  return (leads || []).filter(l => poRevMarcador(poRevNomeAgenda(l && l.agendaRaw)) === marcador);
+}
+
 function poLinhaRevisaoContato(lead) {
   const l = lead || {};
+  const agenda = poRevNomeAgenda(l.agendaRaw);
+  const mk = poRevMarcador(agenda);
   // A situacao e o que torna a revisao reversivel: sem ela a cliente nao ve
   // o que marcou e nao tem como corrigir. Texto fixo, nao vem de dado.
   const sit = l.revisado !== true ? 'Aguardando revisão'
@@ -67,7 +93,10 @@ function poLinhaRevisaoContato(lead) {
   const pend = l.revisado !== true ? ' data-pend="1"' : '';
   return '<tr>' +
     '<td><input type="checkbox" class="rev-chk"' + pend + ' value="' + esc(l.id) + '"></td>' +
-    '<td class="c-name">' + esc(l.nome) + '</td>' +
+    '<td><div class="c-name">' + esc(l.nome) +
+      (mk ? ' <span class="rev-mk rev-mk--' + mk.toLowerCase() + '">' + mk + '</span>' : '') + '</div>' +
+      (agenda && agenda !== l.nome ? '<div class="c-sub rev-agenda">Na agenda: ' + esc(agenda) + '</div>' : '') +
+    '</td>' +
     '<td class="mono">' + esc(l.tel) + '</td>' +
     '<td class="mono">' + esc(l.origemImport) + '</td>' +
     '<td><span class="rev-sit ' + cls + '">' + sit + '</span></td>' +
@@ -159,7 +188,8 @@ function poRenderRevisao() {
   // O contador da navegacao conta SEMPRE so os pendentes: ele e a pendencia,
   // nao o tamanho da lista que esta na tela.
   const pend = poRevFiltra(todosLeads);
-  const lista = verRevisados ? poRevFiltra(todosLeads, true) : pend;
+  const marcador = (document.querySelector('#rev-marcador') || {}).value || '';
+  const lista = poRevPorMarcador(verRevisados ? poRevFiltra(todosLeads, true) : pend, marcador);
   const tb = document.querySelector('#rev-rows');
   if (tb) {
     tb.innerHTML = lista.length

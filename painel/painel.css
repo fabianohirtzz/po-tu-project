@@ -605,3 +605,9 @@ tbody tr:last-child td{border-bottom:none}
 #cli-excluir:disabled{opacity:.45;cursor:not-allowed}
 #cli-excluir:disabled:hover{background:var(--surface);color:var(--st-perdido)}
 .fi-acoes{margin-top:22px;padding-top:16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end}
+
+/* Revisao: o nome como esta na agenda e a etiqueta PO/CIASC (11/11/2026) */
+.rev-mk{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:.62rem;font-weight:700;letter-spacing:.06em;vertical-align:middle}
+.rev-mk--po{background:rgba(31,168,221,.12);color:#0b6f96}
+.rev-mk--ciasc{background:rgba(224,138,0,.14);color:#8a5400}
+.rev-filtro{max-width:280px;margin:12px 0 4px}

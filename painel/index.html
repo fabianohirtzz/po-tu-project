@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="painel.css?v=19">
+<link rel="stylesheet" href="painel.css?v=20">
 <link rel="stylesheet" href="fluxo.css?v=12">
 </head>
 <body>
@@ -346,7 +346,8 @@
       <div class="imp-ct-box">
         <div class="lbl">Contatos aguardando revisão</div>
         <div class="hint">
-          Vieram das agendas de celular (só entram os contatos com <b>PO</b> no nome)
+          Vieram das agendas de celular (só entram os contatos com <b>PO</b> ou <b>CIASC</b>
+          no nome e com celular)
           e das fichas do CRM antigo. Mesmo marcado na agenda, um contato pode ser
           fornecedor ou conhecido, então ninguém entra em disparo antes de você conferir.
           <b>Marcar como cliente</b> libera a pessoa para as campanhas.
@@ -360,6 +361,14 @@
         <!-- Caminho de volta: nenhuma outra tela do painel escreve 'revisado'
              ou 'cliente'. Sem esta caixa, um clique errado com o "marcar
              todos" ligado só teria conserto por SQL no banco. -->
+        <div class="field rev-filtro">
+          <label for="rev-marcador">Mostrar</label>
+          <select class="fselect" id="rev-marcador">
+            <option value="">Todos os contatos</option>
+            <option value="PO">Só os marcados com PO</option>
+            <option value="CIASC">Só os do CIASC</option>
+          </select>
+        </div>
         <label class="imp-ct-forcar">
           <input type="checkbox" id="rev-revisados">
           Mostrar também os contatos que você já revisou (para corrigir)
@@ -768,12 +777,12 @@
 <script src="video-encode.js?v=2"></script>
 <script src="fone.js?v=2"></script>
 <script src="datas.js?v=4"></script>
-<script src="app.js?v=26"></script>
+<script src="app.js?v=27"></script>
 <script src="clientes.js?v=3"></script>
 <script src="funil.js?v=3"></script>
 <script src="conversa.js?v=1"></script>
 <script src="importar-contatos.js?v=6"></script>
-<script src="revisao.js?v=2"></script>
+<script src="revisao.js?v=3"></script>
 <script src="campanhas.js?v=3"></script>
 <script src="modelos.js?v=4"></script>
 <script src="vitrine.js?v=3"></script>
