@@ -1815,6 +1815,19 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     lado do site da saida (`roteiro.css?v=13` em todas as paginas). **Fora do ar
     ate a migration da saida:** `painel/app.js?v=26`, `campanhas.js?v=3` e o
     `painel/index.html` que pede os dois.
+  - **Modelo com o PDF do roteiro (commit `96c81ec`, no ar).** Texto aprovado pela
+    Lais, nome `po_roteiro_interesse`: PDF no TOPO (a Meta so aceita documento no
+    cabecalho, por isso "No PDF acima"), `{{1}}` = NOME DO ROTEIRO (nao da pessoa),
+    botao "Ver roteiro no site" com o slug + utm no fim do endereco. Criar: opcao
+    na aba Modelos; o servidor sobe um PDF de roteiro publicado como exemplo pela
+    API de upload retomavel (`WA_ES_APP_ID` + `WA_TOKEN`, "OAuth" no envio dos
+    bytes). Enviar: o `criar` da campanha le o FORMATO do modelo na Meta
+    (`wa_tpl_formato`: `nome` ou `roteiro_pdf`), exige roteiro em "Quem recebe" e
+    grava `segmento.envio` (PDF, nome, sufixo); o dreno monta cada mensagem disso.
+    **Trava nova no servidor: o texto do modelo precisa ter exatamente UMA
+    variavel** (antes era so aviso na tela). O montador mora no `wa-template.php`
+    (puro): o `templates.php` nao pode carregar o modulo do banco, e o ensaio usa o
+    mesmo montador. **Ainda nao criado na Meta:** precisa de sessao logada no painel.
   - **Rascunho do fluxo alterado por REST com a service_role** (o MCP do Supabase
     estava fora): so cards novos e chaves novas no `config` de dois cards, com o
     resto conferido identico antes/depois. Nada publicado, nada ligado.
