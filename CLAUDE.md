@@ -1863,7 +1863,14 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     da Lais; nenhuma tinha venda; 402 tinham CPF e 271 passaporte). Copia integral fora
     do Git em `~/.claude/projects/<projeto>/backups/po_leads-sem-telefone-crm-*.json`.
     Base foi de 812 para 197. Ficaram sem telefone so os 3 TESTE (mantidos ate validar) e
-    12 "EXEMPLO ..." que nao sao meus (provavelmente do Carlos).
+    12 "EXEMPLO ..." que nao sao meus (provavelmente do Carlos).
+  - **Depois, no mesmo dia:** so FIXO tambem nao entra mais no importador (Fabiano: "nao
+    vamos fazer lista de transmissao para telefone fixo"), e as **138 fichas do CRM so com
+    fixo foram apagadas** (copia em `backups/po_leads-so-fixo-crm-*.json`). Base em 59.
+  - **AGENDA DA LAIS IMPORTADA (11/11/2026)**, origem `agenda-esposa`, pelo proprio
+    `contatos-importar.php`: 466 novos, 15 casaram por celular (5 completaram ficha),
+    11 na Lista de espera, 0 falhas, lote registrado. Base em **525**. Os 466 entram
+    `revisado=false`: so vao para a transmissao "todos os clientes" depois da aba Revisao.
   - **O Carlos tem liberdade total nas abas Leads e Relatorios.** Nao mexer nelas.
   - **Formulario do site: NAO mexer** (decisao ainda nao tomada).
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,

@@ -98,11 +98,12 @@ ok($comBday('--0911') === null, 'BDAY sem ano (--MMDD do iPhone) e descartado');
 ok($comBday('') === null, 'sem BDAY, data_nascimento fica null');
 ok($comBday('aniversario') === null, 'texto solto no BDAY e descartado');
 
-// --- agenda com marcador mas so com fixo: entra, mas sem wa_id (vai pra revisao)
+// --- agenda com marcador mas so com fixo: NAO entra (11/11/2026: fixo nao
+// recebe WhatsApp, e a base existe para a transmissao)
 $soFixo = ['nome'=>'Tia - PO', 'telefones'=>['48 3222-0000'], 'emails'=>[], 'org'=>'', 'raw'=>'y'];
-$f = wa_import_candidato($soFixo, 'agenda-marido');
-ok($f !== null, 'so com fixo e marcador ainda entra');
-ok($f['wa_id'] === null, 'sem celular, sem wa_id');
+ok(wa_import_candidato($soFixo, 'agenda-marido') === null, 'so com fixo nao entra');
+$fc = wa_import_candidato(['nome'=>'Tia - PO', 'telefones'=>['48 3222-0000', '48999990077'], 'raw'=>'y'], 'agenda-marido');
+ok($fc !== null && $fc['fixos'] === ['+554832220000'], 'celular + fixo entra, e o fixo segue guardado');
 
 // --- CRM nao exige marcador (origem crm-*)
 $crm = ['nome'=>'Antonio Filho', 'telefones'=>['48999990001'], 'emails'=>[], 'org'=>'',
@@ -167,7 +168,7 @@ $tel = fn($nome, $tels) => wa_import_candidato(['nome' => $nome, 'telefones' => 
 ok($tel('Ana - PO', []) === null, 'agenda sem telefone nenhum nao entra');
 ok($tel('Ana - PO', ['99996-9673']) === null, 'telefone sem DDD nao e telefone: nao entra');
 ok($tel('Ana CIASC', ['48999990001']) !== null, 'CIASC com celular entra');
-ok($tel('Ana - PO', ['48 3222-0000']) !== null, 'so com fixo continua entrando');
+ok($tel('Ana - PO', ['48 3222-0000']) === null, 'so com fixo tambem nao entra: fixo nao recebe WhatsApp');
 ok(wa_import_candidato(['nome' => 'Antonio', 'telefones' => [], 'cpf' => '111.444.777-35', 'raw' => '{}'], 'crm-toninho') === null,
    'ficha de CRM sem telefone tambem nao entra');
 

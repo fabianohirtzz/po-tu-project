@@ -204,7 +204,10 @@ function wa_import_candidato($contato, $origem, $padroes = null) {
        "Sem DDD" conta como sem telefone: o wa_e164 nao chuta o DDD, e
        reimportar um contato sem celular depois duplicaria a ficha, porque
        sem celular e sem CPF nada casa. Vale para o CRM tambem. */
-    if (!$celulares && !$fixos) return null;
+    /* E so FIXO tambem nao (Fabiano, 11/11/2026): "a gente nao vai fazer
+       lista de transmissao para telefone fixo". O fixo de quem TEM celular
+       continua guardado em telefone_secundario. */
+    if (!$celulares) return null;
 
     $emails = $contato['emails'] ?? [];
 
