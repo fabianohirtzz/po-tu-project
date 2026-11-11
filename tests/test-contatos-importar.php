@@ -90,6 +90,21 @@ function ci_filho($caso) {
         case 'lote-fecha-falha':      $_POST['modo'] = 'aplicar'; break;
         case 'lote-repetido-forcado': $_POST['modo'] = 'aplicar'; $_POST['forcar'] = '1'; break;
         case 'lote-repetido-preview': $_POST['modo'] = 'preview'; break;
+        case 'destinos-falha':        $_POST['modo'] = 'aplicar'; break;
+        case 'espera':
+            $_POST['modo'] = 'aplicar';
+            $_POST['texto'] = "BEGIN:VCARD
+VERSION:3.0
+FN:Patricia Teste - PO Egito
+TEL;TYPE=CELL:48977776666
+END:VCARD
+"
+                            . "BEGIN:VCARD
+VERSION:3.0
+FN:Sem Telefone - PO
+END:VCARD
+";
+            break;
     }
 
     $lotesGet = 0;   // a corrida precisa responder diferente na releitura
@@ -141,6 +156,11 @@ function ci_filho($caso) {
             return ['status'=>204, 'body'=>''];
         }
 
+        if (strpos($url, 'po_destinos') !== false) {
+            if ($caso === 'destinos-falha') return ['status'=>503, 'body'=>'{"message":"boom"}'];
+            return ['status'=>200, 'body'=>json_encode([['nome'=>'Egito','palavras'=>'egito, cairo']])];
+        }
+        if (strpos($url, 'po_wa_espera') !== false) return ['status'=>201, 'body'=>'[{"id":"E1"}]'];
         if ($metodo === 'GET') {
             preg_match('/offset=(\d+)/', $url, $m);
             $off = (int) ($m[1] ?? 0);
@@ -165,7 +185,11 @@ function ci_filho($caso) {
             $ja = $caso === 'aplicar-waid-ja' ? '+5548911112222' : null;
             return ['status'=>200, 'body'=>json_encode($off > 0 ? [] : [ci_lead('L1', $ja)])];
         }
-        if ($metodo === 'POST')  return ['status'=>201, 'body'=>'[{"id":"novo-1"}]'];
+        if ($metodo === 'POST') {
+            // o caso da espera precisa de um uuid de verdade: wa_espera_anota recusa outro formato
+            $id = $caso === 'espera' ? '11111111-2222-4333-8444-555555555555' : 'novo-1';
+            return ['status'=>201, 'body'=>json_encode([['id'=>$id]])];
+        }
         return ['status'=>204, 'body'=>''];   // PATCH
     });
 
@@ -214,7 +238,9 @@ function ci_metodos_de($r, $tabela) { return array_map(fn($c) => $c['metodo'], c
    escrita dos leads e o fechamento depois. */
 function ci_seq($r) {
     return array_map(fn($c) => $c['metodo'] . ' '
-        . (strpos($c['url'], 'po_import_lotes') !== false ? 'lotes' : 'leads'), $r['chamadas']);
+        . (strpos($c['url'], 'po_import_lotes') !== false ? 'lotes'
+           : (strpos($c['url'], 'po_destinos') !== false ? 'destinos'
+           : (strpos($c['url'], 'po_wa_espera') !== false ? 'espera' : 'leads'))), $r['chamadas']);
 }
 
 /* --- login e checado ANTES de qualquer leitura ou escrita --- */
@@ -242,7 +268,7 @@ ok($r['json']['ok'] === true, 'preview deu certo');
 ok($r['json']['resumo']['funde'] === 1, 'um casamento com a base');
 ok($r['json']['resumo']['novos'] === 1, 'um contato novo');
 ok($r['json']['resumo']['por_celular'] === 1, 'casou pelo celular');
-ok(ci_metodos($r) === ['GET', 'GET'], 'preview so le (paginou ate a pagina vazia)');
+ok(ci_metodos($r) === ['GET', 'GET', 'GET'], 'preview so le (os destinos e a base, paginada ate a pagina vazia)');
 /* ci_lead() E o lead do formulario do site: tem telefone e wa_id NULO (o
    enviar.php nunca normalizou para E.164, entao o backfill nao o pegou). A
    fusao tem que preencher os dois campos vazios - email E wa_id. Sem o wa_id,
@@ -255,12 +281,12 @@ ok(!isset($r['json']['itens'][0]['candidato']), 'o preview nao devolve o dado pe
 /* --- aplicar escreve, e escreve so o que pode --- */
 $r = ci_roda('aplicar');
 ok($r['json']['ok'] === true, 'aplicar deu certo');
-ok($r['json']['aplicado'] === ['novos'=>1,'preenchidos'=>1,'revisar'=>0,'ignorados'=>0,'falhas'=>0], 'contagem do que foi feito');
+ok($r['json']['aplicado'] === ['novos'=>1,'preenchidos'=>1,'revisar'=>0,'ignorados'=>0,'falhas'=>0,'espera'=>0], 'contagem do que foi feito');
 
 /* A conversa inteira, em ordem. Fixar so o recorte da po_leads deixaria
    passar escrita em tabela nao relacionada; e a ordem e o que prova que a
    reserva do lote vem ANTES dos leads e o fechamento DEPOIS. */
-ok(ci_seq($r) === ['GET lotes', 'GET leads', 'GET leads',
+ok(ci_seq($r) === ['GET lotes', 'GET destinos', 'GET leads', 'GET leads',
                    'POST lotes', 'PATCH leads', 'POST leads', 'PATCH lotes'],
    'conferiu o lote, leu a base, RESERVOU, escreveu os leads e so entao fechou o lote');
 
@@ -424,7 +450,7 @@ ok(strpos(strtolower($r['json']['error'] ?? ''), 'rodando') !== false,
 $r = ci_roda('lote-orfao');
 ok($r['codigo'] === 200 || $r['codigo'] === 0, 'lote orfao NAO bloqueia o retry');
 ok($r['json']['ok'] === true, 'e a importacao roda');
-ok(ci_seq($r) === ['GET lotes', 'GET leads', 'GET leads',
+ok(ci_seq($r) === ['GET lotes', 'GET destinos', 'GET leads', 'GET leads',
                    'PATCH lotes', 'PATCH leads', 'POST leads', 'PATCH lotes'],
    'reivindica a linha orfa (PATCH, nao POST: o unique impediria o insert) antes de escrever');
 $claim = json_decode(ci_de($r, 'po_import_lotes')[1]['corpo'], true);
@@ -488,4 +514,23 @@ ok(wa_import_hash_lote('AAA', 'agenda-esposa') !== wa_import_hash_lote('AAA', 'a
 ok(wa_import_hash_lote('B', 'A') !== wa_import_hash_lote('', 'AB'),
    'a fronteira entre origem e conteudo nao pode ser ambigua');
 
+
+/* ---------- lista de espera vinda da agenda (reuniao de 11/11/2026) ---------- */
+$r = ci_roda('espera');
+ok(($r['json']['ok'] ?? false) === true, 'importacao com destino responde (deu: ' . $r['bruto'] . ')');
+ok($r['json']['resumo']['total'] === 1, 'o contato sem telefone nao entra nem na contagem');
+ok($r['json']['resumo']['espera'] === 1, 'o resumo conta quem vai para a lista de espera');
+$ins = array_values(array_filter(ci_de($r, 'po_leads'), fn($c) => $c['metodo'] === 'POST'));
+$linha = json_decode($ins[0]['corpo'], true);
+ok($linha['status'] === 'espera' && $linha['nome'] === 'Patricia Teste', 'o novo nasce na Lista de espera, com o nome limpo');
+$esp = ci_de($r, 'po_wa_espera');
+ok(count($esp) === 1, 'uma linha de espera');
+$e = json_decode($esp[0]['corpo'], true);
+ok($e['destino'] === 'Egito' && $e['lead_id'] === '11111111-2222-4333-8444-555555555555',
+   'a espera aponta o destino da casa e o lead recem-criado');
+ok($r['json']['aplicado']['espera'] === 1, 'e a tela recebe a contagem');
+
+$r = ci_roda('destinos-falha');
+ok($r['codigo'] === 503, 'sem a lista de destinos, nada e importado');
+ok(!in_array('POST leads', ci_seq($r), true) && !in_array('POST lotes', ci_seq($r), true), 'e nada e escrito');
 echo "test-contatos-importar OK\n";

@@ -94,4 +94,15 @@ assert.equal(saiuDeVenda.venda_at, null, 'tirar de venda limpa o carimbo');
 const comum = ctxMove('atendimento', {ven: 0, vendaAt: null});
 assert.equal(comum.venda_at, undefined, 'movimento comum nao mexe em venda_at');
 
+
+// --- o card da Lista de espera mostra o DESTINO (reuniao de 11/11/2026) ---
+const comDest = ctxCard({id:8, nome:'Marta', roteiro:'', ven:0, orc:0, data:null}, ['Egito', '<b>Japão']);
+assert.ok(comDest.includes('fn-card-d') && comDest.includes('Egito'), 'o destino da espera aparece no card');
+assert.ok(comDest.includes('&lt;b&gt;Japão') && !comDest.includes('<b>Jap'), 'destino escapado');
+const semDest = ctxCard({id:9, nome:'Ana', roteiro:'Turquia', ven:0, orc:0, data:null});
+assert.ok(!semDest.includes('fn-card-d'), 'sem espera, o card nao ganha a linha');
+const fonteFn = readFileSync(new URL('../painel/funil.js', import.meta.url), 'utf8');
+assert.ok(/poCardFunil\(l,\s*PO_ESPERA_FN\[/.test(fonteFn), 'o quadro passa os destinos de cada lead para o card');
+assert.ok(/from\('po_wa_espera'\)[\s\S]{0,120}\.is\('removido_at',\s*null\)/.test(fonteFn),
+  'o funil le so as esperas ATIVAS (a remocao e soft delete)');
 console.log('test-funil OK');

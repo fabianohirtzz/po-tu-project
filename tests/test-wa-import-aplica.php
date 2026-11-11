@@ -335,4 +335,36 @@ $soFixo = wa_import_linha_nova([
 ok(!array_key_exists('wa_id', $soFixo) || $soFixo['wa_id'] === null,
    'so com fixo NAO grava wa_id: fixo nao tem WhatsApp e nao casa identidade');
 
+
+/* ---------- lista de espera vinda da agenda (reuniao de 11/11/2026) ---------- */
+$inseridos = []; $atualizados = []; $esperas = [];
+$espera = function ($id, $destinos, $novo) use (&$esperas) { $esperas[] = [$id, $destinos, $novo]; return true; };
+$r = wa_import_aplica([
+  ['nome'=>'Patricia','acao'=>'novo','match_id'=>null,'match_por'=>null,'preenche'=>[],
+   'candidato'=>['wa_id'=>'+5548900000001','nome'=>'Patricia','origem_import'=>'agenda-esposa','campos'=>[],
+                 'payload_import'=>[],'espera'=>['Egito']]],
+  ['nome'=>'JaExiste','acao'=>'funde','match_id'=>'L5','match_por'=>'celular','preenche'=>[],
+   'candidato'=>['espera'=>['Dubai']]],
+  ['nome'=>'Talvez','acao'=>'revisar','match_id'=>'L6','match_por'=>'nome_nasc','preenche'=>[],
+   'candidato'=>['espera'=>['Egito']]],
+  ['nome'=>'SemDestino','acao'=>'novo','match_id'=>null,'match_por'=>null,'preenche'=>[],
+   'candidato'=>['wa_id'=>'+5548900000002','nome'=>'SemDestino','origem_import'=>'agenda-esposa','campos'=>[],
+                 'payload_import'=>[],'espera'=>[]]],
+], $inserir, $atualizar, $espera);
+ok($inseridos[0]['status'] === 'espera', 'novo com destino nasce na coluna Lista de espera');
+ok(!isset($inseridos[1]['status']), 'novo sem destino nao ganha status (fica o padrao do banco)');
+ok($esperas[0] === ['novo-1', ['Egito'], true], 'o destino e anotado no lead recem-criado');
+ok($esperas[1] === ['L5', ['Dubai'], false], 'fusao sem nada a preencher ainda anota a espera');
+ok(count($esperas) === 2, 'revisar e lead sem destino nao anotam espera');
+ok($r['espera'] === 2, 'o resultado conta quantos entraram na espera');
+ok($r['ignorados'] === 0, 'fusao que so anotou espera nao conta como ignorada');
+
+$res = wa_import_resumo([
+  ['acao'=>'novo','candidato'=>['espera'=>['Egito']]],
+  ['acao'=>'funde','match_por'=>'celular','candidato'=>['espera'=>['Dubai']]],
+  ['acao'=>'revisar','candidato'=>['espera'=>['Egito']]],
+  ['acao'=>'novo','candidato'=>['espera'=>[]]],
+]);
+ok($res['espera'] === 2, 'o resumo do preview diz quantos vao para a lista de espera');
+
 echo "test-wa-import-aplica OK\n";

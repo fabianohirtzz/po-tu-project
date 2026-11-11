@@ -27,6 +27,8 @@ require_once __DIR__ . '/lib/po-auth.php';
 require_once __DIR__ . '/lib/wa-import.php';
 require_once __DIR__ . '/lib/wa-vcard.php';
 require_once __DIR__ . '/lib/wa-db.php';     // ja carrega o lib/wa-config.php
+require_once __DIR__ . '/lib/wa-destinos.php'; // wa_match_destinos (o destino anotado na agenda)
+require_once __DIR__ . '/lib/wa-espera.php';   // wa_espera_anota
 
 const CI_MAX_BYTES = 8 * 1024 * 1024;   // agenda inteira em vCard da ~1 MB
 const CI_PAGINA    = 1000;              // paginacao da leitura da base
@@ -199,12 +201,22 @@ if (!$contatos) {
 $cands = [];
 foreach ($contatos as $ct) {
     $c = wa_import_candidato($ct, $origem);
-    if ($c) $cands[] = $c;                 // agenda sem o marcador "PO" fica de fora
+    if ($c) $cands[] = $c;                 // sem marcador "PO"/"CIASC" ou sem telefone fica de fora
 }
-$cands = wa_import_dedup($cands);
 if (!$cands) {
-    cfail(422, 'Nenhum contato elegivel: na agenda, so entram os marcados com "PO" no nome.');
+    cfail(422, 'Nenhum contato elegivel: na agenda, so entram os marcados com "PO" ou "CIASC" no nome e com telefone.');
 }
+
+/* Destino anotado depois do marcador ("- PO Egito") vira lista de espera
+   (reuniao de 11/11/2026). Leitura ESTRITA: com o Supabase fora, a lista
+   viria vazia e todo mundo entraria sem a espera, com a tela dizendo
+   sucesso. Antes do dedup, para o dedup somar os destinos. */
+$destinos = wa_db_select_estrito('po_destinos', 'select=nome,palavras&ativo=is.true&order=ordem.asc');
+if ($destinos === null) {
+    cfail(503, 'Nao consegui ler a lista de destinos. Nada foi importado. Tente de novo em instantes.');
+}
+$cands = wa_import_com_espera($cands, $destinos, 'wa_match_destinos');
+$cands = wa_import_dedup($cands);
 
 /* -------- base atual, INTEIRA -------- */
 /* Ler a base pela metade e o pior desfecho possivel aqui: quem nao veio no
@@ -242,6 +254,7 @@ foreach ($plano as $p) {
         'match_id'  => $p['match_id'],
         'match_por' => $p['match_por'],
         'preenche'  => array_keys(is_array($p['preenche'] ?? null) ? $p['preenche'] : []),
+        'espera'    => array_values((array) (($p['candidato'] ?? [])['espera'] ?? [])),
     ];
 }
 $resumo = wa_import_resumo($plano);
@@ -313,7 +326,19 @@ if ($lote['estado'] === 'orfao') {
 $res = wa_import_aplica(
     $plano,
     fn($linha) => wa_db_insert('po_leads', $linha),
-    fn($id, $campos) => wa_db_update('po_leads', 'id=eq.' . rawurlencode((string) $id), $campos)
+    fn($id, $campos) => wa_db_update('po_leads', 'id=eq.' . rawurlencode((string) $id), $campos),
+    /* Lista de espera. Ficha que JA existia so troca de coluna se estava em
+       "Contato feito" (novo/semresposta): o filtro esta na propria escrita,
+       entao quem esta em atendimento, negociacao ou venda nunca e movido. */
+    function ($id, $destinos, $ehNovo) {
+        $ok = false;
+        foreach ($destinos as $d) if (wa_espera_anota((string) $id, $d)) $ok = true;
+        if (!$ehNovo && wa_espera_uuid((string) $id)) {
+            wa_db_update('po_leads', 'id=eq.' . rawurlencode((string) $id) . '&status=in.(novo,semresposta)',
+                         ['status' => 'espera']);
+        }
+        return $ok;
+    }
 );
 
 /* FASE 2: fecha o registro com a contagem real. Se este update nao passar, os

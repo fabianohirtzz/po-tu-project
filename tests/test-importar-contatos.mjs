@@ -207,4 +207,9 @@ assert.ok(/fusoesRows\.innerHTML = poIcFusoesVazio\(\)/.test(reset),
   'o reset volta ao placeholder, nao a corpo vazio');
 assert.ok(/class="empty"/.test(pega('poIcFusoesVazio')), 'e o placeholder e o <div class="empty">');
 
+
+/* ---------- a lista de espera aparece na frase da previa (11/11/2026) ---------- */
+assert.ok(poResumoTexto({ novos: 3, espera: 2 }).includes('2 entram na Lista de espera'), 'a previa diz quantos vao para a espera');
+assert.ok(poResumoTexto({ novos: 3, espera: 1 }).includes('1 entra na Lista de espera'), 'singular');
+assert.ok(!poResumoTexto({ novos: 3 }).includes('espera'), 'sem destino, a frase nao fala de espera');
 console.log('test-importar-contatos OK');

@@ -391,6 +391,8 @@ tbody tr:last-child td{border-bottom:none}
 .fn-card.fn-card--movendo{opacity:.55;pointer-events:none}
 .fn-card-n{font-size:.86rem;font-weight:600}
 .fn-card-r{font-size:.76rem;color:var(--muted)}
+/* destino da lista de espera no card (11/11/2026) */
+.fn-card-d{font-size:.76rem;font-weight:600;color:var(--st-espera);margin-top:2px}
 .fn-card-f{display:flex;align-items:center;justify-content:space-between;gap:8px;
   font-size:.72rem;color:var(--faint);margin-top:2px}
 .fn-vazio{font-size:.74rem;color:var(--faint);padding:6px 2px}
@@ -596,3 +598,10 @@ tbody tr:last-child td{border-bottom:none}
 .rd-del-mes:hover,.rd-del-data:hover{border-color:var(--st-perdido);color:var(--st-perdido)}
 .rd-add-data{margin-top:4px}
 #r-datas-mes{margin-top:12px}
+
+/* Aba Clientes: selecao e exclusao (11/11/2026) */
+.cli-ck{width:36px;text-align:center}
+.cli-ck input{width:16px;height:16px;cursor:pointer;accent-color:var(--st-perdido)}
+#cli-excluir:disabled{opacity:.45;cursor:not-allowed}
+#cli-excluir:disabled:hover{background:var(--surface);color:var(--st-perdido)}
+.fi-acoes{margin-top:22px;padding-top:16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end}

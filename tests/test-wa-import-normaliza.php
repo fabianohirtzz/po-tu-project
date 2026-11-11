@@ -148,4 +148,59 @@ ok($planoBday[0]['acao'] === 'revisar', 'ficha antiga sem cpf e sem celular aind
 ok($planoBday[0]['match_por'] === 'nome_nasc', 'o casamento veio da camada 3 (nome + nascimento do BDAY)');
 ok($planoBday[0]['match_id'] === 'L-CRM', 'aponta a ficha antiga para a revisao humana');
 
+
+/* ============================================================
+   REUNIAO DE 11/11/2026 COM A LAIS. Tres regras novas da agenda:
+   (1) CIASC tambem e marcador, em qualquer grafia;
+   (2) contato SEM telefone valido nao entra (nao serve para transmissao);
+   (3) destino escrito DEPOIS do marcador ("- PO Egito") poe a pessoa na
+       lista de espera daquele destino.
+============================================================ */
+foreach (['Joao Exemplo CIASC', 'Ana ciasc', 'Fe Ciasc Servico Social', 'CIASC Joana'] as $ci) {
+    ok(wa_import_tem_marcador($ci) === true, "CIASC e marcador: $ci");
+}
+ok(wa_import_limpa_nome('Joao Exemplo CIASC') === 'Joao Exemplo', 'CIASC no fim sai do nome');
+ok(wa_import_limpa_nome('Pedro CIASC SETOR') === 'Pedro', 'o que vem depois do CIASC e anotacao');
+ok(wa_import_limpa_nome('CIASC Joana Souza') === 'Joana Souza', 'CIASC no comeco: o resto e o nome');
+
+$tel = fn($nome, $tels) => wa_import_candidato(['nome' => $nome, 'telefones' => $tels, 'emails' => [], 'raw' => 'x'], 'agenda-esposa');
+ok($tel('Ana - PO', []) === null, 'agenda sem telefone nenhum nao entra');
+ok($tel('Ana - PO', ['99996-9673']) === null, 'telefone sem DDD nao e telefone: nao entra');
+ok($tel('Ana CIASC', ['48999990001']) !== null, 'CIASC com celular entra');
+ok($tel('Ana - PO', ['48 3222-0000']) !== null, 'so com fixo continua entrando');
+ok(wa_import_candidato(['nome' => 'Antonio', 'telefones' => [], 'cpf' => '111.444.777-35', 'raw' => '{}'], 'crm-toninho') === null,
+   'ficha de CRM sem telefone tambem nao entra');
+
+ok(wa_import_anotacao('Paula Exemplo - PO Egito') === 'Egito', 'o destino depois do PO e a anotacao');
+ok(wa_import_anotacao('Rui Exemplo - PO Vietna Singapura Dubai') === 'Vietna Singapura Dubai', 'anotacao com varios destinos');
+ok(wa_import_anotacao('Elza Exemplo Po Marrocos') === 'Marrocos', 'Po minusculo no meio');
+ok(wa_import_anotacao('Cliente PO Lia Exemplo') === '', 'marcador no comeco: o resto e NOME, nunca anotacao');
+ok(wa_import_anotacao('Maria Grecia 2 - PO') === '', 'o que vem ANTES do marcador nao e anotacao');
+ok(wa_import_anotacao('Ana Porto - Cliente PO') === '', 'sobrenome antes do marcador nao vira destino');
+ok($tel('Paula Exemplo - PO Egito', ['48999990001'])['anotacao'] === 'Egito', 'o candidato carrega a anotacao');
+
+$dest = [['nome' => 'Egito', 'palavras' => 'egito'], ['nome' => 'Vietnã', 'palavras' => 'vietna'],
+         ['nome' => 'Dubai', 'palavras' => 'dubai'], ['nome' => 'Portugal', 'palavras' => 'portugal, porto']];
+$casa = function ($texto, $ds) {   // duble do wa_match_destinos: casa palavra inteira
+    $out = [];
+    foreach ($ds as $d) foreach (explode(',', $d['palavras']) as $p)
+        if (preg_match('/\b' . trim($p) . '\b/iu', $texto)) { $out[] = $d['nome']; break; }
+    return $out;
+};
+$ce = wa_import_com_espera([
+    $tel('Rui Exemplo - PO Vietna Singapura Dubai', ['48999990001']),
+    $tel('Ana Porto - Cliente PO', ['48999990002']),
+    $tel('Cliente PO Lia Exemplo', ['48999990003']),
+], $dest, $casa);
+ok($ce[0]['espera'] === ['Vietnã', 'Dubai'], 'destinos da anotacao viram espera');
+ok($ce[1]['espera'] === [] && $ce[2]['espera'] === [], 'sem anotacao, sem espera');
+
+$dd = wa_import_dedup([
+    ['wa_id'=>'+5548999990001','celulares'=>['+5548999990001'],'fixos'=>[],'nome'=>'A','email'=>null,'cpf'=>null,
+     'data_nascimento'=>null,'origem_import'=>'agenda-esposa','campos'=>[],'payload_import'=>[],'espera'=>['Egito']],
+    ['wa_id'=>'+5548999990001','celulares'=>['+5548999990001'],'fixos'=>[],'nome'=>'A','email'=>null,'cpf'=>null,
+     'data_nascimento'=>null,'origem_import'=>'agenda-esposa','campos'=>[],'payload_import'=>[],'espera'=>['Egito','Dubai']],
+]);
+ok($dd[0]['espera'] === ['Egito', 'Dubai'], 'dedup soma os destinos sem repetir');
+
 echo "test-wa-import-normaliza OK\n";

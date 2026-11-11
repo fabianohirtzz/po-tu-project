@@ -151,4 +151,43 @@ assert.ok(!html.includes('<img src=x'), 'nome de terceiro e escapado na lista');
 assert.ok(html.includes('&lt;img'), 'o nome aparece escapado, nao sumido');
 assert.ok(html.includes('data-chave="5548996048882"'), 'a linha carrega a chave da pessoa');
 
+
+/* ---------- busca, selecao e exclusao (reuniao de 11/11/2026) ----------
+   A agenda importada traz empresas (CVC, LATAM, Receita Federal) que a Lais
+   precisa achar e tirar em lote. */
+{
+  const ctxB = new Function(
+    pega('poSemAcento') + pega('poFiltraPessoas') + pega('poIdsDasPessoas') + pega('poTextoExclusao') +
+    '; return {poFiltraPessoas, poIdsDasPessoas, poTextoExclusao};'
+  )();
+  const ps = [
+    { chave: 'a', nome: 'CVC Turismo', tel: '+5548999990001', cidade: 'Floripa', leads: [{ id: 'L1' }], temVenda: false },
+    { chave: 'b', nome: 'João da Silva', tel: '+5548996048882', cidade: 'São José', leads: [{ id: 'L2' }, { id: 'L3' }], temVenda: true },
+    { chave: 'c', nome: 'Maria', tel: '—', cidade: '', leads: [{ id: 'L4' }], temVenda: false },
+  ];
+  assert.deepEqual(ctxB.poFiltraPessoas(ps, 'turismo').map(p => p.chave), ['a'], 'acha empresa pelo nome');
+  assert.deepEqual(ctxB.poFiltraPessoas(ps, 'joao').map(p => p.chave), ['b'], 'busca ignora acento');
+  assert.deepEqual(ctxB.poFiltraPessoas(ps, 'sao jose').map(p => p.chave), ['b'], 'acha pela cidade');
+  assert.deepEqual(ctxB.poFiltraPessoas(ps, '9604-8882').map(p => p.chave), ['b'], 'acha pelo telefone, com ou sem traco');
+  assert.equal(ctxB.poFiltraPessoas(ps, '  ').length, 3, 'busca vazia mostra todo mundo');
+
+  assert.deepEqual(ctxB.poIdsDasPessoas(ps, new Set(['b', 'c'])), ['L2', 'L3', 'L4'],
+    'excluir uma pessoa exclui todos os interesses dela');
+  assert.deepEqual(ctxB.poIdsDasPessoas(ps, new Set()), [], 'nada selecionado, nada excluido');
+
+  const t1 = ctxB.poTextoExclusao([ps[0]]);
+  assert.ok(t1.includes('1 contato') && t1.includes('CVC Turismo') && t1.includes('não pode ser desfeito'), 'confirmacao de um');
+  const t2 = ctxB.poTextoExclusao([ps[0], ps[1]]);
+  assert.ok(t2.includes('2 contatos') && t2.includes('1 deles já viajou'), 'confirmacao avisa quem ja comprou');
+
+  const fonte = readFileSync(new URL('../painel/clientes.js', import.meta.url), 'utf8');
+  assert.ok(/\.from\('po_leads'\)\s*\.delete\(\)\s*\.in\('id',/.test(fonte), 'a exclusao apaga por id');
+  assert.ok(/poRevLotes\(/.test(fonte), 'e em lotes de 100 (URL longa estoura o gateway)');
+  assert.ok(/confirm\(poTextoExclusao\(/.test(fonte), 'nada e apagado sem confirmar');
+  const html = readFileSync(new URL('../painel/index.html', import.meta.url), 'utf8');
+  for (const id of ['cli-q', 'cli-todos', 'cli-excluir', 'fi-excluir']) {
+    assert.ok(html.includes('id="' + id + '"'), 'a tela tem #' + id);
+  }
+}
+
 console.log('test-clientes OK');

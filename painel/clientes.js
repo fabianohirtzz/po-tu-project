@@ -92,6 +92,69 @@ function poAgrupaPessoas(leads) {
   return pessoas;
 }
 
+/* ---------- busca, selecao e exclusao (reuniao de 11/11/2026) ----------
+   A agenda importada traz empresas (CVC, LATAM, Receita Federal) que a Lais
+   precisa achar e tirar de uma vez. A busca e PROPRIA desta aba: a do topo
+   pertence a aba Leads, que agora e do Carlos. */
+function poSemAcento(s) {
+  return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+function poFiltraPessoas(pessoas, q) {
+  const termo = poSemAcento(q).trim();
+  if (!termo) return pessoas || [];
+  const dig = termo.replace(/\D+/g, '');
+  return (pessoas || []).filter(p => {
+    if (poSemAcento((p.nome || '') + ' ' + (p.cidade || '') + ' ' + (p.email || '')).includes(termo)) return true;
+    // telefone: so quando o que se digitou e numero ("9604-8882" ou "96048882")
+    return dig.length >= 4 && dig.length === termo.replace(/[\s\-().+]/g, '').length &&
+      String(p.tel || '').replace(/\D+/g, '').includes(dig);
+  });
+}
+
+/* Excluir a PESSOA e excluir todos os interesses dela: senao a ficha
+   reaparece na proxima carga, montada com o que sobrou. */
+function poIdsDasPessoas(pessoas, chaves) {
+  const ids = [];
+  (pessoas || []).forEach(p => {
+    if (chaves.has(p.chave)) (p.leads || []).forEach(l => { if (l && l.id != null) ids.push(l.id); });
+  });
+  return ids;
+}
+
+function poTextoExclusao(pessoas) {
+  const n = pessoas.length;
+  const nomes = pessoas.slice(0, 5).map(p => '- ' + p.nome).join('\n') + (n > 5 ? '\n- e mais ' + (n - 5) : '');
+  const viajaram = pessoas.filter(p => p.temVenda).length;
+  return 'Excluir ' + n + (n === 1 ? ' contato' : ' contatos') + ' da base?\n\n' + nomes + '\n\n' +
+    (viajaram ? 'Atenção: ' + viajaram + (viajaram === 1 ? ' deles já viajou' : ' deles já viajaram') +
+      ' com a agência (tem venda registrada).\n\n' : '') +
+    'Isso apaga a ficha e todo o histórico, e não pode ser desfeito.';
+}
+
+const PO_CLI_SEL = new Set();
+
+async function poExcluiPessoas(pessoas) {
+  if (!pessoas.length) return;
+  if (!confirm(poTextoExclusao(pessoas))) return;
+  const ids = poIdsDasPessoas(pessoas, new Set(pessoas.map(p => p.chave)));
+  const lotes = poRevLotes(ids, 100);
+  const apagados = new Set();
+  for (let i = 0; i < lotes.length; i++) {
+    const { error } = await sb.from('po_leads').delete().in('id', lotes[i]);
+    if (error) {
+      alert('Parte da exclusão falhou (' + apagados.size + ' de ' + ids.length +
+        ' registros apagados). Recarregue a página e confira antes de tentar de novo.');
+      break;
+    }
+    lotes[i].forEach(id => apagados.add(String(id)));
+  }
+  // tira da memoria so o que o banco confirmou
+  for (let i = LEADS.length - 1; i >= 0; i--) if (apagados.has(String(LEADS[i].id))) LEADS.splice(i, 1);
+  pessoas.forEach(p => PO_CLI_SEL.delete(p.chave));
+  poRenderClientes();
+}
+
 /* ---------- lista de pessoas ---------- */
 
 /* Separada do render para poder ser testada: o nome vem do perfil do
@@ -101,7 +164,10 @@ function poLinhaPessoa(p) {
     ? '<span class="cli-tag cli-tag--cliente">Cliente</span>'
     : '<span class="cli-tag">Lead</span>';
   const viagens = p.vendas === 1 ? '1 viagem' : p.vendas + ' viagens';
+  const marcado = typeof PO_CLI_SEL !== 'undefined' && PO_CLI_SEL.has(p.chave);
   return '<tr data-chave="' + esc(p.chave) + '">' +
+    '<td class="cli-ck"><input type="checkbox" aria-label="Selecionar" data-ck="' + esc(p.chave) + '"' +
+      (marcado ? ' checked' : '') + '></td>' +
     '<td><div class="c-name">' + esc(p.nome) + '</div>' +
          '<div class="c-sub">' + esc(p.cidade || '—') + '</div></td>' +
     '<td class="mono">' + esc(p.tel) + '</td>' +
@@ -120,15 +186,26 @@ function poPessoas() {
 }
 
 function poRenderClientes() {
-  const pessoas = poPessoas();
+  const qEl = document.querySelector('#cli-q');
+  const pessoas = poFiltraPessoas(poPessoas(), qEl ? qEl.value : '');
   const tb = document.querySelector('#cli-rows');
   if (!tb) return;
   tb.innerHTML = pessoas.length
     ? pessoas.map(poLinhaPessoa).join('')
-    : '<tr><td colspan="7"><div class="empty">Nenhum cliente com esses filtros.</div></td></tr>';
+    : '<tr><td colspan="8"><div class="empty">Nenhum cliente com esses filtros.</div></td></tr>';
   tb.querySelectorAll('tr[data-chave]').forEach(tr => {
     tr.onclick = () => poAbreFicha(tr.dataset.chave);
   });
+  tb.querySelectorAll('input[data-ck]').forEach(ck => {
+    // a caixa nao abre a ficha: o clique e na selecao, nao na linha
+    ck.onclick = e => e.stopPropagation();
+    ck.onchange = () => {
+      if (ck.checked) PO_CLI_SEL.add(ck.dataset.ck); else PO_CLI_SEL.delete(ck.dataset.ck);
+      poCliBarra(pessoas);
+    };
+  });
+  poCliLigaBarra();
+  poCliBarra(pessoas);
 
   const clientes = pessoas.filter(p => p.temVenda).length;
   const faturado = pessoas.reduce((s, p) => s + p.valorVendido, 0);
@@ -141,10 +218,48 @@ function poRenderClientes() {
       brl2(faturado) + '</div><div class="kpi-sub">soma de todas as vendas</div></div>';
 }
 
+/* O "marcar todos" e o botao de excluir olham so o que esta NA TELA (o
+   resultado da busca): buscar "turismo", marcar todos e excluir nao pode
+   levar junto quem a busca escondeu. */
+function poCliBarra(visiveis) {
+  const todos = document.querySelector('#cli-todos');
+  const btn = document.querySelector('#cli-excluir');
+  // a selecao que vale e a que esta na tela
+  const naTela = visiveis.filter(p => PO_CLI_SEL.has(p.chave));
+  if (todos) {
+    todos.checked = visiveis.length > 0 && naTela.length === visiveis.length;
+    todos.indeterminate = naTela.length > 0 && naTela.length < visiveis.length;
+    todos.onchange = () => {
+      visiveis.forEach(p => { if (todos.checked) PO_CLI_SEL.add(p.chave); else PO_CLI_SEL.delete(p.chave); });
+      poRenderClientes();
+    };
+  }
+  if (btn) {
+    btn.disabled = naTela.length === 0;
+    btn.textContent = naTela.length ? 'Excluir selecionados (' + naTela.length + ')' : 'Excluir selecionados';
+    btn.onclick = () => poExcluiPessoas(naTela);
+  }
+}
+
+function poCliLigaBarra() {
+  const q = document.querySelector('#cli-q');
+  if (q && !q.dataset.ligado) {
+    q.dataset.ligado = '1';
+    q.oninput = () => poRenderClientes();
+  }
+}
+
 /* ---------- ficha ---------- */
 function poAbreFicha(chave) {
   const p = poPessoas().find(x => x.chave === chave);
   if (!p) return;
+
+  const ex = document.querySelector('#fi-excluir');
+  if (ex) ex.onclick = async () => {
+    const antes = LEADS.length;
+    await poExcluiPessoas([p]);
+    if (LEADS.length < antes) poFechaFicha();
+  };
 
   document.querySelector('#fi-nome').textContent = p.nome;
   document.querySelector('#fi-tel').textContent  = p.tel;

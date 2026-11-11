@@ -35,8 +35,12 @@ function poAgrupaFunil(leads) {
   return cols;
 }
 
-function poCardFunil(l) {
+/* destinos: os destinos ATIVOS da lista de espera deste lead (pode faltar).
+   Sem eles, o card da coluna Lista de espera so dizia nome e data, e a Lais
+   tinha que abrir um por um para saber quem queria o Egito (11/11/2026). */
+function poCardFunil(l, destinos) {
   const valor = l.ven || l.orc;
+  const dest = Array.isArray(destinos) ? destinos.filter(Boolean) : [];
   // typeof (nao referencia direta) porque o teste isola poCardFunil sem
   // poMovendo no contexto: typeof numa variavel livre nao declarada nao
   // estoura, so devolve 'undefined'.
@@ -45,15 +49,40 @@ function poCardFunil(l) {
     '" draggable="true" data-id="' + esc(l.id) + '">' +
     '<div class="fn-card-n">' + esc(l.nome) + '</div>' +
     '<div class="fn-card-r">' + esc(l.roteiro) + '</div>' +
+    (dest.length ? '<div class="fn-card-d">Espera: ' + dest.map(esc).join(', ') + '</div>' : '') +
     '<div class="fn-card-f">' +
       '<span class="mono">' + esc(fmtData(l.data)) + '</span>' +
       (valor ? '<span class="money">' + brl(valor) + '</span>' : '') +
     '</div></article>';
 }
 
+/* lead_id -> [destinos] das esperas ATIVAS. Lido uma vez por abertura da aba
+   (no maximo a cada 60 s) e o quadro se redesenha quando chega. */
+let PO_ESPERA_FN = {};
+let PO_ESPERA_FN_AT = 0;
+let PO_ESPERA_FN_LENDO = false;
+
+async function poCarregaEsperaFunil() {
+  if (PO_ESPERA_FN_LENDO || typeof sb === 'undefined') return;
+  PO_ESPERA_FN_LENDO = true;
+  try {
+    const { data, error } = await sb.from('po_wa_espera').select('lead_id,destino')
+      .is('removido_at', null).limit(5000);
+    if (error) return;   // sem a leitura, o card so fica sem a linha do destino
+    const mapa = {};
+    (data || []).forEach(r => { (mapa[String(r.lead_id)] = mapa[String(r.lead_id)] || []).push(r.destino); });
+    PO_ESPERA_FN = mapa;
+    PO_ESPERA_FN_AT = Date.now();
+    poRenderFunil();
+  } finally {
+    PO_ESPERA_FN_LENDO = false;
+  }
+}
+
 function poRenderFunil() {
   const alvo = document.querySelector('#fn-board');
   if (!alvo) return;
+  if (Date.now() - PO_ESPERA_FN_AT > 60000) poCarregaEsperaFunil();
   // filtradosFunil, nao filtered: o quadro ignora o filtro de status, senao
   // mover um card para outra coluna faz ele sumir da tela inteira.
   const cols = poAgrupaFunil(typeof filtradosFunil === 'function' ? filtradosFunil() : LEADS);
@@ -67,7 +96,7 @@ function poRenderFunil() {
       '<header class="fn-col-h"><span class="fn-col-t">' + c.titulo + '</span>' +
         '<span class="fn-col-n">' + lista.length + '</span></header>' +
       etiqueta +
-      '<div class="fn-col-b">' + (lista.length ? lista.map(poCardFunil).join('') :
+      '<div class="fn-col-b">' + (lista.length ? lista.map(l => poCardFunil(l, PO_ESPERA_FN[String(l.id)])).join('') :
         '<div class="fn-vazio">nenhum</div>') + '</div>' +
       '</section>';
   }).join('');

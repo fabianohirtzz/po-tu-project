@@ -140,13 +140,14 @@ ok($chamouInserir === 1, 'inserir foi chamado exatamente uma vez');
 ok($chamouAtualizar === 0, 'atualizar nao foi chamado (fusao sem preenche nao escreve)');
 
 /* ============================================================
-   Fichas de CRM SEM telefone/cpf ainda viram candidato (o CRM dispensa o
-   marcador "PO" e entra sempre) - e nao quebram o dedup.
+   Ficha de CRM SEM telefone NAO vira candidato (reuniao de 11/11/2026: a
+   base existe para a transmissao, e contato sem numero nao recebe nada). O
+   CRM continua dispensando o marcador "PO", mas nao o telefone.
 ============================================================ */
-$semContato = [['nome' => 'Sem Contato Nenhum']];
+$semContato = [['nome' => 'Sem Contato Nenhum'], ['nome' => 'Com Celular', 'telefone' => '48999990009']];
 $r3 = wa_import_executa($semContato, 'crm-toninho', fn() => [], null, null, false);
 ok($r3['erro'] === false, 'base vazia de verdade (sem erro) processa normalmente');
-ok($r3['candidatos'] === 1, 'ficha de CRM sem telefone/cpf ainda vira candidato');
-ok($r3['resumo']['novos'] === 1, 'sem nada na base, vira novo');
+ok($r3['candidatos'] === 1, 'ficha de CRM sem telefone nao vira candidato; a com celular vira');
+ok($r3['resumo']['novos'] === 1, 'sem nada na base, a com celular vira novo');
 
 echo "test-wa-import-carga OK\n";

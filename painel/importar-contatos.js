@@ -43,7 +43,10 @@ function poResumoTexto(resumo) {
   return novos + (novos === 1 ? ' contato novo' : ' contatos novos') + ', ' +
     funde + fundeTxt + ' (' + porCpf + ' por CPF, ' + porCelular + ' por celular), e ' +
     revisar + ' para voce revisar antes de entrar' +
-    (porNomeNasc ? ' (' + porNomeNasc + ' por nome e nascimento)' : '') + '.';
+    (porNomeNasc ? ' (' + porNomeNasc + ' por nome e nascimento)' : '') + '.' +
+    // destino anotado depois do marcador ("- PO Egito"), reuniao de 11/11/2026
+    (r.espera ? ' ' + r.espera + (r.espera === 1 ? ' entra' : ' entram') +
+      ' na Lista de espera do funil, pelo destino anotado no nome.' : '');
 }
 
 /* Uma linha da tabela de revisao. 'revisar' chega em TRES sabores

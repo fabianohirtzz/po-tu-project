@@ -18,7 +18,10 @@ require_once __DIR__ . '/wa-fone.php';
    lista, entao um contato sem marcador nenhum era ADMITIDO na importacao
    como se a cliente o tivesse marcado. O /u liga o PCRE2_UCP, e a fronteira
    volta a ser por caractere. */
-const WA_IMPORT_MARCADORES = ['/\bPO\b/iu', '/\bcliente\s+po\b/iu'];
+const WA_IMPORT_MARCADORES = ['/\bPO\b/iu', '/\bcliente\s+po\b/iu', '/ciasc/iu'];
+/* CIASC (reuniao de 11/11/2026): o grupo da empresa onde a Lais trabalhou
+   tambem e base de clientes. Vale "em qualquer formato, desde que tenha
+   CIASC" (Fabiano), entao e substring e nao palavra inteira. */
 
 /* Nome que sobra vazio depois da limpeza (o contato chamado so "PO", que
    existe na agenda) NAO pode ir em branco para o banco: o painel mostraria
@@ -94,6 +97,46 @@ function wa_import_limpa_nome($nome, $padroes = null) {
     return $nomeLimpo !== '' ? $nomeLimpo : WA_IMPORT_NOME_VAZIO;
 }
 
+/* O que a agenda escreveu DEPOIS do marcador ("Paula - PO Egito" ->
+   "Egito"). E ali, e so ali, que a Lais anota o destino que a pessoa quer.
+
+   O que vem ANTES nunca e anotacao: e o nome, e nome tem sobrenome como
+   "Porto" ou "Paris", que casariam um destino. E marcador no COMECO ("Cliente
+   PO Lia Exemplo") tambem devolve vazio, porque ali o resto e o nome. */
+function wa_import_anotacao($nome, $padroes = null) {
+    $padroes = $padroes ?: WA_IMPORT_MARCADORES;
+    $s = trim(preg_replace('/\s+/', ' ', (string) $nome));
+    if ($s === '') return '';
+    $toks = explode(' ', $s);
+    foreach ($toks as $i => $t) {
+        if (!wa_import_casa_marcador($t, $padroes)) continue;
+        if ($i === 0) return '';
+        // "Cliente PO" no comeco tambem abre o nome
+        if ($i === 1) {
+            foreach ($padroes as $re) {
+                if (preg_match($re, $toks[0] . ' ' . $t) && !preg_match($re, $t)) return '';
+            }
+        }
+        $resto = wa_import_corta_anotacao(array_slice($toks, $i + 1));
+        return trim(implode(' ', $resto));
+    }
+    return '';
+}
+
+/* Poe em cada candidato a lista 'espera': os destinos da casa que aparecem
+   na anotacao. $casa e o wa_match_destinos (injetado, para este arquivo
+   seguir puro e sem banco). Candidato sem anotacao fica com lista vazia. */
+function wa_import_com_espera($cands, $destinos, $casa) {
+    $out = [];
+    foreach ((array) $cands as $c) {
+        if (!is_array($c)) continue;
+        $a = (string) ($c['anotacao'] ?? '');
+        $c['espera'] = $a === '' ? [] : array_values(array_unique((array) $casa($a, $destinos)));
+        $out[] = $c;
+    }
+    return $out;
+}
+
 /* Um token e marcador quando um dos padroes casa nele sozinho. */
 function wa_import_casa_marcador($token, $padroes) {
     foreach ($padroes as $re) if (preg_match($re, $token)) return true;
@@ -156,6 +199,13 @@ function wa_import_candidato($contato, $origem, $padroes = null) {
         else                  { if (!in_array($e, $fixos, true))     $fixos[] = $e; }
     }
 
+    /* Sem telefone valido, nao entra (reuniao de 11/11/2026). A base existe
+       para a transmissao do WhatsApp, e contato sem numero nao recebe nada.
+       "Sem DDD" conta como sem telefone: o wa_e164 nao chuta o DDD, e
+       reimportar um contato sem celular depois duplicaria a ficha, porque
+       sem celular e sem CPF nada casa. Vale para o CRM tambem. */
+    if (!$celulares && !$fixos) return null;
+
     $emails = $contato['emails'] ?? [];
 
     /* Nascimento ja normalizado aqui, e nao so na hora de gravar: e chave de
@@ -172,6 +222,8 @@ function wa_import_candidato($contato, $origem, $padroes = null) {
         'celulares'       => $celulares,
         'fixos'           => $fixos,
         'nome'            => $ehCrm ? trim($nomeBruto) : wa_import_limpa_nome($nomeBruto, $padroes),
+        'anotacao'        => $ehCrm ? '' : wa_import_anotacao($nomeBruto, $padroes),
+        'espera'          => [],
         'email'           => $emails[0] ?? null,
         'cpf'             => wa_import_cpf($contato['cpf'] ?? '') ?: null,
         'data_nascimento' => $nasc !== '' ? $nasc : null,
@@ -208,6 +260,7 @@ function wa_import_soma_candidato($a, $b) {
     $a['fixos']     = array_values(array_unique(array_merge($a['fixos'], $b['fixos'])));
     $a['wa_id']     = $a['wa_id'] ?: $b['wa_id'];
     $a['campos']    = $a['campos'] + $b['campos']; // '+' preserva as chaves ja existentes
+    $a['espera']    = array_values(array_unique(array_merge((array) ($a['espera'] ?? []), (array) ($b['espera'] ?? []))));
     $a['payload_import']['tambem'][] = $b['payload_import'];
     return $a;
 }
@@ -536,8 +589,18 @@ function wa_import_saneia($campos) {
    nunca acrescidas). Montar o update a partir do candidato cru faria da
    whitelist da Task 6 pura decoracao, e uma importacao de agenda apagaria
    o funil e o faturamento da cliente em silencio. */
-function wa_import_aplica($plano, $inserir, $atualizar) {
-    $r = ['novos'=>0, 'preenchidos'=>0, 'revisar'=>0, 'ignorados'=>0, 'falhas'=>0];
+/* $espera($leadId, $destinos, $ehNovo) anota a lista de espera vinda da
+   agenda. E um escritor SEPARADO de proposito: o $atualizar so pode receber
+   as chaves de 'preenche', e a espera nao e campo da ficha. 'revisar' nunca
+   anota: a decisao ali e humana. */
+function wa_import_aplica($plano, $inserir, $atualizar, $espera = null) {
+    $r = ['novos'=>0, 'preenchidos'=>0, 'revisar'=>0, 'ignorados'=>0, 'falhas'=>0, 'espera'=>0];
+    $anota = function ($id, $item, $ehNovo) use ($espera, &$r) {
+        $ds = array_values((array) (($item['candidato'] ?? [])['espera'] ?? []));
+        if (!$ds || !$espera || $id === null || $id === '') return false;
+        if ($espera($id, $ds, $ehNovo)) { $r['espera']++; return true; }
+        return false;
+    };
     foreach ((array) $plano as $item) {
         if (!is_array($item)) continue;
         $acao = $item['acao'] ?? 'revisar';
@@ -548,10 +611,12 @@ function wa_import_aplica($plano, $inserir, $atualizar) {
             // que nao aconteceu.
             $res = $inserir(wa_import_linha_nova($item['candidato'] ?? []));
             if ($res) $r['novos']++; else $r['falhas']++;
+            if ($res) $anota(is_array($res) ? ($res['id'] ?? null) : null, $item, true);
 
         } elseif ($acao === 'funde') {
+            $anotou = $anota($item['match_id'] ?? null, $item, false);
             $campos = wa_import_saneia(is_array($item['preenche'] ?? null) ? $item['preenche'] : []);
-            if (!$campos) { $r['ignorados']++; continue; }
+            if (!$campos) { if (!$anotou) $r['ignorados']++; continue; }
             $res = $atualizar($item['match_id'], $campos);
             if ($res) $r['preenchidos']++; else $r['falhas']++;
 
@@ -596,6 +661,10 @@ function wa_import_linha_nova($c) {
         'revisado'            => $ehCrm ? true : false,
         'cliente'             => $ehCrm ? true : false,
     ], $campos);
+
+    // Destino anotado na agenda: a pessoa nasce na coluna Lista de espera.
+    // Sem destino, o status fica o padrao do banco.
+    if (!empty($c['espera'])) $linha['status'] = 'espera';
 
     // Mesma razao do wa_import_preenche: 'wa_id' entrou na whitelist, entao
     // $campos (texto de arquivo de terceiro) passaria por ela e venceria o
@@ -659,12 +728,14 @@ function wa_import_select_base() {
    por_cpf/por_celular detalham o 'funde'; por_nome_nasc e sempre 'revisar'
    (nome+nascimento nunca funde sozinho) e detalha o 'revisar'. */
 function wa_import_resumo($plano) {
-    $r = ['total'=>0,'novos'=>0,'funde'=>0,'revisar'=>0,'por_cpf'=>0,'por_celular'=>0,'por_nome_nasc'=>0];
+    $r = ['total'=>0,'novos'=>0,'funde'=>0,'revisar'=>0,'por_cpf'=>0,'por_celular'=>0,'por_nome_nasc'=>0,'espera'=>0];
     foreach ((array) $plano as $p) {
         if (!is_array($p)) continue;
         $r['total']++;
         $acao = $p['acao'] ?? 'revisar';
         $por  = $p['match_por'] ?? null;
+        // mesma regra do wa_import_aplica: so novo e funde anotam espera
+        if ($acao !== 'revisar' && !empty(($p['candidato'] ?? [])['espera'])) $r['espera']++;
 
         if ($acao === 'novo') {
             $r['novos']++;

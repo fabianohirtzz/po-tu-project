@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="painel.css?v=18">
+<link rel="stylesheet" href="painel.css?v=19">
 <link rel="stylesheet" href="fluxo.css?v=12">
 </head>
 <body>
@@ -161,11 +161,19 @@
     <!-- ===== CLIENTES ===== -->
     <section class="view" id="view-clientes">
       <div class="kpis" id="cli-kpis"></div>
+      <div class="toolbar">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+          <input type="text" id="cli-q" placeholder="Buscar por nome, telefone ou cidade (ex.: turismo)">
+        </div>
+        <button class="btn btn-danger" id="cli-excluir" type="button" disabled>Excluir selecionados</button>
+      </div>
       <div class="table-wrap">
         <div class="tscroll">
           <table>
             <thead>
               <tr>
+                <th class="cli-ck"><input type="checkbox" id="cli-todos" aria-label="Selecionar todos da lista"></th>
                 <th>Nome</th><th>Telefone</th><th>Situação</th>
                 <th>Interesses</th><th>Viagens</th><th>Faturado</th><th>Último contato</th>
               </tr>
@@ -740,6 +748,9 @@
     <div class="spec-row"><span class="spec-k">Cidade</span><span class="spec-v" id="fi-cid"></span></div>
     <div class="dr-section-l">Histórico</div>
     <div class="fi-leads" id="fi-leads"></div>
+    <div class="fi-acoes">
+      <button class="btn btn-danger" id="fi-excluir" type="button">Excluir este contato</button>
+    </div>
   </div>
 </aside>
 
@@ -758,10 +769,10 @@
 <script src="fone.js?v=2"></script>
 <script src="datas.js?v=4"></script>
 <script src="app.js?v=26"></script>
-<script src="clientes.js?v=2"></script>
-<script src="funil.js?v=2"></script>
+<script src="clientes.js?v=3"></script>
+<script src="funil.js?v=3"></script>
 <script src="conversa.js?v=1"></script>
-<script src="importar-contatos.js?v=5"></script>
+<script src="importar-contatos.js?v=6"></script>
 <script src="revisao.js?v=2"></script>
 <script src="campanhas.js?v=3"></script>
 <script src="modelos.js?v=4"></script>
