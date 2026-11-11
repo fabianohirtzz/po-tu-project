@@ -15,10 +15,22 @@ const ctx = new Function(
 )();
 const { PO_COLUNAS, poAgrupaFunil } = ctx;
 
-// --- as cinco colunas, na ordem da spec (secao 7)
+// --- as seis colunas. "Lista de espera" entrou em 11/11/2026 (reuniao de
+// 09/11): quem toca em "Sim, tenho interesse" no robo cai nela sozinho.
 assert.deepEqual(PO_COLUNAS.map(c => c.status),
-  ['novo','atendimento','negociacao','venda','perdido'],
-  'cinco colunas na ordem do funil');
+  ['novo','atendimento','negociacao','venda','espera','perdido'],
+  'seis colunas na ordem do funil, a espera antes de perdido');
+assert.equal(PO_COLUNAS.find(c => c.status === 'espera').modo, 'auto', 'a espera e preenchida pelo robo');
+assert.equal(poAgrupaFunil([{id:5, status:'espera'}]).espera.length, 1, 'lead em espera cai na coluna da espera');
+
+// --- clicar no card abre a gaveta do lead (no desktop o clique simples; antes
+// era so duplo clique e a cliente achava que nada acontecia). No celular o
+// toque segue abrindo o menu de etapas, que tem "Ver o lead completo".
+{
+  const liga = pega('poLigaMover');
+  assert.ok(/card\.onclick\s*=\s*\(\)\s*=>\s*openDrawer\(card\.dataset\.id\)/.test(liga), 'clique simples abre a gaveta no desktop');
+  assert.ok(/poAbreMenuEtapa\(card\.dataset\.id\)/.test(liga), 'o toque no celular segue abrindo o menu de etapas');
+}
 
 // --- os leads caem na coluna certa
 const leads = [

@@ -95,4 +95,41 @@ const html = readFileSync(new URL('../painel/index.html', import.meta.url), 'utf
 assert.ok(/id="e-pdata"/.test(html), 'a caixa existe na gaveta');
 assert.ok(/pdata:\$\('#e-pdata'\)\.checked/.test(src), 'o Salvar le a caixa (trava no ponto de chamada)');
 assert.ok(/perdeuData:r\.qualif_data===false/.test(src), 'o lead carrega a marca do banco');
+
+/* ---------- a gaveta preenchida pelo robo (11/11/2026) ----------
+   Lead do WhatsApp chega sem o "Roteiro" do formulario: o robo guarda o slug
+   em `interesses`. A gaveta mostra o NOME dos roteiros (do catalogo do painel)
+   e o WhatsApp como link. Lead antigo, gravado antes de o robo preencher o
+   nome, cai no primeiro interesse. */
+{
+  const poGavetaRoteiros = new Function(pega('poGavetaRoteiros') + '; return poGavetaRoteiros;')();
+  const poWaLink = new Function(pega('poWaLink') + '; return poWaLink;')();
+  const cat = [{slug:'chile', titulo:'Chile e Deserto do Atacama'}, {slug:'peru-fascinante', titulo:'Peru Fascinante'}];
+  let g = poGavetaRoteiros({roteiro:'—', interesses:['peru-fascinante','chile']}, cat);
+  assert.equal(g.roteiro, 'Peru Fascinante', 'sem roteiro gravado, o primeiro interesse vira o roteiro');
+  assert.deepEqual(g.interesses, ['Peru Fascinante', 'Chile e Deserto do Atacama'], 'os interesses saem pelo nome');
+  g = poGavetaRoteiros({roteiro:'Chile e Deserto do Atacama', interesses:['chile']}, cat);
+  assert.equal(g.roteiro, 'Chile e Deserto do Atacama', 'roteiro gravado manda');
+  g = poGavetaRoteiros({roteiro:'—', interesses:['saiu-do-ar']}, cat);
+  assert.deepEqual(g.interesses, ['saiu-do-ar'], 'slug fora do catalogo aparece cru, nunca some');
+  g = poGavetaRoteiros({roteiro:'Grécia', interesses:null}, null);
+  assert.equal(g.roteiro, 'Grécia'); assert.deepEqual(g.interesses, []);
+
+  assert.equal(poWaLink('5548999990000'), 'https://wa.me/5548999990000');
+  assert.equal(poWaLink('+55 (48) 99999-0000'), 'https://wa.me/5548999990000', 'so os digitos');
+  assert.equal(poWaLink('48 99999-0000'), 'https://wa.me/5548999990000', 'sem DDI ganha o 55');
+  assert.equal(poWaLink('—'), null); assert.equal(poWaLink(''), null);
+  assert.equal(poWaLink('4832220000'), null, 'fixo nao vira link de WhatsApp');
+
+  const app = readFileSync(new URL('../painel/app.js', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../painel/index.html', import.meta.url), 'utf8');
+  assert.ok(/poGavetaRoteiros\(l,\s*ROTEIROS\)/.test(app), 'a gaveta usa o catalogo do painel (trava no ponto de chamada)');
+  assert.ok(/id="dr-wa"/.test(html) && /id="dr-int"/.test(html) && /id="dr-espera"/.test(html), 'linhas de WhatsApp, interesses e lista de espera na gaveta');
+  assert.ok(/from\('po_wa_espera'\)[\s\S]{0,200}removido_at/.test(app), 'a lista de espera so mostra entradas ativas');
+  for (const sel of ['status-filter', 'e-status']) {
+    const bloco = html.split('id="' + sel + '"')[1].split('</select>')[0];
+    assert.ok(/value="espera"/.test(bloco), 'opcao "Lista de espera" em #' + sel);
+  }
+  assert.ok(/espera:\{label:'Lista de espera'/.test(app), 'rotulo do status');
+}
 console.log('test-gaveta (ponto de chamada) OK');

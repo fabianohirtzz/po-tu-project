@@ -61,6 +61,15 @@ ok(wa_camp_motivo_fora($x) === 'nao_cliente', 'marcado "Nao e cliente" na Revisa
 $x = $perdeu; $x['wa_id'] = null; $x['telefone'] = '+554832220000';
 ok(wa_camp_motivo_fora($x) === 'sem_celular', 'fixo continua fora, mesmo perdendo por data');
 
+/* Lista de espera (11/11/2026): desde que ela virou coluna do funil, quem
+   toca em "Sim, tenho interesse" sai de "perdido" para "espera". Essas sao as
+   pessoas que PEDIRAM para ser avisadas, e nao podem sumir da transmissao so
+   porque mudaram de coluna. */
+$esp = $perdeu; $esp['status'] = 'espera'; $esp['qualif_data'] = null;
+ok(wa_camp_perdeu_data($esp) && wa_camp_motivo_fora($esp) === null, 'quem esta na lista de espera entra');
+$x = $esp; $x['opt_out_at'] = '2026-11-01T00:00:00Z';
+ok(wa_camp_motivo_fora($x) === 'saiu', 'SAIR vale para a lista de espera');
+
 $r = wa_camp_publico([$base, $perdeu]);
 ok($r['resumo']['total'] === 2 && $r['resumo']['perdeu_data'] === 1,
    'o resumo conta quantos entraram por terem perdido uma data');

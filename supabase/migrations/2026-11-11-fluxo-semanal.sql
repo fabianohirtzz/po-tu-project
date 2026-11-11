@@ -43,3 +43,13 @@ update public.po_wa_cards
    set config = config || '{"se_semanal":"c1000000-0000-4000-8000-000000000023"}'::jsonb
  where id = 'c1000000-0000-4000-8000-000000000006'
    and not (config ? 'se_semanal');
+
+-- ------------------------------------------------------------
+-- A coluna "Lista de espera" do funil (pedido de 11/11/2026): o card que anota
+-- o destino na espera passa a gravar tambem o status `espera`. Quem toca em
+-- "Sim, tenho interesse" cai sozinho na coluna. O robo nunca troca o status de
+-- quem esta em proposta ou venda (WA_FLUXO_STATUS_INTOCAVEIS, no codigo).
+update public.po_wa_cards
+   set config = config || '{"status":"espera"}'::jsonb
+ where id = 'c2000000-0000-4000-8000-000000000001'
+   and not (config ? 'status');

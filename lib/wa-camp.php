@@ -41,6 +41,10 @@ function wa_camp_telefone($lead) {
    A politica de privacidade ja cobre: aviso de roteiro para quem "ja pediu
    informacao", por legitimo interesse, com o SAIR como contrapartida. */
 function wa_camp_perdeu_data($lead) {
+    /* A lista de espera (11/11/2026) e o mesmo publico com outro nome: quem
+       perdeu pela data e tocou em "Sim, tenho interesse" sai de 'perdido' e
+       vira 'espera'. Pediu para ser avisado, entao entra. */
+    if (($lead['status'] ?? null) === 'espera') return true;
     return ($lead['status'] ?? null) === 'perdido' && ($lead['qualif_data'] ?? null) === false;
 }
 

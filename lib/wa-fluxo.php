@@ -117,7 +117,16 @@ const WA_FLUXO_LIMITE = [
 const WA_FLUXO_CAMPOS_MARCAVEIS = ['status','qualif_data','qualif_grupo','qualif_at','interesses','espera','espera_destino'];
 // `venda` e `negociacao` ficam de fora: venda e decisao humana, e negociacao
 // e o que o atalho #proposta da dona carimba.
-const WA_FLUXO_STATUS_PERMITIDOS = ['novo','atendimento','perdido'];
+/* Campos que o `marca` grava DERIVADOS da conversa, nunca da configuracao do
+   card: a cliente nao os escolhe e o validador nao os aceita no config.
+   `roteiro` e o nome do roteiro da conversa ("Roteiro de interesse" da gaveta). */
+const WA_FLUXO_CAMPOS_DERIVADOS = ['roteiro'];
+// `espera` (11/11/2026): a coluna "Lista de espera" do funil.
+const WA_FLUXO_STATUS_PERMITIDOS = ['novo','atendimento','espera','perdido'];
+/* Status que o robo NUNCA troca: proposta e venda sao decisao da Lais. Uma
+   cliente que ja comprou e volta perguntando por outro destino nao pode ir
+   parar em "Perdido" ou "Lista de espera". */
+const WA_FLUXO_STATUS_INTOCAVEIS = ['negociacao','venda'];
 
 /* As variaveis do roteiro.
 
@@ -1441,6 +1450,24 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
         }
         // Cinto e suspensorio: so a whitelist chega ao banco.
         $campos = array_intersect_key($campos, array_flip(WA_FLUXO_CAMPOS_MARCAVEIS));
+        /* O status atual decide se o novo pode ser gravado: proposta e venda
+           nao sao rebaixadas. Se a leitura falhar, vale a regra que ja existia
+           para o `marca` (a marcacao segue, a conversa nao para): o status e
+           gravado. Leitura que falha e gravacao que funciona logo depois e o
+           caso raro; o comum, venda lida com sucesso, fica protegido. */
+        if (isset($campos['status'])) {
+            $l = wa_fl_call('select_estrito', 'po_leads', 'wa_id=eq.' . rawurlencode($wa_id) . '&select=status&limit=1');
+            if (is_array($l) && in_array($l[0]['status'] ?? null, WA_FLUXO_STATUS_INTOCAVEIS, true)) {
+                unset($campos['status']);
+            }
+        }
+        /* O "Roteiro de interesse" da gaveta e o NOME do roteiro, nao o slug.
+           Derivado do roteiro da conversa, depois da whitelist de proposito:
+           nao e campo que a cliente configure no card. */
+        if (isset($campos['interesses']) && $roteiro !== null && trim((string) ($roteiro['titulo'] ?? '')) !== '') {
+            $campos['roteiro'] = (string) $roteiro['titulo'];
+        }
+        $campos = array_intersect_key($campos, array_flip(array_merge(WA_FLUXO_CAMPOS_MARCAVEIS, WA_FLUXO_CAMPOS_DERIVADOS)));
         // O `marca` nao envia nada, entao a lei do envio nao tem o que proteger
         // aqui. Falha de gravacao NAO bloqueia: ele costuma vir antes do card
         // que fala, e bloquear deixaria o cliente sem resposta ate o timeout.

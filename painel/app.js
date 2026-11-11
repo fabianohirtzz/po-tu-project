@@ -19,6 +19,7 @@ const STATUS={
   negociacao:{label:'Em negociação',cls:'s-nego'},
   atendimento:{label:'Atendimento iniciado',cls:'s-aberto'},
   semresposta:{label:'Sem resposta',cls:'s-sem'},
+  espera:{label:'Lista de espera',cls:'s-espera'},
   perdido:{label:'Perdido',cls:'s-perdido'}
 };
 // A cor mora aqui junto do rótulo: o donut e a legenda dos relatórios leem deste
@@ -117,13 +118,15 @@ function mapRow(r){
     tel:r.telefone||'—',email:r.email||'',cidade:r.cidade||'—',
     viajantes:r.viajantes||'—',roteiro:r.roteiro||'—',msg:r.mensagem||'(sem mensagem)',
     origemRaw:r.origem||'—',origemAuto:auto,origem:eff,
-    camp:r.utm_campaign||r.origem||'—',land:r.landing_page||'—',
+    // Lead de anuncio que leva ao WhatsApp chega sem UTM, com o ad_id da Meta.
+    camp:r.utm_campaign||(r.ad_id?'Anúncio '+r.ad_id:'')||r.origem||'—',land:r.landing_page||'—',
     status:r.status||'semresposta',orc:Number(r.orcamento)||0,ven:Number(r.venda)||0,
     notas:Array.isArray(r.notas)?r.notas:[],vendaAt:r.venda_at||null,
     waId:r.wa_id||'',
     /* Triagem dos contatos importados (spec 8.1). origemImport vazio = lead do
        formulario do site, que nunca passa pela fila de revisao. */
     origemImport:r.origem_import||'',revisado:r.revisado===true,cliente:r.cliente===true,
+    interesses:Array.isArray(r.interesses)?r.interesses:[],
     // perdeu por data (robo ou caixa da gaveta): entra na transmissao
     perdeuData:r.qualif_data===false};
 }
@@ -293,13 +296,43 @@ function renderLeadKpis(rows,fora){
     <div class="kpi k-orange"><div class="kpi-l">Em orçamentos</div><div class="kpi-n" style="font-size:1.7rem">${brl2(valOrc)}</div><div class="kpi-sub">valor total cotado</div></div>
     <div class="kpi k-green"><div class="kpi-l">Em vendas</div><div class="kpi-n" style="font-size:1.7rem">${brl2(valVen)}</div><div class="kpi-sub">faturamento fechado</div></div>`;
 }
+/* O que o robo deixou na ficha, lido para a gaveta. O "Roteiro" do formulario
+   do site nao existe no lead do WhatsApp: o robo guarda o slug de cada roteiro
+   enviado em `interesses`. Lead gravado antes de o robo preencher o nome cai
+   no primeiro interesse. Slug fora do catalogo aparece cru, nunca some. */
+function poGavetaRoteiros(l,roteiros){
+  const cat=Array.isArray(roteiros)?roteiros:[];
+  const nome=s=>{const r=cat.find(x=>x&&x.slug===s);return r&&r.titulo?r.titulo:String(s);};
+  const interesses=(Array.isArray(l.interesses)?l.interesses:[]).filter(Boolean).map(nome);
+  const gravado=l.roteiro&&l.roteiro!=='—'?l.roteiro:'';
+  return {roteiro:gravado||interesses[0]||'—',interesses};
+}
+// Link do WhatsApp do lead, ou null. So celular brasileiro (o fixo nao tem WhatsApp).
+function poWaLink(fone){
+  let d=String(fone==null?'':fone).replace(/\D/g,'');
+  if(d.length===10||d.length===11)d='55'+d;
+  if(!/^55\d{2}9\d{8}$/.test(d))return null;
+  return 'https://wa.me/'+d;
+}
+// As entradas ATIVAS da lista de espera (a remocao e soft delete).
+async function poGavetaEspera(id){
+  const alvo=$('#dr-espera');alvo.textContent='…';
+  const {data,error}=await sb.from('po_wa_espera').select('destino').eq('lead_id',id).is('removido_at',null);
+  if(String(openId)!==String(id))return;   // a gaveta ja mostra outro lead
+  alvo.textContent=error?'não consegui ler':((data||[]).map(x=>x.destino).join(', ')||'—');
+}
 function openDrawer(id){
   const l=LEADS.find(x=>String(x.id)===String(id));if(!l)return;openId=l.id;
   $('#dr-orig').innerHTML=origBadge(l.origem);
   $('#dr-name').textContent=l.nome;$('#dr-comp').textContent=l.roteiro;
   $('#dr-tel').textContent=l.tel;$('#dr-email').textContent=l.email||'—';
   $('#dr-cidade').textContent=l.cidade;$('#dr-viajantes').textContent=l.viajantes;
-  $('#dr-roteiro').textContent=l.roteiro;$('#dr-data').textContent=fmtData(l.data);
+  const gr=poGavetaRoteiros(l,ROTEIROS);
+  $('#dr-roteiro').textContent=gr.roteiro;$('#dr-data').textContent=fmtData(l.data);
+  $('#dr-int').textContent=gr.interesses.join(', ')||'—';
+  const wa=poWaLink(l.waId||l.tel);
+  $('#dr-wa').innerHTML=wa?'<a href="'+wa+'" target="_blank" rel="noopener">Abrir conversa</a>':'—';
+  poGavetaEspera(l.id);
   $('#dr-ciclo').textContent=fmtCiclo(cicloDias(l));
   $('#dr-canal').textContent=(ORIG[l.origemAuto]||ORIG.direto).label;
   $('#dr-camp').textContent=l.camp;$('#dr-land').textContent=l.land;$('#dr-desc').textContent=l.msg;
@@ -506,10 +539,10 @@ function renderReports(){
   $('#donut').style.background=`conic-gradient(${segs.join(',')||'#e4e7eb 0 100%'})`;
   $('#donut').innerHTML=`<div class="donut-c"><b>${total}</b><span>leads</span></div>`;
   $('#donut-legend').innerHTML=Object.entries(byOrig).filter(([,v])=>v).map(([k,v])=>`<div class="legend-row"><span class="legend-dot" style="background:${corOrig(k)}"></span>${(ORIG[k]||ORIG.direto).label}<span class="pct">${total?(v/total*100).toFixed(0):0}%</span><span class="n">${v}</span></div>`).join('')||'<div class="card-sub">Sem dados no período.</div>';
-  const order=['novo','atendimento','negociacao','venda','semresposta','perdido'];
+  const order=['novo','atendimento','negociacao','venda','semresposta','espera','perdido'];
   const byStatus={};order.forEach(s=>byStatus[s]=rows.filter(l=>l.status===s).length);
   const maxS=Math.max(1,...Object.values(byStatus));
-  const scolor={novo:'var(--st-novo)',atendimento:'var(--st-aberto)',negociacao:'var(--st-nego)',venda:'var(--st-venda)',semresposta:'var(--st-sem)',perdido:'var(--st-perdido)'};
+  const scolor={novo:'var(--st-novo)',atendimento:'var(--st-aberto)',negociacao:'var(--st-nego)',venda:'var(--st-venda)',semresposta:'var(--st-sem)',espera:'var(--st-espera)',perdido:'var(--st-perdido)'};
   $('#status-bars').innerHTML=order.map(s=>`<div class="bar-row"><div class="bar-lbl">${STATUS[s].label}</div><div class="bar-track"><div class="bar-fill" style="width:${byStatus[s]/maxS*100}%;background:${scolor[s]}"></div></div><div class="bar-n">${byStatus[s]}</div></div>`).join('');
   $('#vs-orc').textContent=brl2(valOrc);$('#vs-ven').textContent=brl2(valVen);
   const close=valOrc>0?valVen/valOrc*100:0;$('#close-bar').style.width=Math.min(100,close)+'%';$('#close-n').textContent=close.toFixed(0)+'%';

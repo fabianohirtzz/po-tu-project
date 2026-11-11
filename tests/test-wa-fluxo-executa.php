@@ -173,7 +173,10 @@ foreach ($ESCRITAS as $e) if ($e[0] === 'po_leads') $campos = $e[1];
 ok($campos !== null, 'card marca escreve em po_leads');
 ok($campos['interesses'] === ['chile', 'turquia'], 'interesses ACRESCENTA, nao substitui');
 ok($campos['status'] === 'atendimento', 'status permitido e gravado');
-ok(array_diff(array_keys($campos), WA_FLUXO_CAMPOS_MARCAVEIS) === [], 'nenhuma chave fora da whitelist chega ao banco');
+ok(array_diff(array_keys($campos), WA_FLUXO_CAMPOS_MARCAVEIS, WA_FLUXO_CAMPOS_DERIVADOS) === [], 'nenhuma chave fora da whitelist chega ao banco');
+// a lista dos derivados e fechada: so o nome do roteiro (11/11/2026)
+ok(WA_FLUXO_CAMPOS_DERIVADOS === ['roteiro'], 'derivado e so o nome do roteiro');
+ok(!array_intersect(WA_FLUXO_CAMPOS_DERIVADOS, ['status', 'venda', 'venda_at', 'notas', 'cliente', 'revisado']), 'derivado nunca e campo de funil ou faturamento');
 ok($r['ok'] === true && $r['espera'] === false && $ENVIADAS === [], 'card marca nao espera e nao envia');
 $LEAD = [['interesses' => ['turquia'], 'espera' => []]]; zera();
 wa_fluxo_executa($g, 'mrc', $fone, $ct, 'Marta');

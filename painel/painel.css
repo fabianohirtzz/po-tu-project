@@ -5,7 +5,7 @@
   --azul:#1FA8DD; --verde:#84C440;
   --grad:linear-gradient(135deg,var(--azul),var(--verde));
   --border:#e2e7ec; --border2:#d2d9e0;
-  --st-venda:#16a34a; --st-nego:#2563eb; --st-aberto:#e08a00; --st-sem:#9aa4b2; --st-perdido:#dc2626;
+  --st-venda:#16a34a; --st-nego:#2563eb; --st-aberto:#e08a00; --st-sem:#9aa4b2; --st-perdido:#dc2626; --st-espera:#0d9488;
   /* Roxo de proposito: 'novo' fica ao lado de 'em negociacao' na tabela, e
      um segundo azul ali confundiria os dois numa olhada rapida. */
   --st-novo:#7c3aed;
@@ -146,6 +146,7 @@ tbody tr:last-child td{border-bottom:none}
 .s-aberto{background:rgba(224,138,0,.14);color:#b06f00}
 .s-sem{background:#eef1f4;color:#66707e}
 .s-perdido{background:rgba(220,38,38,.1);color:var(--st-perdido)}
+.s-espera{background:rgba(13,148,136,.1);color:var(--st-espera)}
 
 /* ===== DRAWER ===== */
 .scrim{position:fixed;inset:0;background:rgba(20,26,34,.5);opacity:0;pointer-events:none;transition:.25s;z-index:60}

@@ -1,8 +1,8 @@
 /* ============================================================
    Aba Funil: o quadro que se move pela conversa do WhatsApp.
 
-   As tres primeiras colunas sao preenchidas pelo robo sozinho (entrada,
-   qualificacao e perda); as duas do meio dependem de um gesto da dona,
+   As colunas automaticas sao preenchidas pelo robo sozinho (entrada,
+   qualificacao, lista de espera e perda); as duas do meio dependem de um gesto da dona,
    que e um atalho digitado no proprio WhatsApp (#proposta, #fechou).
    Arrastar aqui e a rede de seguranca para corrigir, nao o caminho
    principal: o pedido do projeto foi justamente nao ter que preencher
@@ -14,6 +14,8 @@ const PO_COLUNAS = [
   {status:'atendimento', titulo:'Qualificado',      modo:'auto'},
   {status:'negociacao',  titulo:'Proposta enviada', modo:'atalho'},
   {status:'venda',       titulo:'Contrato assinado',modo:'atalho'},
+  // Quem toca em "Sim, tenho interesse" na lista de espera do robo (11/11/2026).
+  {status:'espera',      titulo:'Lista de espera',  modo:'auto'},
   {status:'perdido',     titulo:'Perdido',          modo:'auto'},
 ];
 
@@ -146,7 +148,9 @@ function poLigaMover() {
       card.onclick = () => poAbreMenuEtapa(card.dataset.id);
       return;
     }
-    card.ondblclick = () => openDrawer(card.dataset.id);
+    // Clique simples abre a gaveta (era duplo clique, e a cliente achava que o
+    // card nao fazia nada). Arrastar nao dispara click, entao os dois convivem.
+    card.onclick = () => openDrawer(card.dataset.id);
     card.ondragstart = e => {
       e.dataTransfer.setData('text/plain', card.dataset.id);
       e.dataTransfer.effectAllowed = 'move';
