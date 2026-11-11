@@ -810,4 +810,28 @@ ok($DB['po_wa_campanhas'][0]['status'] === 'enviando', 'a campanha continua envi
 $linha_teto = wa_test_acha_envio($DB, 'LT9');
 ok($linha_teto && $linha_teto['status'] === 'reservado', 'e o destinatario continua na fila');
 
+
+/* ---------- o dreno entrega ao envio o formato GRAVADO na campanha (11/11/2026) ----------
+   A campanha do PDF do roteiro guarda em segmento.envio o PDF, o nome do
+   roteiro e o final do endereco. Sem isto chegando ao envio, a mensagem iria
+   como o modelo de sempre (o nome da pessoa no {{1}}) e a Meta recusaria todo
+   destinatario do modelo com PDF. */
+$DB['po_wa_envios'] = [];
+$ENVIO_PDF = ['formato' => 'roteiro_pdf', 'roteiro' => 'Peru Fascinante', 'pdf' => 'https://x/p.pdf', 'sufixo' => 'peru?utm_source=whatsapp'];
+$DB['po_wa_campanhas'][] = ['id' => 'CPDF', 'template' => 'po_roteiro_interesse',
+                            'segmento' => ['tipo' => 'roteiro', 'slug' => 'peru', 'envio' => $ENVIO_PDF]];
+wa_test_usa_transporte_normal();
+wa_camp_reserva('CPDF', [['lead_id'=>'LP1', 'wa_id'=>'+5548999990150', 'nome'=>'Pdf']]);
+$recebido = 'nada';
+wa_camp_set_enviador(function ($wa_id, $nome, $envio = null) use (&$recebido) {
+    $recebido = $envio;
+    return ['ok' => true, 'wamid' => 'wamid.pdf', 'erro' => null];
+});
+wa_camp_drena('CPDF', 5);
+ok($recebido === $ENVIO_PDF, 'o envio recebe o formato gravado na campanha (deu: ' . json_encode($recebido) . ')');
+$DB['po_wa_campanhas'][] = ['id' => 'CVELHA', 'template' => 'modelo_generico'];
+wa_camp_reserva('CVELHA', [['lead_id'=>'LP2', 'wa_id'=>'+5548999990151', 'nome'=>'Velha']]);
+$recebido = 'nada';
+wa_camp_drena('CVELHA', 5);
+ok($recebido === null, 'campanha antiga, sem formato gravado: o envio de sempre');
 echo "test-wa-camp-fila OK\n";

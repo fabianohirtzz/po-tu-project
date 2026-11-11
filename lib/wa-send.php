@@ -278,7 +278,9 @@ function wa_send_buttons($para, $corpo, $botoes) {
    Sem parametros, o bloco `components` e OMITIDO: mandar components vazio
    faz a Graph devolver 132000 ("number of parameters does not match") e a
    mensagem inteira nao sai. */
-function wa_send_template($para, $template, $params = [], $idioma = 'pt_BR', $phone_id = null) {
+/* $componentes: os componentes ja montados (cabecalho com documento, botao),
+   para o modelo que nao e so texto. Quando vem, $params e ignorado. */
+function wa_send_template($para, $template, $params = [], $idioma = 'pt_BR', $phone_id = null, $componentes = null) {
     $template = trim((string) $template);
     if ($template === '') {
         // Nome vazio viraria 400 na Meta e um destinatario sem nada, em
@@ -300,7 +302,9 @@ function wa_send_template($para, $template, $params = [], $idioma = 'pt_BR', $ph
             'language' => ['code' => $idioma],
         ],
     ];
-    if ($params) {
+    if (is_array($componentes) && $componentes) {
+        $msg['template']['components'] = array_values($componentes);
+    } elseif ($params) {
         $msg['template']['components'] = [[
             'type'       => 'body',
             'parameters' => array_map(

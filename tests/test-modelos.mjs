@@ -145,4 +145,19 @@ assert.ok(app.includes("v==='modelos'"), 'o app.js tem a rota da aba');
 assert.ok(app.includes('poRenderModelos'),
   'e a rota recarrega a lista: o status muda sozinho na Meta');
 
+
+/* ---------- modelo com o PDF do roteiro (11/11/2026) ---------- */
+{
+  const ESC2 = 'function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c]));}';
+  const op = new Function(ESC2 + pega('poModeloOpcoesRoteiro') + ';return poModeloOpcoesRoteiro;')();
+  const h = op([{ slug: 'peru-fascinante', titulo: 'Peru <b>', pdf_url: 'https://x/p.pdf' }, { slug: 'sem-pdf', titulo: 'Sem', pdf_url: '' }]);
+  assert.ok(h.includes('value="peru-fascinante"') && h.includes('Peru &lt;b&gt;'), 'roteiro com PDF entra, escapado');
+  assert.ok(!h.includes('sem-pdf'), 'roteiro sem PDF nao serve para o ensaio do modelo com PDF');
+  assert.ok(h.startsWith('<option value="">'), 'primeira opcao vazia: modelo so de texto nao precisa de roteiro');
+  const fonte = readFileSync(new URL('../painel/modelos.js', import.meta.url), 'utf8');
+  assert.ok(/formato:\s*\(document\.querySelector\('#mdl-pdf'\)/.test(fonte), 'a criacao manda o formato escolhido');
+  assert.ok(/roteiro:\s*\(document\.querySelector\('#ens-roteiro'\)/.test(fonte), 'o ensaio manda o roteiro escolhido');
+  const html = readFileSync(new URL('../painel/index.html', import.meta.url), 'utf8');
+  assert.ok(/id="mdl-pdf"/.test(html) && /id="ens-roteiro"/.test(html), 'a opcao do PDF e o roteiro do ensaio existem na tela');
+}
 console.log('test-modelos OK');

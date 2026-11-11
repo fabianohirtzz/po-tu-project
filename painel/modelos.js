@@ -94,7 +94,17 @@ function poModeloCampos() {
     titulo:  (document.querySelector('#mdl-titulo') || {}).value || '',
     corpo:   (document.querySelector('#mdl-corpo') || {}).value || '',
     exemplo: (document.querySelector('#mdl-exemplo') || {}).value || '',
+    // PDF do roteiro no topo + botao "Ver roteiro no site" (11/11/2026)
+    formato: (document.querySelector('#mdl-pdf') || {}).checked ? 'roteiro_pdf' : '',
   };
+}
+
+/* Os roteiros que servem ao ensaio do modelo com PDF: so os que TEM PDF. A
+   primeira opcao e vazia, porque modelo so de texto nao precisa de roteiro. */
+function poModeloOpcoesRoteiro(roteiros) {
+  const lista = (Array.isArray(roteiros) ? roteiros : []).filter(r => r && r.slug && r.pdf_url);
+  return '<option value="">(só para o modelo com PDF)</option>' +
+    lista.map(r => '<option value="' + esc(r.slug) + '">' + esc(r.titulo || r.slug) + '</option>').join('');
 }
 
 /* O botao de criar NASCE desabilitado e so uma conferencia sem problemas o
@@ -152,6 +162,8 @@ async function poRenderModelos() {
   const box = document.querySelector('#mdl-lista');
   if (!box) return;
   box.innerHTML = '<div class="hint">Lendo os modelos da conta...</div>';
+  const selR = document.querySelector('#ens-roteiro');
+  if (selR && typeof ROTEIROS !== 'undefined') selR.innerHTML = poModeloOpcoesRoteiro(ROTEIROS);
   try {
     const j = await poModeloPost('listar', {});
     const ts = j.templates || [];
@@ -193,7 +205,8 @@ async function poModeloEnsaio() {
   if (msg) msg.textContent = 'Enviando...';
   try {
     const j = await poModeloPost('ensaio',
-      { template: alvo, destino: fone, nome_var: nome });
+      { template: alvo, destino: fone, nome_var: nome,
+        roteiro: (document.querySelector('#ens-roteiro') || {}).value || '' });
     if (msg) msg.textContent = 'Enviado. Confira o WhatsApp do número ' + fone + '.';
     toast('Teste enviado.');
   } catch (e) {

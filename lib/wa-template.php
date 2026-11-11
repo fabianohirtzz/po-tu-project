@@ -27,6 +27,12 @@ const WA_TPL_CORPO_MAX  = 1024;   // limite de corpo de template da Cloud API
 const WA_TPL_NOME_MAX   = 512;
 const WA_TPL_CATEGORIAS = ['MARKETING', 'UTILITY', 'AUTHENTICATION'];
 
+/* Modelo da transmissao por interesse (11/11/2026): o PDF do roteiro no topo
+   e um botao que abre o roteiro no site. A parte variavel do botao e o FIM do
+   endereco (regra da Meta), e e o slug com a marcacao de origem. */
+const WA_TPL_SITE_ROTEIROS = 'https://pereiraoliveiraturismo.com.br/roteiros/';
+const WA_TPL_BOTAO_ROTEIRO = 'Ver roteiro no site';
+
 function wa_tpl_set_transport($f) { $GLOBALS['WA_TPL_TRANSPORT'] = $f; }
 
 /* $payload null = GET. */
@@ -165,14 +171,100 @@ function wa_tpl_exemplos($csv) {
    Os componentes do template. O exemplo e OBRIGATORIO quando ha variavel: a
    Meta usa ele para revisar e recusa sem ele.
 ------------------------------------------------------------ */
-function wa_tpl_componentes($corpo, $exemplos) {
+function wa_tpl_componentes($corpo, $exemplos, $extra = []) {
     $comp = ['type' => 'BODY', 'text' => (string) $corpo];
     $ex = array_values(array_map('strval', (array) $exemplos));
     if ($ex) {
         // body_text e uma lista DE LISTAS: uma lista de exemplos por linha.
         $comp['example'] = ['body_text' => [$ex]];
     }
-    return [$comp];
+    $out = [$comp];
+    /* Documento no topo: a Meta revisa com um PDF de exemplo ja SUBIDO
+       (header_handle), nunca com um link. */
+    if (!empty($extra['header_handle'])) {
+        array_unshift($out, ['type' => 'HEADER', 'format' => 'DOCUMENT',
+                             'example' => ['header_handle' => [(string) $extra['header_handle']]]]);
+    }
+    if (!empty($extra['botao'])) {
+        $out[] = ['type' => 'BUTTONS', 'buttons' => [[
+            'type'    => 'URL',
+            'text'    => (string) $extra['botao'],
+            'url'     => WA_TPL_SITE_ROTEIROS . '{{1}}',
+            'example' => [WA_TPL_SITE_ROTEIROS . (string) ($extra['botao_exemplo'] ?? '')],
+        ]]];
+    }
+    return $out;
+}
+
+/* O formato de um modelo da conta, lido dos componentes que a Meta devolve.
+   E o que o ENVIO sabe montar:
+     'nome'        so texto, {{1}} = nome da pessoa (o modelo de sempre)
+     'roteiro_pdf' documento no topo + botao de link, {{1}} = nome do roteiro
+   Qualquer outra combinacao devolve null: mandar um modelo cujos parametros o
+   envio nao sabe montar faz a Meta recusar TODO destinatario, e falha e
+   terminal. Quem chama recusa a campanha. */
+function wa_tpl_formato($t) {
+    $doc = false; $url = false; $outro = false;
+    foreach ((array) ($t['components'] ?? []) as $c) {
+        $tipo = strtoupper((string) ($c['type'] ?? ''));
+        if ($tipo === 'HEADER') {
+            if (strtoupper((string) ($c['format'] ?? '')) === 'DOCUMENT') $doc = true; else $outro = true;
+        } elseif ($tipo === 'BUTTONS') {
+            foreach ((array) ($c['buttons'] ?? []) as $b) {
+                if (strtoupper((string) ($b['type'] ?? '')) === 'URL' && strpos((string) ($b['url'] ?? ''), '{{1}}') !== false) $url = true;
+                else $outro = true;
+            }
+        }
+    }
+    if ($outro) return null;
+    if (!$doc && !$url) return 'nome';
+    return ($doc && $url) ? 'roteiro_pdf' : null;
+}
+
+/* Quantas variaveis o TEXTO do modelo tem, lido da Meta. */
+function wa_tpl_vars_corpo($t) {
+    foreach ((array) ($t['components'] ?? []) as $c) {
+        if (strtoupper((string) ($c['type'] ?? '')) === 'BODY') {
+            return count(array_unique(wa_tpl_vars($c['text'] ?? '')));
+        }
+    }
+    return 0;
+}
+
+/* O modelo da lista, pelo nome. Null se nao esta. */
+function wa_tpl_do_nome($nome, $lista) {
+    foreach ((array) $lista as $t) if ((string) ($t['name'] ?? '') === (string) $nome) return $t;
+    return null;
+}
+
+/* Sobe um PDF de exemplo pela API de upload retomavel e devolve o handle, ou
+   ['erro' => ...]. Duas chamadas: abre a sessao NO APP (WA_ES_APP_ID) com
+   tamanho e tipo, e manda os bytes com "OAuth" e file_offset 0. */
+function wa_tpl_sobe_pdf($url_pdf, $cfg) {
+    $app = trim((string) ($cfg['WA_ES_APP_ID'] ?? ''));
+    if ($app === '') return ['erro' => 'O id do app da Meta (WA_ES_APP_ID) não está no servidor.'];
+    $pdf = wa_tpl_http((string) $url_pdf, null, []);
+    if (!$pdf || ($pdf['status'] ?? 0) !== 200 || strpos((string) $pdf['body'], '%PDF') !== 0) {
+        return ['erro' => 'Não consegui baixar o PDF de exemplo do roteiro.'];
+    }
+    $bytes = (string) $pdf['body'];
+    $q = http_build_query(['file_name' => 'roteiro-exemplo.pdf', 'file_length' => strlen($bytes), 'file_type' => 'application/pdf']);
+    $s = wa_tpl_http(WA_GRAPH . $app . '/uploads?' . $q, '', wa_tpl_headers($cfg));
+    $sj = $s ? json_decode((string) ($s['body'] ?? ''), true) : null;
+    $sessao = is_array($sj) ? (string) ($sj['id'] ?? '') : '';
+    if (!$s || ($s['status'] ?? 0) >= 300 || strpos($sessao, 'upload:') !== 0) {
+        return ['erro' => 'A Meta não abriu o envio do PDF de exemplo: '
+            . (string) ($sj['error']['message'] ?? 'sem resposta') . '.'];
+    }
+    $u = wa_tpl_http(WA_GRAPH . $sessao, $bytes,
+        ['Authorization: OAuth ' . ($cfg['WA_TOKEN'] ?? ''), 'file_offset: 0']);
+    $uj = $u ? json_decode((string) ($u['body'] ?? ''), true) : null;
+    $h = is_array($uj) ? (string) ($uj['h'] ?? '') : '';
+    if (!$u || ($u['status'] ?? 0) >= 300 || $h === '') {
+        return ['erro' => 'A Meta não aceitou o PDF de exemplo: '
+            . (string) ($uj['error']['message'] ?? 'sem resposta') . '.'];
+    }
+    return ['handle' => $h];
 }
 
 function wa_tpl_waba($cfg = null) {
@@ -195,7 +287,7 @@ function wa_tpl_headers($cfg) {
    no ponto de chamada, aplicada ao contrario - este e o ponto por onde todo
    mundo passa.
 ------------------------------------------------------------ */
-function wa_tpl_cria($titulo, $categoria, $corpo, $exemplos = [], $idioma = 'pt_BR') {
+function wa_tpl_cria($titulo, $categoria, $corpo, $exemplos = [], $idioma = 'pt_BR', $extra = []) {
     $cfg  = wa_config();
     $waba = wa_tpl_waba($cfg);
     if ($waba === '') {
@@ -221,11 +313,25 @@ function wa_tpl_cria($titulo, $categoria, $corpo, $exemplos = [], $idioma = 'pt_
         return ['ok' => false, 'erro' => implode(' ', $problemas), 'problemas' => $problemas];
     }
 
+    /* Formato com o PDF do roteiro: sobe o exemplo ANTES. Se ele falhar,
+       nenhum modelo e submetido - modelo criado nao se apaga nem se renomeia
+       de imediato na Meta. */
+    $comp_extra = [];
+    if (($extra['formato'] ?? '') === 'roteiro_pdf') {
+        $up = wa_tpl_sobe_pdf($extra['pdf_exemplo'] ?? '', $cfg);
+        if (isset($up['erro'])) return ['ok' => false, 'erro' => $up['erro']];
+        $comp_extra = [
+            'header_handle' => $up['handle'],
+            'botao'         => WA_TPL_BOTAO_ROTEIRO,
+            'botao_exemplo' => (string) ($extra['slug_exemplo'] ?? '') . '?utm_source=whatsapp&utm_medium=transmissao',
+        ];
+    }
+
     $payload = [
         'name'       => $nome,
         'language'   => (string) $idioma,
         'category'   => $categoria,
-        'components' => wa_tpl_componentes($corpo, $exemplos),
+        'components' => wa_tpl_componentes($corpo, $exemplos, $comp_extra),
     ];
     $r = wa_tpl_http(WA_GRAPH . $waba . '/message_templates',
                      json_encode($payload, JSON_UNESCAPED_UNICODE),
@@ -305,4 +411,36 @@ function wa_tpl_aprovado($nome, $lista = null) {
         }
     }
     return false;   // a lista veio e o modelo nao esta nela: nao existe.
+}
+
+/* O "como enviar" de uma campanha de roteiro com PDF (11/11/2026), gravado na
+   campanha no criar: o PDF, o nome do roteiro e o final do endereco do botao.
+   Roteiro sem PDF devolve null: este modelo nao tem o que mandar no topo. */
+function wa_tpl_envio_roteiro($r) {
+    $slug = (string) ($r['slug'] ?? '');
+    $pdf  = trim((string) ($r['pdf_url'] ?? ''));
+    $tit  = trim((string) ($r['titulo'] ?? ''));
+    if ($slug === '' || $pdf === '' || $tit === '') return null;
+    return [
+        'formato' => 'roteiro_pdf',
+        'roteiro' => $tit,
+        'pdf'     => $pdf,
+        'sufixo'  => $slug . '?utm_source=whatsapp&utm_medium=transmissao&utm_campaign=' . rawurlencode($slug),
+    ];
+}
+
+/* Os componentes de UMA mensagem. 'nome' (ou campanha antiga, sem envio
+   gravado) manda o nome da pessoa no {{1}}; 'roteiro_pdf' manda o PDF no
+   topo, o nome do roteiro no {{1}} do texto e o final do endereco no botao. */
+function wa_tpl_componentes_envio($envio, $nome) {
+    if (is_array($envio) && ($envio['formato'] ?? '') === 'roteiro_pdf') {
+        return [
+            ['type' => 'header', 'parameters' => [['type' => 'document', 'document' =>
+                ['link' => (string) $envio['pdf'], 'filename' => 'Roteiro ' . (string) $envio['roteiro'] . '.pdf']]]],
+            ['type' => 'body', 'parameters' => [['type' => 'text', 'text' => (string) $envio['roteiro']]]],
+            ['type' => 'button', 'sub_type' => 'url', 'index' => '0',
+             'parameters' => [['type' => 'text', 'text' => (string) $envio['sufixo']]]],
+        ];
+    }
+    return [['type' => 'body', 'parameters' => [['type' => 'text', 'text' => (string) $nome]]]];
 }

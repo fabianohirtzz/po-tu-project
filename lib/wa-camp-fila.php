@@ -23,18 +23,24 @@
 require_once __DIR__ . '/wa-db.php';
 require_once __DIR__ . '/wa-camp.php';
 require_once __DIR__ . '/wa-send.php';
+require_once __DIR__ . '/wa-template.php';   // montagem da mensagem (pura)
 
 function wa_camp_set_enviador($f) { $GLOBALS['WA_CAMP_ENVIADOR'] = $f; }
 
 /* O enviador padrao manda o template da campanha. Fora da janela de 24h nao
    existe outro caminho (ver Task 2). */
-function wa_camp_envia($wa_id, $nome, $template) {
+/* O montador da mensagem mora no lib/wa-template.php (puro, sem banco), para o
+   ensaio do templates.php usar a MESMA montagem sem carregar a base. */
+function wa_camp_envio_roteiro($r) { return wa_tpl_envio_roteiro($r); }
+function wa_camp_componentes($envio, $nome) { return wa_tpl_componentes_envio($envio, $nome); }
+
+function wa_camp_envia($wa_id, $nome, $template, $envio = null) {
     if (isset($GLOBALS['WA_CAMP_ENVIADOR']) && $GLOBALS['WA_CAMP_ENVIADOR']) {
-        return call_user_func($GLOBALS['WA_CAMP_ENVIADOR'], $wa_id, $nome);
+        return call_user_func($GLOBALS['WA_CAMP_ENVIADOR'], $wa_id, $nome, $envio);
     }
     // Idioma explicito, nao o padrao da funcao: e o mesmo valor que o
     // campanha.php confere na Meta antes de deixar criar a campanha.
-    return wa_send_template($wa_id, $template, [$nome], WA_CAMP_IDIOMA);
+    return wa_send_template($wa_id, $template, [], WA_CAMP_IDIOMA, null, wa_camp_componentes($envio, $nome));
 }
 
 /* Reserva uma linha por destinatario. Conflito (409) significa que a pessoa
@@ -117,6 +123,11 @@ function wa_camp_drena($campanha_id, $limite) {
        o indice unico impede ate re-reservar. Melhor nao fazer nada e deixar a
        fila intacta para a proxima varredura, depois que a campanha for
        corrigida. */
+    /* Como montar cada mensagem, gravado no criar. Campanha antiga nao tem:
+       vale o formato de sempre (nome). */
+    $seg_c = ($camp && isset($camp[0]['segmento'])) ? $camp[0]['segmento'] : [];
+    if (is_string($seg_c)) $seg_c = json_decode($seg_c, true);
+    $envio = is_array($seg_c) && isset($seg_c['envio']) && is_array($seg_c['envio']) ? $seg_c['envio'] : null;
     if ($template === '') {
         error_log('wa_camp_drena: campanha sem template, fila intacta | ' . $campanha_id);
         /* 'motivo' porque restam=-1 sozinho junta duas causas com conserto
@@ -156,7 +167,7 @@ function wa_camp_drena($campanha_id, $limite) {
         }
         if (!$posse) continue;   // outro dreno pegou esta linha primeiro
 
-        $r = wa_camp_envia($e['wa_id'], $e['nome'] ?? '', $template);
+        $r = wa_camp_envia($e['wa_id'], $e['nome'] ?? '', $template, $envio);
         if (!empty($r['ok']) && !empty($r['wamid'])) {
             // Estado so avanca se o envio SAIU, e o wamid e o que prova isso:
             // e por ele que o recibo de entrega volta (Task 7).

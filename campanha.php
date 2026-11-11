@@ -338,6 +338,38 @@ if ($modo === 'criar') {
     }
 
     $seg = camp_segmento_post();
+
+    /* COMO cada mensagem e montada, decidido pelo MODELO na Meta, nunca pela
+       tela (11/11/2026). Dois formatos que o envio sabe montar: so texto com
+       o nome da pessoa no {{1}}, ou o PDF do roteiro no topo com o nome do
+       roteiro no {{1}} e o botao do site. Qualquer outro, ou um texto que nao
+       tenha EXATAMENTE uma variavel, faz a Meta recusar todo destinatario - e
+       falha e terminal. Por isso a recusa e aqui, antes de existir campanha.
+       Fica gravado na campanha: o dreno le de la. */
+    $tplm    = wa_tpl_do_nome($template, $cat);
+    $formato = $tplm ? wa_tpl_formato($tplm) : null;
+    if ($formato === null) {
+        cfail(400, 'O modelo "' . $template . '" tem um formato que a transmissão não sabe enviar. '
+                 . 'Use um modelo só de texto, ou o modelo com o PDF do roteiro e o botão do site.');
+    }
+    if (wa_tpl_vars_corpo($tplm) !== 1) {
+        cfail(400, 'O texto do modelo "' . $template . '" precisa ter exatamente uma variável ({{1}}). '
+                 . 'Com outro número, a Meta recusa todos os envios.');
+    }
+    $envio = ['formato' => 'nome'];
+    if ($formato === 'roteiro_pdf') {
+        if ($seg['tipo'] !== 'roteiro') {
+            cfail(400, 'Este modelo envia o PDF de um roteiro. Em "Quem recebe", escolha o roteiro.');
+        }
+        $ro = wa_db_select_estrito('po_roteiros',
+            'select=slug,titulo,pdf_url&slug=eq.' . rawurlencode($seg['slug']) . '&limit=1');
+        if ($ro === null) cfail(502, 'Não consegui ler o roteiro agora. Nada foi criado.');
+        $envio = $ro ? wa_camp_envio_roteiro($ro[0]) : null;
+        if ($envio === null) {
+            cfail(400, 'O roteiro escolhido não tem PDF cadastrado. Suba o PDF na aba Roteiros antes.');
+        }
+    }
+
     list($leads, $r, $custo) = camp_calcula($seg);
     /* Publico vazio nunca vira campanha: uma linha 'rascunho' sem
        destinatario ficaria eternamente no caminho da proxima. */
@@ -360,7 +392,7 @@ if ($modo === 'criar') {
         'roteiro_slug'            => cpost('roteiro_slug') ?: null,
         'template'                => $template,
         'corpo'                   => $corpo,
-        'segmento'                => $seg + ['origem' => 'painel'],
+        'segmento'                => $seg + ['origem' => 'painel', 'envio' => $envio],
         'total'                   => $r['resumo']['total'],
         // Congelados AGORA: o preco da Meta muda, e o relatorio de uma
         // campanha antiga tem que continuar batendo com a fatura daquele mes.

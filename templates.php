@@ -93,6 +93,8 @@ if ($modo === 'listar') {
             'status'   => (string) ($t['status'] ?? ''),
             'categoria'=> (string) ($t['category'] ?? ''),
             'idioma'   => (string) ($t['language'] ?? ''),
+            // 'nome' (so texto) ou 'roteiro_pdf' (PDF no topo + botao do site)
+            'formato'  => wa_tpl_formato($t),
         ];
     }
     tok(['templates' => $limpo]);
@@ -129,6 +131,7 @@ if ($modo === 'ensaio') {
        nao bate com o modelo (hello_world, por exemplo, nao tem nenhum). */
     $nomeVar = tpost('nome_var');
     $params  = $nomeVar === '' ? [] : [$nomeVar];
+    $componentes = null;
 
     if ($modelo === '')  tfail(400, 'Escolha o modelo aprovado que quer testar.');
     if (!wa_destino($destino)) {
@@ -139,10 +142,22 @@ if ($modo === 'ensaio') {
        identificado por nome + idioma: o nome certo com o idioma errado
        devolve "#132001 ... does not exist in the translation" e nao entrega.
        O hello_world da conta de teste existe so em en_US. */
-    $idioma = wa_tpl_idioma($modelo);
+    $lista  = wa_tpl_lista();
+    $idioma = wa_tpl_idioma($modelo, $lista);
     if ($idioma === null) $idioma = 'pt_BR';
 
-    $r = wa_send_template($destino, $modelo, $params, $idioma, $pid);
+    /* Modelo com o PDF do roteiro (11/11/2026): o ensaio monta a mensagem
+       com o MESMO montador da campanha, para um roteiro escolhido na tela. */
+    $tplm = is_array($lista) ? wa_tpl_do_nome($modelo, $lista) : null;
+    if ($tplm && wa_tpl_formato($tplm) === 'roteiro_pdf') {
+        $slug = tpost('roteiro');
+        $ro = $slug !== '' ? po_fetch_roteiro($slug) : null;
+        $envio = $ro ? wa_tpl_envio_roteiro($ro) : null;
+        if ($envio === null) tfail(400, 'Escolha um roteiro com PDF para testar este modelo.');
+        $componentes = wa_tpl_componentes_envio($envio, '');
+    }
+
+    $r = wa_send_template($destino, $modelo, $params, $idioma, $pid, $componentes);
     if (empty($r['ok'])) {
         tfail(502, 'A Meta não entregou: ' . ($r['erro'] ?? 'motivo não informado') . '.');
     }
@@ -157,7 +172,19 @@ $categoria = tpost('categoria') ?: 'MARKETING';
 
 if ($titulo === '') tfail(400, 'Dê um nome ao modelo.');
 
-$r = wa_tpl_cria($titulo, $categoria, $corpo, $exemplos);
+/* Formato com o PDF do roteiro no topo e o botao do site: a Meta revisa com um
+   PDF de EXEMPLO, que sai de um roteiro publicado. */
+$extra = [];
+if (tpost('formato') === 'roteiro_pdf') {
+    $exemplo = null;
+    foreach (po_fetch_roteiros() as $ro) {
+        if (!empty($ro['pdf_url'])) { $exemplo = $ro; break; }
+    }
+    if ($exemplo === null) tfail(409, 'Nenhum roteiro publicado tem PDF para servir de exemplo à Meta.');
+    $extra = ['formato' => 'roteiro_pdf', 'pdf_exemplo' => $exemplo['pdf_url'], 'slug_exemplo' => $exemplo['slug']];
+}
+
+$r = wa_tpl_cria($titulo, $categoria, $corpo, $exemplos, 'pt_BR', $extra);
 if (!$r['ok']) {
     // 422: o texto e que esta errado, nao a requisicao. A tela distingue para
     // mostrar a lista de problemas em vez de "erro inesperado".

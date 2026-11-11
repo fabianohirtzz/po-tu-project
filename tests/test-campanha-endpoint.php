@@ -90,9 +90,19 @@ function ce_filho($caso) {
         if ($caso === 'meta-fora') return null;
         $lang = ($caso === 'tpl-idioma') ? 'en_US' : 'pt_BR';
         $st   = ($caso === 'tpl-pendente') ? 'PENDING' : 'APPROVED';
+        /* Os componentes vem como a Meta devolve de verdade (fields=components):
+           o criar le deles o formato do modelo e quantas variaveis o texto tem. */
+        $vars = ($caso === 'criar-tpl-2vars') ? 'Oi {{1}}, abriu {{2}}.' : 'Oi {{1}}, roteiro novo.';
         return ['status' => 200, 'body' => json_encode(['data' => [
             ['name' => 'po_roteiro_novo', 'status' => $st,
-             'category' => 'MARKETING', 'language' => $lang],
+             'category' => 'MARKETING', 'language' => $lang,
+             'components' => [['type' => 'BODY', 'text' => $vars]]],
+            ['name' => 'po_roteiro_interesse', 'status' => 'APPROVED',
+             'category' => 'MARKETING', 'language' => 'pt_BR',
+             'components' => [['type' => 'HEADER', 'format' => 'DOCUMENT'],
+                              ['type' => 'BODY', 'text' => 'Olá! Viagem {{1}}. Responda SAIR.'],
+                              ['type' => 'BUTTONS', 'buttons' => [['type' => 'URL', 'text' => 'Ver roteiro no site',
+                                  'url' => 'https://pereiraoliveiraturismo.com.br/roteiros/{{1}}']]]]],
         ]])];
     });
 
@@ -143,6 +153,11 @@ function ce_filho($caso) {
                                           // a TELA manda "todos": o servidor tem que ignorar e usar o da campanha
                                           'segmento'=>'{"tipo":"todos"}']; break;
         case 'seg-segmentos':      $_POST['modo'] = 'segmentos'; break;
+        case 'seg-criar-pdf':      $_POST = array_merge($_POST, $criar, ['total_confirmado'=>'2', 'template'=>'po_roteiro_interesse',
+                                          'segmento'=>'{"tipo":"roteiro","slug":"chile"}']); break;
+        case 'seg-criar-pdf-todos':$_POST = array_merge($_POST, $criar, ['total_confirmado'=>'1', 'template'=>'po_roteiro_interesse',
+                                          'segmento'=>'{"tipo":"todos"}']); break;
+        case 'criar-tpl-2vars':    $_POST = array_merge($_POST, $criar); break;
     }
 
     wa_db_set_transport(function ($metodo, $url, $corpo, $headers) use ($caso, &$chamadas) {
@@ -150,7 +165,7 @@ function ce_filho($caso) {
 
         if (strpos($url, 'po_roteiros') !== false) {
             return ['status'=>200, 'body'=>json_encode([
-                ['slug'=>'chile', 'titulo'=>'Chile e Deserto do Atacama'],
+                ['slug'=>'chile', 'titulo'=>'Chile e Deserto do Atacama', 'pdf_url'=>'https://pereiraoliveiraturismo.com.br/docs/chile-x.pdf'],
                 ['slug'=>'peru-fascinante', 'titulo'=>'Peru Fascinante']])];
         }
         if (strpos($url, 'po_wa_espera') !== false) {
@@ -571,4 +586,20 @@ ok(($r['json']['roteiros'][0] ?? null) === ['slug'=>'chile', 'titulo'=>'Chile e 
    'lista os roteiros com quantos pediram (deu: ' . json_encode($r['json']['roteiros'] ?? null) . ')');
 ok(count($r['json']['roteiros']) === 1, 'roteiro que ninguem pediu nao aparece (campanha vazia)');
 ok(($r['json']['espera'] ?? null) === [['destino'=>'Itália', 'n'=>1]], 'lista os destinos da espera com a contagem');
+
+/* ---------- modelo com o PDF do roteiro (11/11/2026) ---------- */
+$r = ce_roda('seg-criar-pdf');
+ok($r['codigo'] === 200, 'campanha com o modelo do PDF e criada (deu: ' . json_encode($r['json']) . ')');
+$posts = array_values(array_filter($r['chamadas'], fn($c) => $c['metodo'] === 'POST' && strpos($c['url'], 'po_wa_campanhas') !== false));
+$env = json_decode($posts[0]['corpo'], true)['segmento']['envio'] ?? null;
+ok(($env['formato'] ?? null) === 'roteiro_pdf' && ($env['roteiro'] ?? null) === 'Chile e Deserto do Atacama'
+   && ($env['pdf'] ?? null) === 'https://pereiraoliveiraturismo.com.br/docs/chile-x.pdf',
+   'a campanha grava o PDF e o nome do roteiro para o envio (deu: ' . json_encode($env) . ')');
+$r = ce_roda('seg-criar-pdf-todos');
+ok($r['codigo'] === 400 && !ce_escreveu($r), 'modelo do PDF sem um roteiro escolhido e recusado (nao ha PDF para mandar)');
+$r = ce_roda('criar-tpl-2vars');
+ok($r['codigo'] === 400 && !ce_escreveu($r), 'modelo com duas variaveis e recusado no criar, antes de queimar a base');
+$r = ce_roda('criar');
+$posts = array_values(array_filter($r['chamadas'], fn($c) => $c['metodo'] === 'POST' && strpos($c['url'], 'po_wa_campanhas') !== false));
+ok((json_decode($posts[0]['corpo'], true)['segmento']['envio']['formato'] ?? null) === 'nome', 'o modelo de sempre grava o formato nome');
 echo "test-campanha-endpoint OK\n";

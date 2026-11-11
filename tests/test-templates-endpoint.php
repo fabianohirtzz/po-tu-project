@@ -52,6 +52,14 @@ function te_filho($caso) {
 
     po_auth_set_verificador(fn($u, $a, $t) => $caso !== 'sem-auth' && $t === 'tok.valido');
 
+    /* Os roteiros (o PDF de exemplo da criacao e o roteiro do ensaio) vem do
+       leitor injetavel do po-data: nenhum caso toca o Supabase. */
+    $GLOBALS['WA_ES_APP_ID'] = '777000222';
+    po_set_fetcher(function ($url) {
+        return json_encode([['slug' => 'peru-fascinante', 'titulo' => 'Peru Fascinante', 'ativo' => true,
+            'pdf_url' => 'https://pereiraoliveiraturismo.com.br/docs/peru-fascinante-40ebac8a.pdf']]);
+    });
+
     wa_tpl_set_transport(function ($url, $payload, $h) use (&$chamadas, $caso) {
         $chamadas[] = ['url' => $url, 'payload' => $payload];
         if ($caso === 'meta-recusa') {
@@ -65,6 +73,17 @@ function te_filho($caso) {
             ]])];
         }
         if ($caso === 'listar-fora') return ['status' => 500, 'body' => 'erro'];
+        // criacao com PDF: baixa o exemplo, abre a sessao, sobe os bytes, cria
+        if (strpos($url, '/docs/') !== false) return ['status' => 200, 'body' => '%PDF-1.4 x'];
+        if (strpos($url, '/uploads?') !== false) return ['status' => 200, 'body' => '{"id":"upload:S1"}'];
+        if (strpos($url, 'upload:S1') !== false) return ['status' => 200, 'body' => '{"h":"H1"}'];
+        if (in_array($caso, ['ensaio-pdf', 'listar-pdf', 'ensaio-pdf-sem-roteiro'], true)) {
+            return ['status' => 200, 'body' => json_encode(['data' => [
+                ['name' => 'po_roteiro_interesse', 'status' => 'APPROVED', 'category' => 'MARKETING', 'language' => 'pt_BR',
+                 'components' => [['type' => 'HEADER', 'format' => 'DOCUMENT'], ['type' => 'BODY', 'text' => 'Viagem {{1}}.'],
+                    ['type' => 'BUTTONS', 'buttons' => [['type' => 'URL', 'text' => 'Ver', 'url' => 'https://x/{{1}}']]]]],
+            ]])];
+        }
         /* O ensaio pergunta o idioma a conta antes de enviar. O hello_world
            que a Meta cria junto com a conta de teste existe SO em en_US. */
         if (strpos($caso, 'ensaio') === 0) {
@@ -115,6 +134,14 @@ function te_filho($caso) {
         case 'ensaio-fone-ruim':
             $_POST = ['modo' => 'ensaio', 'sb_token' => 'tok.valido',
                       'template' => 'hello_world', 'destino' => 'nao e telefone']; break;
+        case 'criar-pdf':      $_POST = ['modo' => 'criar', 'formato' => 'roteiro_pdf'] + $base;
+                               $_POST['titulo'] = 'po_roteiro_interesse'; $_POST['exemplo'] = 'Peru Fascinante'; break;
+        case 'listar-pdf':     $_POST = ['modo' => 'listar', 'sb_token' => 'tok.valido']; break;
+        case 'ensaio-pdf':     $_POST = ['modo' => 'ensaio', 'sb_token' => 'tok.valido', 'template' => 'po_roteiro_interesse',
+                                         'destino' => '48999990001', 'roteiro' => 'peru-fascinante']; break;
+        case 'ensaio-pdf-sem-roteiro':
+                               $_POST = ['modo' => 'ensaio', 'sb_token' => 'tok.valido', 'template' => 'po_roteiro_interesse',
+                                         'destino' => '48999990001', 'roteiro' => '']; break;
         default:               $_POST = ['modo' => 'criar'] + $base; break;
     }
 
@@ -361,4 +388,28 @@ ok(preg_match("/\\\$pid = trim\\(\\(string\\) \\(\\\$cfg\\['WA_PHONE_ID'\\]/", $
 ok(preg_match("/if \\(\\\$pid === ''\\) \\\$pid = trim\\(\\(string\\) \\(\\\$cfg\\['WA_TEST_PHONE_ID'\\]/", $src) === 1,
    'e o de teste so como queda, quando o da agencia veio vazio');
 
+
+/* ---------- modelo com o PDF do roteiro (11/11/2026) ---------- */
+$r = te_roda('criar-pdf');
+ok($r['codigo'] === 200 && ($r['json']['ok'] ?? false) === true, 'cria o modelo com PDF (deu: ' . json_encode($r['json']) . ')');
+$cria = null;
+foreach ($r['chamadas'] as $c) if (strpos($c['url'], '/message_templates') !== false && $c['payload'] !== null) $cria = json_decode($c['payload'], true);
+ok($cria !== null && $cria['components'][0]['type'] === 'HEADER' && $cria['components'][0]['example']['header_handle'] === ['H1'],
+   'o modelo leva o documento no topo com o exemplo subido');
+ok(strpos(json_encode($r['chamadas']), 'peru-fascinante-40ebac8a.pdf') !== false, 'o exemplo e o PDF de um roteiro publicado');
+
+$r = te_roda('listar-pdf');
+ok(($r['json']['templates'][0]['formato'] ?? null) === 'roteiro_pdf', 'a lista diz o formato de cada modelo');
+
+$r = te_roda('ensaio-pdf');
+ok($r['codigo'] === 200, 'ensaio do modelo com PDF responde (deu: ' . json_encode($r['json']) . ')');
+$env = null;
+foreach ($r['chamadas'] as $c) if (strpos($c['url'], '/messages') !== false) $env = json_decode($c['payload'], true);
+$cmp = $env['template']['components'] ?? [];
+ok(($cmp[0]['parameters'][0]['document']['link'] ?? null) === 'https://pereiraoliveiraturismo.com.br/docs/peru-fascinante-40ebac8a.pdf'
+   && ($cmp[1]['parameters'][0]['text'] ?? null) === 'Peru Fascinante'
+   && strpos($cmp[2]['parameters'][0]['text'] ?? '', 'peru-fascinante?utm_source=whatsapp') === 0,
+   'o ensaio monta PDF, roteiro e botao com o mesmo montador da campanha');
+$r = te_roda('ensaio-pdf-sem-roteiro');
+ok($r['codigo'] === 400, 'ensaio do modelo com PDF sem roteiro escolhido e recusado');
 echo "test-templates-endpoint OK\n";
