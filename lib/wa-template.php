@@ -366,7 +366,18 @@ function wa_tpl_lista($limite = 50) {
     $url = WA_GRAPH . $waba . '/message_templates'
          . '?fields=name,status,category,language,components&limit=' . (int) $limite;
     $r = wa_tpl_http($url, null, wa_tpl_headers($cfg));
-    if (!$r || ($r['status'] ?? 0) < 200 || ($r['status'] ?? 0) >= 300) return null;
+    if (!$r || ($r['status'] ?? 0) < 200 || ($r['status'] ?? 0) >= 300) {
+        /* A mensagem da Meta (nunca o token) fica para a tela mostrar: "nao
+           consegui ler" sem o motivo nao deixa ninguem consertar nada. */
+        $ej = $r ? json_decode((string) ($r['body'] ?? ''), true) : null;
+        $GLOBALS['WA_TPL_ULTIMO_ERRO'] = $r
+            ? ('HTTP ' . (int) ($r['status'] ?? 0) . ': ' . (string) ($ej['error']['message'] ?? 'sem detalhe')
+               . (isset($ej['error']['code']) ? ' [codigo ' . $ej['error']['code'] . (isset($ej['error']['error_subcode']) ? '/' . $ej['error']['error_subcode'] : '') . ']' : '')
+               . (isset($ej['error']['error_user_msg']) ? ' ' . $ej['error']['error_user_msg'] : '')
+               . (isset($ej['error']['error_data']) ? ' ' . json_encode($ej['error']['error_data'], JSON_UNESCAPED_UNICODE) : ''))
+            : 'sem resposta da Meta';
+        return null;
+    }
 
     $j = json_decode((string) ($r['body'] ?? ''), true);
     // Lista vazia e resposta legitima; erro de leitura e null. Confundir os

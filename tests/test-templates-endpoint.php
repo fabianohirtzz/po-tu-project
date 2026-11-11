@@ -137,6 +137,8 @@ function te_filho($caso) {
         case 'criar-pdf':      $_POST = ['modo' => 'criar', 'formato' => 'roteiro_pdf'] + $base;
                                $_POST['titulo'] = 'po_roteiro_interesse'; $_POST['exemplo'] = 'Peru Fascinante'; break;
         case 'listar-pdf':     $_POST = ['modo' => 'listar', 'sb_token' => 'tok.valido']; break;
+        case 'diagnostico':    $_POST = ['modo' => 'diagnostico', 'sb_token' => 'tok.valido', 'waba' => '374665579072339']; break;
+        case 'diagnostico-lixo': $_POST = ['modo' => 'diagnostico', 'sb_token' => 'tok.valido', 'waba' => '../me?x']; break;
         case 'ensaio-pdf':     $_POST = ['modo' => 'ensaio', 'sb_token' => 'tok.valido', 'template' => 'po_roteiro_interesse',
                                          'destino' => '48999990001', 'roteiro' => 'peru-fascinante']; break;
         case 'ensaio-pdf-sem-roteiro':
@@ -412,4 +414,16 @@ ok(($cmp[0]['parameters'][0]['document']['link'] ?? null) === 'https://pereiraol
    'o ensaio monta PDF, roteiro e botao com o mesmo montador da campanha');
 $r = te_roda('ensaio-pdf-sem-roteiro');
 ok($r['codigo'] === 400, 'ensaio do modelo com PDF sem roteiro escolhido e recusado');
+
+/* ---------- diagnostico da conta (11/11/2026): SO LEITURA ----------
+   Nasceu do "not supported for this WhatsApp Business Account": o WA_WABA_ID
+   do servidor apontava para outra conta, e so a saude do NUMERO dizia qual era
+   a dona dele. */
+$r = te_roda('diagnostico');
+ok($r['codigo'] === 200 && isset($r['json']['diagnostico']['conta']), 'o diagnostico responde');
+foreach ($r['chamadas'] as $c) ok($c['payload'] === null, 'o diagnostico so faz GET: ' . $c['url']);
+ok(strpos(json_encode($r['chamadas']), '374665579072339') !== false, 'consulta a conta informada');
+ok(strpos(json_encode($r['json']), 'token-de-teste') === false, 'e nunca devolve o token');
+$r = te_roda('diagnostico-lixo');
+foreach ($r['chamadas'] as $c) ok(strpos($c['url'], '../me') === false, 'conta que nao e numero e ignorada (nunca vira caminho)');
 echo "test-templates-endpoint OK\n";

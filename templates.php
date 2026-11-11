@@ -49,7 +49,7 @@ if (!po_auth_ok($cfg['SUPABASE_URL'] ?? '', $cfg['SUPABASE_ANON_KEY'] ?? '')) {
 }
 
 $modo = tpost('modo');
-if (!in_array($modo, ['conferir', 'criar', 'listar', 'ensaio'], true)) {
+if (!in_array($modo, ['conferir', 'criar', 'listar', 'ensaio', 'diagnostico'], true)) {
     tfail(400, 'Modo inválido.');
 }
 
@@ -81,11 +81,37 @@ if ($modo === 'conferir') {
     ]);
 }
 
+/* diagnostico: o que a conta responde, SO LEITURA (so GET). Existe porque a
+   Meta devolve erro generico ("not supported for this WhatsApp Business
+   Account") e o motivo mora no estado da conta, nao no nosso pedido. Nunca
+   devolve o token. */
+if ($modo === 'diagnostico') {
+    $waba = wa_tpl_waba($cfg);
+    // Outra conta para conferir, so digitos (nunca vira caminho arbitrario).
+    if (preg_match('/^\d{6,20}$/', tpost('waba'))) $waba = tpost('waba');
+    if ($waba === '') tfail(409, 'Conta do WhatsApp não configurada.');
+    $h = wa_tpl_headers($cfg);
+    $out = [];
+    foreach ([
+        'conta'    => $waba . '?fields=id,name,account_review_status,business_verification_status,ownership_type,health_status,currency,timezone_id',
+        'numeros'  => $waba . '/phone_numbers?fields=id,display_phone_number,verified_name,status,platform_type,code_verification_status,name_status',
+        'modelos'  => $waba . '/message_templates?limit=1',
+        'apps'     => $waba . '/subscribed_apps',
+        'numero'   => trim((string) ($cfg['WA_PHONE_ID'] ?? '')) . '?fields=id,display_phone_number,verified_name,status,platform_type,quality_rating,health_status,throughput,is_on_biz_app',
+        'teste'    => trim((string) ($cfg['WA_TEST_PHONE_ID'] ?? '')) . '?fields=id,display_phone_number,status',
+    ] as $k => $caminho) {
+        $r = wa_tpl_http(WA_GRAPH . $caminho, null, $h);
+        $out[$k] = $r ? ['status' => (int) ($r['status'] ?? 0), 'corpo' => json_decode((string) ($r['body'] ?? ''), true)] : null;
+    }
+    tok(['diagnostico' => $out]);
+}
+
 if ($modo === 'listar') {
     $l = wa_tpl_lista();
     // null e erro de leitura, nao conta vazia. Confundir os dois faria a tela
     // dizer "nenhum modelo" com a Meta fora, e alguem criaria um duplicado.
-    if ($l === null) tfail(502, 'Não consegui ler os modelos agora.');
+    if ($l === null) tfail(502, 'Não consegui ler os modelos agora ('
+        . (string) ($GLOBALS['WA_TPL_ULTIMO_ERRO'] ?? 'motivo desconhecido') . ').');
     $limpo = [];
     foreach ($l as $t) {
         $limpo[] = [
