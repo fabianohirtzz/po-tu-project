@@ -84,7 +84,7 @@ if (!defined('PO_TEST')) {
         'description' => 'Como funcionam as excursões em grupo da Pereira Oliveira: acompanhante brasileiro, o que está incluído, pagamento, reserva e atendimento em Florianópolis.',
         'canonical'   => po_url('/perguntas-frequentes'),
         'og_image'    => po_url('/assets/images/roteiro-grecia.jpg'),
-        'css'         => ['/assets/css/roteiro.css?v=12', '/assets/css/roteiros.css?v=3', '/assets/css/faq.css?v=3', '/assets/css/cadastur.css?v=2'],
+        'css'         => ['/assets/css/roteiro.css?v=13', '/assets/css/roteiros.css?v=3', '/assets/css/faq.css?v=3', '/assets/css/cadastur.css?v=2'],
         'jsonld'      => po_faq_jsonld($itens),
     ]);
     echo po_header();

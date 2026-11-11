@@ -1,0 +1,12 @@
+-- ============================================================
+-- Pereira Oliveira: local de saida do roteiro (reuniao de 09/11/2026).
+--
+-- Texto livre que a cliente preenche na gaveta do roteiro, por exemplo
+-- "Saida de Florianopolis, com acompanhamento desde o embarque". Aparece em
+-- destaque SO na pagina do roteiro (nada de tag na home nem nos cards).
+--
+-- RODAR ANTES de publicar o painel novo: o salvamento do painel manda `saida`
+-- em todo roteiro, e sem a coluna o PostgREST recusa (PGRST204) e a aba
+-- Roteiros inteira para de salvar. Aditivo, nao apaga nada.
+-- ============================================================
+alter table public.po_roteiros add column if not exists saida text not null default '';

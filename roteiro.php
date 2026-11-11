@@ -71,6 +71,15 @@ function po_hero_chips($r) {
     return $chips;
 }
 
+/* Local de saida (09/11/2026): o texto que a cliente escreve na gaveta do
+   roteiro, em destaque so aqui, nunca na home nem nos cards. Vazio = nada. */
+function po_hero_saida($r) {
+    $s = trim((string) (is_array($r) ? ($r['saida'] ?? '') : ''));
+    if ($s === '') return '';
+    return '<p class="hero__saida"><svg viewBox="0 0 24 24"><path d="M2 16l20-6-20-6 4 6-4 6Zm4-6h8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        . po_e($s) . '</p>';
+}
+
 /* --reels-bg e uma custom property lida DENTRO de assets/css/roteiro.css
    (.intro__media:fullscreen::before), entao uma URL relativa ali seria
    resolvida contra a pasta do CSS (assets/css/) e daria 404 (mesmo bug que
@@ -175,6 +184,7 @@ function po_roteiro_html($r, ?array $outros = null) {
         . '<h1 class="hero__title">' . po_e($titulo) . '</h1>'
         . (!empty($r['subtitulo']) ? '<p class="hero__sub">' . po_e($r['subtitulo']) . '</p>' : '')
         . '<div class="hero__meta">' . po_hero_chips($r) . '</div>'
+        . po_hero_saida($r)
         . '<div class="hero__actions">' . po_btn_ir('#contato', 'Quero este roteiro') . po_btn_wa()
         . (count($valores) ? '<a class="btn btn--ghost" href="#investimento">Ver investimento</a>' : '') . '</div>'
         . '</div><a class="hero__scroll" href="#sobre" aria-label="Rolar"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg></a></section>';
@@ -441,7 +451,7 @@ if (!defined('PO_TEST')) {
         'description' => mb_substr($desc, 0, 155),
         'canonical'   => po_url(po_roteiro_href($r)),
         'og_image'    => $r['capa_url'] ?? po_url('/assets/images/roteiro-grecia.jpg'),
-        'css'         => ['/assets/css/roteiro.css?v=12', '/assets/css/status-tag.css?v=4', '/assets/css/cadastur.css?v=2'],
+        'css'         => ['/assets/css/roteiro.css?v=13', '/assets/css/status-tag.css?v=4', '/assets/css/cadastur.css?v=2'],
         'jsonld'      => po_roteiro_jsonld($r),
     ]);
     echo po_header();

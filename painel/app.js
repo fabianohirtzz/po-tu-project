@@ -657,6 +657,7 @@ function roteiroForm(r){
   </div>
   <div class="field"><label>Badge (ex: 8 dias)</label><input id="r-badge" value="${esc(r.badge||'')}"></div>
   <div class="field"><label>Período (texto) — usado no card e no hero</label><input id="r-periodo" value="${esc(r.periodo||'')}"></div>
+  <div class="field"><label>Saída (aparece em destaque só na página do roteiro)</label><input id="r-saida" placeholder="Ex.: Saída de Florianópolis, com acompanhamento desde o embarque" value="${esc(r.saida||'')}"></div>
   <div class="field"><label>Ativo no site</label><select id="r-ativo"><option value="1" ${r.ativo!==false?'selected':''}>Sim, publicado</option><option value="0" ${r.ativo===false?'selected':''}>Não (oculto)</option></select></div>
   <div class="field"><label>Status da viagem, aparece como tag na foto do roteiro</label><select id="r-status"><option value="">Sem tag</option>${Object.keys(STATUS_VIAGEM).map(k=>`<option value="${k}" ${r.status_viagem===k?'selected':''}>${STATUS_VIAGEM[k]}</option>`).join('')}</select></div>
   <div class="field" id="r-datas-wrap" ${r.status_viagem==='semanal'?'':'hidden'}>
@@ -931,6 +932,7 @@ function collectRoteiro(){
     // fallbacks (periodo/subtitulo). Não vão no patch para um update não apagar
     // o que os roteiros antigos já têm gravado.
     ordem:Number($('#r-ordem').value)||0,badge:$('#r-badge').value.trim(),periodo:$('#r-periodo').value.trim(),
+    saida:$('#r-saida').value.trim(),
     video_capa_url:$('#r-vcapa').value.trim()||null,video_insta_url:$('#r-vid').value.trim()||null,
     pdf_url:$('#r-pdf').value.trim()||null,
     ativo:$('#r-ativo').value==='1',status_viagem:$('#r-status').value||null,capa_url:$('#r-capa').value.trim()||null,

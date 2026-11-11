@@ -176,6 +176,11 @@ button{font-family:inherit;cursor:pointer}
   background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);backdrop-filter:blur(6px);
   font-family:var(--font-mono);font-size:.78rem;letter-spacing:.04em;color:#fff}
 .hero__chip svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;opacity:.85}
+/* Local de saida (09/11/2026): uma linha em destaque sob os chips. */
+.hero__saida{display:flex;align-items:center;gap:10px;margin:18px 0 0;max-width:52ch;
+  font-size:clamp(.98rem,1.4vw,1.1rem);font-weight:600;line-height:1.45;color:#fff;
+  text-shadow:0 2px 18px rgba(0,0,0,.45)}
+.hero__saida svg{width:20px;height:20px;flex:none;fill:none;stroke:var(--brand-verde,#84C440);stroke-width:2}
 .hero__actions{display:flex;flex-wrap:wrap;gap:14px;margin:32px 0 0}
 .hero__scroll{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:2;
   display:grid;place-items:center;width:38px;height:38px;color:rgba(255,255,255,.7)}
