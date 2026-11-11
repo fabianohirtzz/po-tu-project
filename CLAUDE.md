@@ -1845,6 +1845,27 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
   - **Rascunho do fluxo alterado por REST com a service_role** (o MCP do Supabase
     estava fora): so cards novos e chaves novas no `config` de dois cards, com o
     resto conferido identico antes/depois. Nada publicado, nada ligado.
+- **AJUSTES DA REUNIAO DE 11/11 (TARDE): NO AR, e `main` no GitHub (e4b3fa3).**
+  - **Importador:** `CIASC` virou marcador (substring, qualquer grafia); contato **sem
+    telefone valido nao entra** (vale para CRM tambem; sem DDD conta como sem telefone;
+    so fixo continua entrando); destino escrito **depois** do marcador ("- PO Egito")
+    poe a pessoa na Lista de espera (`wa_import_anotacao` + `wa_import_com_espera`,
+    casado contra `po_destinos`). O que vem ANTES do marcador nunca e destino (sobrenome
+    "Porto" nao vira Portugal). Ficha existente so muda para `espera` se estava em
+    novo/semresposta (filtro na propria escrita). O iPhone grava telefone rotulado como
+    `item1.TEL`: o parser agora tira o grupo. Medido no .vcf da Lais (2.776 contatos):
+    481 entram, 74 ficam de fora sem telefone, 11 vao para a espera.
+  - **Funil:** card da Lista de espera mostra "Espera: <destinos>" (`PO_ESPERA_FN`).
+  - **Clientes:** busca propria (`#cli-q`; a do topo e da aba Leads, que e do Carlos),
+    selecao multipla e exclusao em lote de 100 e na ficha. "Marcar todos" pega so o que
+    esta na tela.
+  - **Base limpa:** as **615 fichas do CRM sem telefone nenhum foram apagadas** (pedido
+    da Lais; nenhuma tinha venda; 402 tinham CPF e 271 passaporte). Copia integral fora
+    do Git em `~/.claude/projects/<projeto>/backups/po_leads-sem-telefone-crm-*.json`.
+    Base foi de 812 para 197. Ficaram sem telefone so os 3 TESTE (mantidos ate validar) e
+    12 "EXEMPLO ..." que nao sao meus (provavelmente do Carlos).
+  - **O Carlos tem liberdade total nas abas Leads e Relatorios.** Nao mexer nelas.
+  - **Formulario do site: NAO mexer** (decisao ainda nao tomada).
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro
