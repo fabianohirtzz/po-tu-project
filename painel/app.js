@@ -207,6 +207,8 @@ $('#status-filter').onchange=e=>{F.status=e.target.value;renderLeads();if($('#vi
    CRM, e um clique em "Nao e cliente" os tiraria todos das campanhas. */
 if($('#rev-cliente'))$('#rev-cliente').onclick=()=>poRevMarcar(true);
 if($('#rev-naocliente'))$('#rev-naocliente').onclick=()=>poRevMarcar(false);
+if($('#rev-excluir'))$('#rev-excluir').onclick=()=>poRevExcluir(poRevSelecionados(document.querySelector('#rev-rows')));
+if($('#rev-q'))$('#rev-q').oninput=()=>poRenderRevisao();
 if($('#rev-todos'))$('#rev-todos').onchange=e=>poRevAplicaTodos($$('#rev-rows .rev-chk'),e.target.checked);
 if($('#rev-revisados'))$('#rev-revisados').onchange=()=>poRenderRevisao();
 if($('#rev-marcador'))$('#rev-marcador').onchange=()=>poRenderRevisao();

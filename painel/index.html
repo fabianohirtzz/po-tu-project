@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="painel.css?v=20">
+<link rel="stylesheet" href="painel.css?v=21">
 <link rel="stylesheet" href="fluxo.css?v=12">
 </head>
 <body>
@@ -357,10 +357,15 @@
         <div class="rev-acoes">
           <button class="btn btn-primary" id="rev-cliente" type="button">Marcar como cliente</button>
           <button class="btn btn-ghost" id="rev-naocliente" type="button">Não é cliente</button>
+          <button class="btn btn-danger" id="rev-excluir" type="button">Excluir selecionados</button>
         </div>
         <!-- Caminho de volta: nenhuma outra tela do painel escreve 'revisado'
              ou 'cliente'. Sem esta caixa, um clique errado com o "marcar
              todos" ligado só teria conserto por SQL no banco. -->
+        <div class="search rev-busca">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+          <input type="text" id="rev-q" placeholder="Buscar por nome ou telefone">
+        </div>
         <div class="field rev-filtro">
           <label for="rev-marcador">Mostrar</label>
           <select class="fselect" id="rev-marcador">
@@ -380,7 +385,7 @@
           <table>
             <thead><tr>
               <th class="rev-chk-col"><input type="checkbox" id="rev-todos" title="Marcar todos"></th>
-              <th>Nome</th><th>Telefone</th><th>Origem</th><th>Situação</th>
+              <th>Nome</th><th>Telefone</th><th>Origem</th><th>Situação</th><th class="rev-del-col"></th>
             </tr></thead>
             <tbody id="rev-rows"></tbody>
           </table>
@@ -777,12 +782,12 @@
 <script src="video-encode.js?v=2"></script>
 <script src="fone.js?v=2"></script>
 <script src="datas.js?v=4"></script>
-<script src="app.js?v=27"></script>
+<script src="app.js?v=28"></script>
 <script src="clientes.js?v=3"></script>
 <script src="funil.js?v=3"></script>
 <script src="conversa.js?v=1"></script>
 <script src="importar-contatos.js?v=6"></script>
-<script src="revisao.js?v=3"></script>
+<script src="revisao.js?v=4"></script>
 <script src="campanhas.js?v=3"></script>
 <script src="modelos.js?v=4"></script>
 <script src="vitrine.js?v=3"></script>

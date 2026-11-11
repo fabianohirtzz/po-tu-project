@@ -100,7 +100,60 @@ function poLinhaRevisaoContato(lead) {
     '<td class="mono">' + esc(l.tel) + '</td>' +
     '<td class="mono">' + esc(l.origemImport) + '</td>' +
     '<td><span class="rev-sit ' + cls + '">' + sit + '</span></td>' +
+    '<td class="rev-del-col"><button type="button" class="rev-del" data-id="' + esc(l.id) +
+      '" title="Excluir este contato" aria-label="Excluir ' + esc(l.nome) + '">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>' +
+    '</button></td>' +
     '</tr>';
+}
+
+/* ---------- busca e exclusao (11/11/2026) ----------
+   A Lais vai rolando a fila e tirando quem nao quer (empresa, servico,
+   conhecido); no fim marca todos como cliente. */
+function poRevSemAcento(s) {
+  return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+function poRevBusca(leads, q) {
+  const termo = poRevSemAcento(q).trim();
+  if (!termo) return leads || [];
+  const dig = termo.replace(/\D+/g, '');
+  const soNumero = dig.length >= 4 && dig.length === termo.replace(/[\s\-().+]/g, '').length;
+  return (leads || []).filter(l => {
+    if (!l) return false;
+    if (soNumero) return String(l.tel || '').replace(/\D+/g, '').includes(dig);
+    const txt = (l.nome || '') + ' ' + poRevNomeAgenda(l.agendaRaw);
+    return txt.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().includes(termo);
+  });
+}
+
+function poRevExcluirTexto(nomes) {
+  const n = nomes.length;
+  if (n === 1) return 'Excluir "' + nomes[0] + '" da base?\n\nIsso não pode ser desfeito.';
+  return 'Excluir ' + n + ' contatos da base?\n\n' +
+    nomes.slice(0, 5).map(x => '- ' + x).join('\n') + (n > 5 ? '\n- e mais ' + (n - 5) : '') +
+    '\n\nIsso não pode ser desfeito.';
+}
+
+async function poRevExcluir(ids) {
+  const todosLeads = typeof LEADS !== 'undefined' ? LEADS : [];
+  if (!ids.length) { toast('Selecione ao menos um contato.', true); return; }
+  const nomes = ids.map(id => (todosLeads.find(x => String(x.id) === String(id)) || {}).nome || '(sem nome)');
+  if (!window.confirm(poRevExcluirTexto(nomes))) return;
+  const apagados = new Set();
+  const erros = [];
+  const lotes = poRevLotes(ids, PO_REV_LOTE);
+  for (let i = 0; i < lotes.length; i++) {
+    const { error } = await sb.from('po_leads').delete().in('id', lotes[i]);
+    if (error) { erros.push(error.message || String(error)); continue; }
+    lotes[i].forEach(id => apagados.add(String(id)));
+  }
+  // so sai da memoria o que o banco confirmou
+  for (let i = todosLeads.length - 1; i >= 0; i--) if (apagados.has(String(todosLeads[i].id))) todosLeads.splice(i, 1);
+  poRenderRevisao();
+  toast(erros.length
+    ? apagados.size + ' de ' + ids.length + ' excluídos. Falhou: ' + erros.join(' · ')
+    : apagados.size + (apagados.size === 1 ? ' contato excluído.' : ' contatos excluídos.'), erros.length > 0);
 }
 
 function poRevSelecionados(container) {
@@ -189,14 +242,17 @@ function poRenderRevisao() {
   // nao o tamanho da lista que esta na tela.
   const pend = poRevFiltra(todosLeads);
   const marcador = (document.querySelector('#rev-marcador') || {}).value || '';
-  const lista = poRevPorMarcador(verRevisados ? poRevFiltra(todosLeads, true) : pend, marcador);
+  const q = (document.querySelector('#rev-q') || {}).value || '';
+  const lista = poRevBusca(poRevPorMarcador(verRevisados ? poRevFiltra(todosLeads, true) : pend, marcador), q);
   const tb = document.querySelector('#rev-rows');
   if (tb) {
     tb.innerHTML = lista.length
       ? lista.map(poLinhaRevisaoContato).join('')
-      : '<tr><td colspan="5"><div class="empty">' +
-        (verRevisados ? 'Nenhum contato importado ainda.' : 'Nenhum contato aguardando revisão.') +
+      : '<tr><td colspan="6"><div class="empty">' +
+        (q.trim() ? 'Nenhum contato com essa busca.' :
+          (verRevisados ? 'Nenhum contato importado ainda.' : 'Nenhum contato aguardando revisão.')) +
         '</div></td></tr>';
+    tb.querySelectorAll('.rev-del').forEach(b => { b.onclick = () => poRevExcluir([b.dataset.id]); });
   }
   // A caixa "marcar todos" precisa voltar ao normal: senao ela fica marcada
   // sobre uma lista que acabou de trocar, dizendo que tudo esta selecionado

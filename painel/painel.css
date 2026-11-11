@@ -611,3 +611,8 @@ tbody tr:last-child td{border-bottom:none}
 .rev-mk--po{background:rgba(31,168,221,.12);color:#0b6f96}
 .rev-mk--ciasc{background:rgba(224,138,0,.14);color:#8a5400}
 .rev-filtro{max-width:280px;margin:12px 0 4px}
+.rev-busca{max-width:420px;margin-top:14px}
+.rev-del-col{width:44px;text-align:center}
+.rev-del{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid transparent;color:var(--muted);background:none;cursor:pointer;transition:.15s}
+.rev-del svg{width:16px;height:16px}
+.rev-del:hover,.rev-del:focus-visible{color:var(--st-perdido);border-color:rgba(220,38,38,.4);background:rgba(220,38,38,.06)}

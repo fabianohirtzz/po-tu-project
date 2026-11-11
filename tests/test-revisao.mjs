@@ -484,4 +484,38 @@ assert.ok(!/A agenda tem médico, fornecedor e família/.test(painel),
   assert.ok(/agendaRaw:/.test(app), 'a carga dos leads guarda o cartao da agenda');
 }
 
+
+/* ---------- busca e exclusao na Revisao (11/11/2026) ----------
+   A Lais vai rolando a fila e tirando quem nao quer; no fim marca todos
+   como cliente. */
+{
+  const c3 = new Function(ESC + pega('poRevNomeAgenda') + pega('poRevMarcador') + pega('poRevSemAcento') + pega('poRevBusca') +
+    pega('poRevExcluirTexto') + pega('poLinhaRevisaoContato') +
+    '; return {poRevBusca, poRevExcluirTexto, poLinhaRevisaoContato};')();
+  const ls = [
+    { id: '1', nome: 'Ana Exemplo', tel: '+5548999990001', agendaRaw: 'FN:Ana Exemplo - Cliente PO' },
+    { id: '2', nome: 'Ambulatório', tel: '+5548999990002', agendaRaw: 'FN:Ambulatório CIASC' },
+    { id: '3', nome: 'João Teste', tel: '+5548999990003', agendaRaw: '' },
+  ];
+  assert.deepEqual(c3.poRevBusca(ls, 'ambulatorio').map(l => l.id), ['2'], 'busca por nome, sem acento');
+  assert.deepEqual(c3.poRevBusca(ls, 'cliente po').map(l => l.id), ['1'], 'acha pelo nome como esta na agenda');
+  assert.deepEqual(c3.poRevBusca(ls, 'joao').map(l => l.id), ['3'], 'joao acha João');
+  assert.deepEqual(c3.poRevBusca(ls, '9990003').map(l => l.id), ['3'], 'acha pelo telefone');
+  assert.equal(c3.poRevBusca(ls, ' ').length, 3, 'busca vazia mostra todos');
+
+  const t1 = c3.poRevExcluirTexto(['Ana Exemplo']);
+  assert.ok(t1.includes('Ana Exemplo') && t1.includes('não pode ser desfeito'), 'confirmacao de um diz quem e');
+  const t9 = c3.poRevExcluirTexto(['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+  assert.ok(t9.includes('7 contatos') && t9.includes('e mais 2'), 'confirmacao de varios mostra a contagem');
+
+  const h = c3.poLinhaRevisaoContato({ id: '7', nome: 'X', revisado: false });
+  assert.ok(/class="[^"]*rev-del[^"]*"[^>]*data-id="7"/.test(h), 'cada linha tem o botao de excluir com o id');
+
+  const fonte = readFileSync(new URL('../painel/revisao.js', import.meta.url), 'utf8');
+  assert.ok(/\.from\('po_leads'\)\s*\.delete\(\)\s*\.in\('id',/.test(fonte), 'exclui por id');
+  assert.ok(/confirm\(poRevExcluirTexto\(/.test(fonte), 'nada e apagado sem confirmar');
+  const html = readFileSync(new URL('../painel/index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="rev-q"') && html.includes('id="rev-excluir"'), 'a busca e o excluir em massa estao na tela');
+}
+
 console.log('test-revisao OK');
