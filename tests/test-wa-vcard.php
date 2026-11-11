@@ -85,4 +85,16 @@ ok(count($t) === 1, 'o card truncado (sem END) nao vira contato: so o card intei
 ok($t[0]['nome'] === 'Bruno Dias - PO', 'o card inteiro mantem o proprio nome');
 ok($t[0]['telefones'] === ['48999992222'], 'e NAO herda o telefone do card truncado');
 
+/* iPhone grava telefone com rotulo personalizado como item1.TEL (com o
+   item1.X-ABLabel ao lado). Sem tirar o prefixo do grupo, o contato entrava
+   SEM telefone: na agenda real da cliente, 22 dos 445 marcados com PO. */
+$g = wa_vcard_parse("BEGIN:VCARD\nVERSION:3.0\nFN:Ana Teste - Cliente PO\n"
+    . "item1.TEL;type=pref:+5548999990001\nitem1.X-ABLabel:Celular\n"
+    . "item2.TEL:+5548999990002\nitem2.X-ABLabel:WhatsApp\n"
+    . "item3.EMAIL;type=INTERNET:ana@exemplo.com\nEND:VCARD\n");
+ok($g[0]['telefones'] === ['+5548999990001', '+5548999990002'], 'telefone em grupo itemN.TEL e lido');
+ok($g[0]['emails'] === ['ana@exemplo.com'], 'email em grupo itemN.EMAIL e lido');
+ok(wa_vcard_parse("BEGIN:VCARD\nFN:X\nitem1.X-ABLabel:Celular\nEND:VCARD\n")[0]['telefones'] === [],
+   'o rotulo do grupo nao vira telefone');
+
 echo "test-wa-vcard OK\n";

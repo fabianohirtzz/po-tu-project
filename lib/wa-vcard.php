@@ -27,7 +27,11 @@ function wa_vcard_parse($texto) {
                 if (strpos($ln, ':') === false) continue;
                 list($chaveBruta, $valor) = explode(':', $ln, 2);
                 $partes = explode(';', $chaveBruta);
-                $prop   = strtoupper($partes[0]);
+                /* O iPhone agrupa campo com rotulo personalizado como
+                   item1.TEL / item1.X-ABLabel. O grupo (antes do ponto) nao
+                   faz parte do nome da propriedade: sem tirar, todo telefone
+                   rotulado ("Celular", "WhatsApp", "numero antigo") sumia. */
+                $prop   = strtoupper(preg_replace('/^[A-Za-z0-9-]+\./', '', $partes[0]));
                 $qp     = false;
                 foreach ($partes as $p) {
                     if (stripos($p, 'QUOTED-PRINTABLE') !== false) $qp = true;
