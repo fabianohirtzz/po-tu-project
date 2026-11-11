@@ -8,6 +8,13 @@
      modo=drenar    -> manda o proximo lote (o wa-cron chama o mesmo caminho).
      modo=cancelar  -> encerra a campanha atual. A saida de emergencia.
      modo=estado    -> o andamento da campanha atual, so para a tela mostrar.
+     modo=segmentos -> os roteiros que alguem pediu e os destinos da lista de
+                       espera, com a contagem, para o seletor da tela.
+
+   SEGMENTO (11/11/2026): previa e criar recebem `segmento` (json: todos,
+   roteiro ou espera). O criar o GRAVA na campanha, e a reserva o le de la,
+   nunca da tela: ela recalcula o publico a cada pedaco, e um segmento lido de
+   novo do navegador poderia mandar a lista de um roteiro para a base inteira.
 
    Criar, reservar e drenar sao separados de proposito:
 
@@ -80,7 +87,7 @@ function camp_leads() {
     $todos = [];
     for ($i = 0; $i < 100; $i++) {      // teto de 100 mil leads; a base tem ~790
         $p = wa_db_select_estrito('po_leads',
-            'select=id,nome,telefone,wa_id,cliente,revisado,opt_out_at,payload_import,status,qualif_data'
+            'select=id,nome,telefone,wa_id,cliente,revisado,opt_out_at,payload_import,status,qualif_data,interesses,roteiro'
             . '&order=created_at.asc&offset=' . ($i * CAMP_PAGINA) . '&limit=' . CAMP_PAGINA);
         if ($p === null) return null;
         foreach ($p as $l) $todos[] = $l;
@@ -100,14 +107,45 @@ function camp_em_andamento() {
         . '&status=in.(rascunho,enviando)&order=created_at.asc&limit=1');
 }
 
+/* O que o segmento precisa e wa_camp_publico nao busca: o nome do roteiro
+   (para casar quem pediu pelo formulario do site) ou quem esta na lista de
+   espera do destino. Leitura estrita: um erro lido como "ninguem" faria a
+   previa mostrar 0 e a cliente concluir que ninguem pediu. */
+function camp_ctx_segmento($seg) {
+    if ($seg['tipo'] === 'roteiro') {
+        $r = wa_db_select_estrito('po_roteiros', 'select=slug,titulo&slug=eq.' . rawurlencode($seg['slug']) . '&limit=1');
+        if ($r === null) return null;
+        return ['titulo' => (string) ($r[0]['titulo'] ?? '')];
+    }
+    if ($seg['tipo'] === 'espera') {
+        $e = wa_db_select_estrito('po_wa_espera', 'select=lead_id&destino=eq.' . rawurlencode($seg['destino'])
+            . '&removido_at=is.null&limit=10000');
+        if ($e === null) return null;
+        $ids = [];
+        foreach ($e as $x) $ids[(string) ($x['lead_id'] ?? '')] = true;
+        return ['espera_ids' => $ids];
+    }
+    return [];
+}
+
 /* Publico + custo, do jeito que a tela mostra e o reservador usa. A MESMA
    funcao nos dois caminhos: previa que calcule diferente da reserva mostra um
    numero e cobra outro. */
-function camp_calcula() {
+function camp_calcula($seg = null) {
+    $seg = is_array($seg) ? $seg : ['tipo' => 'todos'];
     $leads = camp_leads();
     if ($leads === null) cfail(502, 'Não consegui ler a base agora. Nada foi alterado.');
-    $r = wa_camp_publico($leads);
+    $ctx = camp_ctx_segmento($seg);
+    if ($ctx === null) cfail(502, 'Não consegui ler quem pediu este roteiro agora. Nada foi alterado.');
+    $r = wa_camp_publico($leads, $seg, $ctx);
     return [$leads, $r, wa_camp_custo($r['resumo']['total'], WA_CAMP_PRECO_CENTAVOS)];
+}
+
+/* O segmento que veio da tela. Ilegivel e recusado, nunca vira "todos". */
+function camp_segmento_post() {
+    $seg = wa_camp_segmento(cpost('segmento'));
+    if ($seg === null) cfail(400, 'Não entendi para quem é esta campanha. Escolha o público de novo.');
+    return $seg;
 }
 
 /* Fecha a lista: carimba o total REAL de reservados e libera o dreno.
@@ -147,7 +185,7 @@ function camp_numero_configurado() {
 
 $modo = cpost('modo');
 if ($modo === '') $modo = 'previa';
-if (!in_array($modo, ['previa', 'criar', 'reservar', 'drenar', 'cancelar', 'estado'], true)) {
+if (!in_array($modo, ['previa', 'criar', 'reservar', 'drenar', 'cancelar', 'estado', 'segmentos'], true)) {
     cfail(400, 'Modo desconhecido.');
 }
 
@@ -174,9 +212,34 @@ if ($modo === 'estado') {
     ]);
 }
 
+/* ---------------------------------------------------------- segmentos */
+/* As opcoes do seletor: so o que tem gente. Roteiro ou destino com zero
+   pessoas e escolha que produz campanha vazia (spec de 04/11, C.3). */
+if ($modo === 'segmentos') {
+    $leads = camp_leads();
+    $rots  = wa_db_select_estrito('po_roteiros', 'select=slug,titulo&order=titulo.asc&limit=500');
+    $esp   = wa_db_select_estrito('po_wa_espera', 'select=destino&removido_at=is.null&limit=10000');
+    if ($leads === null || $rots === null || $esp === null) cfail(502, 'Não consegui ler os públicos agora.');
+    $roteiros = [];
+    foreach ($rots as $ro) {
+        $seg = wa_camp_segmento(['tipo' => 'roteiro', 'slug' => (string) ($ro['slug'] ?? '')]);
+        if ($seg === null) continue;
+        $n = 0;
+        foreach ($leads as $l) if (wa_camp_no_segmento($l, $seg, ['titulo' => (string) ($ro['titulo'] ?? '')])) $n++;
+        if ($n > 0) $roteiros[] = ['slug' => $seg['slug'], 'titulo' => (string) ($ro['titulo'] ?? ''), 'n' => $n];
+    }
+    usort($roteiros, function ($a, $b) { return $b['n'] <=> $a['n'] ?: strcmp($a['titulo'], $b['titulo']); });
+    $cont = [];
+    foreach ($esp as $x) { $d = trim((string) ($x['destino'] ?? '')); if ($d !== '') $cont[$d] = ($cont[$d] ?? 0) + 1; }
+    arsort($cont);
+    $espera = [];
+    foreach ($cont as $d => $n) $espera[] = ['destino' => $d, 'n' => $n];
+    cok(['roteiros' => $roteiros, 'espera' => $espera]);
+}
+
 /* ---------------------------------------------------------- previa */
 if ($modo === 'previa') {
-    list($leads, $r, $custo) = camp_calcula();
+    list($leads, $r, $custo) = camp_calcula(camp_segmento_post());
 
     // Conferencia do estrangeiro discado com 00, so entre QUEM VAI RECEBER.
     $porLead = [];
@@ -274,7 +337,8 @@ if ($modo === 'criar') {
                  . 'antes de começar outra.');
     }
 
-    list($leads, $r, $custo) = camp_calcula();
+    $seg = camp_segmento_post();
+    list($leads, $r, $custo) = camp_calcula($seg);
     /* Publico vazio nunca vira campanha: uma linha 'rascunho' sem
        destinatario ficaria eternamente no caminho da proxima. */
     if ($r['resumo']['total'] === 0) {
@@ -296,7 +360,7 @@ if ($modo === 'criar') {
         'roteiro_slug'            => cpost('roteiro_slug') ?: null,
         'template'                => $template,
         'corpo'                   => $corpo,
-        'segmento'                => ['origem' => 'painel'],
+        'segmento'                => $seg + ['origem' => 'painel'],
         'total'                   => $r['resumo']['total'],
         // Congelados AGORA: o preco da Meta muda, e o relatorio de uma
         // campanha antiga tem que continuar batendo com a fatura daquele mes.
@@ -342,7 +406,7 @@ if ($modo === 'reservar') {
     if ($id === '') cfail(400, 'Campanha não informada.');
 
     $c = wa_db_select_estrito('po_wa_campanhas',
-        'select=id,status,preco_centavos&id=eq.' . rawurlencode($id) . '&limit=1');
+        'select=id,status,preco_centavos,segmento&id=eq.' . rawurlencode($id) . '&limit=1');
     if ($c === null) cfail(502, 'Não consegui ler a campanha agora.');
     if (!$c)         cfail(404, 'Campanha não encontrada.');
     /* So 'rascunho' aceita reserva. Reservar em campanha ja 'enviando'
@@ -352,7 +416,13 @@ if ($modo === 'reservar') {
         cfail(409, 'Esta campanha já está com a lista fechada.');
     }
 
-    list($leads, $r, $custo) = camp_calcula();
+    /* O segmento GRAVADO na campanha, nunca o da tela. Campanha antiga (sem
+       tipo, so com a origem) e "todos", que era o unico publico que existia. */
+    $gravado = $c[0]['segmento'] ?? [];
+    if (is_string($gravado)) $gravado = json_decode($gravado, true);
+    $seg = wa_camp_segmento(is_array($gravado) && isset($gravado['tipo']) ? $gravado : ['tipo' => 'todos']);
+    if ($seg === null) cfail(409, 'O público gravado nesta campanha está ilegível. Cancele e crie de novo.');
+    list($leads, $r, $custo) = camp_calcula($seg);
     $l = wa_camp_reserva_lote($id, $r['publico']);
     $completo = $l['completo']
         && camp_fecha_reserva($id, $l['reservados_total'], $custo);

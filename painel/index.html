@@ -439,6 +439,12 @@
 
       <div class="imp-ct-box">
         <div class="lbl">Quem recebe e quanto custa</div>
+        <div class="field">
+          <label for="camp-publico">Quem recebe</label>
+          <!-- Todos os clientes, quem pediu um roteiro, ou a lista de espera de um
+               destino (11/11/2026). As opcoes vem do campanha.php (modo segmentos). -->
+          <select class="fselect" id="camp-publico"><option value='{"tipo":"todos"}'>Todos os clientes</option></select>
+        </div>
         <div class="camp-num">
           <div><b id="camp-custo">—</b><span>Custo estimado</span></div>
         </div>
@@ -746,7 +752,7 @@
 <script src="conversa.js?v=1"></script>
 <script src="importar-contatos.js?v=5"></script>
 <script src="revisao.js?v=2"></script>
-<script src="campanhas.js?v=2"></script>
+<script src="campanhas.js?v=3"></script>
 <script src="modelos.js?v=3"></script>
 <script src="vitrine.js?v=3"></script>
 <script src="fluxo.js?v=25"></script>

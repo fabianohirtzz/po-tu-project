@@ -58,9 +58,12 @@ function wa_camp_perdeu_data($lead) {
    2) revisado/cliente antes de telefone, porque e a defesa 1 e e o numero
       que decide se a fila de revisao ja foi trabalhada.
    3) telefone por ultimo. */
-function wa_camp_motivo_fora($lead) {
+function wa_camp_motivo_fora($lead, $pediu = false) {
     if (!empty($lead['opt_out_at']))            return 'saiu';
-    if (wa_camp_perdeu_data($lead)) {
+    /* $pediu: a pessoa entrou por um SEGMENTO (pediu aquele roteiro, esta na
+       lista de espera daquele destino). Mesmo tratamento de quem perdeu pela
+       data: nao passa pela Revisao, mas o "Nao e cliente" marcado la vale. */
+    if ($pediu || wa_camp_perdeu_data($lead)) {
         // Marcado "Nao e cliente" na Revisao continua valendo: e decisao dela.
         if (($lead['revisado'] ?? null) === true && ($lead['cliente'] ?? null) !== true) return 'nao_cliente';
     } else {
@@ -104,14 +107,55 @@ function wa_camp_saiu_fones($leads) {
     return $fora;
 }
 
+/* ---------- segmento da transmissao (09/11 e 11/11/2026) ----------
+   Quem recebe: 'todos' (os clientes, como sempre), 'roteiro' (quem pediu um
+   roteiro: o robo grava o slug em `interesses`, o formulario do site grava o
+   nome em `roteiro`) ou 'espera' (quem esta na lista de espera de um destino).
+   O segmento fica GRAVADO na campanha: a reserva recalcula o publico a cada
+   pedaco, e um segmento lido da tela de novo poderia mandar para outra gente.
+
+   Normaliza o que veio (json da tela ou array do banco). Lixo devolve null,
+   NUNCA 'todos': um segmento ilegivel que virasse "todos" mandaria a
+   campanha de um roteiro para a base inteira, paga. */
+const WA_CAMP_SEGMENTOS = ['todos', 'roteiro', 'espera'];
+function wa_camp_segmento($raw) {
+    if ($raw === '' || $raw === null) return ['tipo' => 'todos'];
+    $s = is_string($raw) ? json_decode($raw, true) : $raw;
+    if (!is_array($s) || !in_array($s['tipo'] ?? null, WA_CAMP_SEGMENTOS, true)) return null;
+    if ($s['tipo'] === 'todos') return ['tipo' => 'todos'];
+    if ($s['tipo'] === 'roteiro') {
+        $slug = is_string($s['slug'] ?? null) ? $s['slug'] : '';
+        return preg_match('/^[a-z0-9][a-z0-9-]{0,99}$/', $slug) ? ['tipo' => 'roteiro', 'slug' => $slug] : null;
+    }
+    $d = is_string($s['destino'] ?? null) ? trim($s['destino']) : '';
+    return ($d !== '' && mb_strlen($d, 'UTF-8') <= 80) ? ['tipo' => 'espera', 'destino' => $d] : null;
+}
+
+/* A ficha esta no segmento? $ctx traz o que o segmento precisa e a funcao
+   nao busca: 'titulo' do roteiro (para casar o lead do site) e 'espera_ids'
+   (lead_id => true dos que estao na lista do destino). */
+function wa_camp_no_segmento($lead, $seg, $ctx = []) {
+    $tipo = $seg['tipo'] ?? 'todos';
+    if ($tipo === 'todos') return true;
+    if ($tipo === 'espera') return isset(($ctx['espera_ids'] ?? [])[(string) ($lead['id'] ?? '')]);
+    $int = $lead['interesses'] ?? [];
+    if (is_string($int)) $int = json_decode($int, true);
+    if (is_array($int) && in_array($seg['slug'], $int, true)) return true;
+    $norm = function ($t) { return mb_strtolower(trim(preg_replace('/\s+/u', ' ', (string) $t)), 'UTF-8'); };
+    $tit = $norm($ctx['titulo'] ?? '');
+    return $tit !== '' && $norm($lead['roteiro'] ?? '') === $tit;
+}
+
 /* Monta o publico e o resumo por motivo. A deduplicacao e por E.164, e a
    PRIMEIRA ficha vence: regra 3 do Armando, nunca duplicar. Duas fichas da
    mesma pessoa (uma do CRM, uma da agenda) com o mesmo celular sao um
    destinatario so, cobrado uma vez so. */
-function wa_camp_publico($leads) {
+function wa_camp_publico($leads, $seg = null, $ctx = []) {
+    $seg     = is_array($seg) ? $seg : ['tipo' => 'todos'];
+    $pediu   = $seg['tipo'] !== 'todos';
     $publico = [];
     $vistos  = [];
-    $resumo  = ['total' => 0, 'duplicados' => 0, 'saiu' => 0, 'nao_cliente' => 0,
+    $resumo  = ['total' => 0, 'segmento' => 0, 'duplicados' => 0, 'saiu' => 0, 'nao_cliente' => 0,
                 'nao_revisado' => 0, 'sem_telefone' => 0, 'sem_celular' => 0,
                 // informativo: dos que ENTRAM, quantos vieram por perder uma data
                 'perdeu_data' => 0];
@@ -120,7 +164,10 @@ function wa_camp_publico($leads) {
     $saiu = wa_camp_saiu_fones($leads);
 
     foreach ($leads as $l) {
-        $motivo = wa_camp_motivo_fora($l);
+        // Fora do segmento nao e "ficou de fora": nem entra na conta.
+        if (!wa_camp_no_segmento($l, $seg, $ctx)) continue;
+        $resumo['segmento']++;
+        $motivo = wa_camp_motivo_fora($l, $pediu);
         if ($motivo !== null) { $resumo[$motivo]++; continue; }
         $fone = wa_camp_telefone($l);
         /* Este numero saiu por OUTRA ficha. Conta como 'saiu', nunca como

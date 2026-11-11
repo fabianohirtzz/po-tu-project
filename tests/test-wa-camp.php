@@ -74,6 +74,58 @@ $r = wa_camp_publico([$base, $perdeu]);
 ok($r['resumo']['total'] === 2 && $r['resumo']['perdeu_data'] === 1,
    'o resumo conta quantos entraram por terem perdido uma data');
 
+
+/* ---------- transmissao segmentada (pedido de 09/11 e 11/11/2026) ----------
+   A Lais escolhe quem recebe: todos os clientes (como sempre), quem pediu um
+   ROTEIRO especifico (o robo grava o slug em `interesses`; o formulario do
+   site grava o nome em `roteiro`), ou quem esta na LISTA DE ESPERA de um
+   destino. Quem entra por um segmento PEDIU a informacao, entao entra sem
+   passar pela Revisao, como quem perdeu pela data. SAIR, fixo e "Nao e
+   cliente" marcado na Revisao continuam valendo. */
+ok(wa_camp_segmento('') === ['tipo' => 'todos'], 'sem segmento = todos');
+ok(wa_camp_segmento('{"tipo":"todos"}') === ['tipo' => 'todos'], 'todos explicito');
+ok(wa_camp_segmento('{"tipo":"roteiro","slug":"chile"}') === ['tipo' => 'roteiro', 'slug' => 'chile'], 'roteiro');
+ok(wa_camp_segmento(['tipo' => 'roteiro', 'slug' => 'chile']) === ['tipo' => 'roteiro', 'slug' => 'chile'], 'aceita array (vem do banco)');
+ok(wa_camp_segmento('{"tipo":"espera","destino":" Itália "}') === ['tipo' => 'espera', 'destino' => 'Itália'], 'espera, aparado');
+ok(wa_camp_segmento('{"tipo":"roteiro","slug":"../x"}') === null, 'slug invalido e recusado');
+ok(wa_camp_segmento('{"tipo":"roteiro"}') === null, 'roteiro sem slug e recusado');
+ok(wa_camp_segmento('{"tipo":"espera","destino":""}') === null, 'espera sem destino e recusada');
+ok(wa_camp_segmento('{"tipo":"apagar"}') === null, 'tipo fora da lista e recusado');
+ok(wa_camp_segmento('nao e json') === null, 'lixo e recusado, nunca vira "todos"');
+
+$sb = ['cliente'=>false, 'revisado'=>false, 'opt_out_at'=>null, 'status'=>'novo', 'qualif_data'=>null, 'wa_id'=>null, 'roteiro'=>'', 'interesses'=>[]];
+$seg_leads = [
+    array_merge($sb, ['id'=>'S1', 'nome'=>'Pediu pelo robo', 'telefone'=>'+5548999991001', 'interesses'=>['chile']]),
+    array_merge($sb, ['id'=>'S2', 'nome'=>'Cliente antigo',  'telefone'=>'+5548999991002', 'cliente'=>true, 'revisado'=>true]),
+    array_merge($sb, ['id'=>'S3', 'nome'=>'Pediu pelo site', 'telefone'=>'+5548999991003', 'roteiro'=>'  chile e deserto do atacama ']),
+    array_merge($sb, ['id'=>'S4', 'nome'=>'Nao e cliente',   'telefone'=>'+5548999991004', 'interesses'=>['chile'], 'revisado'=>true]),
+    array_merge($sb, ['id'=>'S5', 'nome'=>'Saiu',            'telefone'=>'+5548999991005', 'interesses'=>['chile'], 'opt_out_at'=>'2026-11-01T00:00:00Z']),
+    array_merge($sb, ['id'=>'S6', 'nome'=>'So fixo',         'telefone'=>'+554832221006', 'interesses'=>['chile']]),
+];
+// interesses vindo do banco como texto json tambem vale
+$seg_leads[] = array_merge($sb, ['id'=>'S7', 'nome'=>'Json', 'telefone'=>'+5548999991007', 'interesses'=>'["chile"]']);
+
+$r = wa_camp_publico($seg_leads, ['tipo'=>'roteiro', 'slug'=>'chile'], ['titulo'=>'Chile e Deserto do Atacama']);
+$ids = array_column($r['publico'], 'lead_id'); sort($ids);
+ok($ids === ['S1', 'S3', 'S7'], 'roteiro: quem pediu pelo robo e pelo site entra, sem revisao (deu: ' . implode(',', $ids) . ')');
+ok($r['resumo']['nao_cliente'] === 1 && $r['resumo']['saiu'] === 1 && $r['resumo']['sem_celular'] === 1,
+   'nao-cliente marcado, SAIR e fixo seguem fora, cada um no seu balde');
+ok(!in_array('S2', $ids, true), 'cliente que nao pediu este roteiro nao recebe');
+ok($r['resumo']['segmento'] === 7 - 1, 'o resumo diz quantas fichas sao do segmento (S2 fica fora dele)');
+
+$r = wa_camp_publico($seg_leads, ['tipo'=>'espera', 'destino'=>'Itália'], ['espera_ids'=>['S2'=>true, 'S5'=>true]]);
+ok(array_column($r['publico'], 'lead_id') === ['S2'] && $r['resumo']['saiu'] === 1, 'espera: so quem esta na lista do destino, e SAIR segue valendo');
+
+// SAIR por OUTRA ficha do mesmo numero vale dentro do segmento
+$dup = $seg_leads; $dup[] = array_merge($sb, ['id'=>'S8', 'nome'=>'Mesma pessoa', 'telefone'=>'+5548999991001', 'opt_out_at'=>'2026-11-02T00:00:00Z']);
+$r = wa_camp_publico($dup, ['tipo'=>'roteiro', 'slug'=>'chile'], ['titulo'=>'Chile e Deserto do Atacama']);
+ok(!in_array('S1', array_column($r['publico'], 'lead_id'), true), 'quem saiu por outra ficha do mesmo numero nao recebe pelo segmento');
+
+// todos: o comportamento de sempre (cliente revisado), sem os segmentados
+$r = wa_camp_publico($seg_leads, ['tipo'=>'todos']);
+ok(array_column($r['publico'], 'lead_id') === ['S2'], 'todos: so cliente revisado, como sempre');
+ok(wa_camp_publico($seg_leads)['resumo']['total'] === 1, 'sem segmento e o mesmo que todos');
+
 /* wa_id vence telefone: e o numero com que o WhatsApp JA falou. */
 $x = $base; $x['wa_id'] = '+5548988880002'; $x['telefone'] = '+5548999990001';
 ok(wa_camp_telefone($x) === '+5548988880002', 'wa_id tem prioridade sobre telefone');

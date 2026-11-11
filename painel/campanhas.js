@@ -25,7 +25,7 @@ function poCampResumoTexto(r) {
   const d = r || {};
   const p = [];
   p.push((Number(d.total) || 0) + ' pessoas recebem');
-  if (d.perdeu_data)  p.push(d.perdeu_data + ' delas perderam uma data e recebem a oferta');
+  if (d.perdeu_data)  p.push(d.perdeu_data + ' delas perderam uma data ou estão na lista de espera');
   if (d.duplicados)   p.push(d.duplicados + ' repetidas, contadas uma vez');
   if (d.saiu)         p.push(d.saiu + ' pediram SAIR e ficam de fora');
   if (d.nao_revisado) p.push(d.nao_revisado + ' ainda faltam revisar');
@@ -33,6 +33,23 @@ function poCampResumoTexto(r) {
   if (d.sem_celular)  p.push(d.sem_celular + ' têm só telefone fixo');
   if (d.sem_telefone) p.push(d.sem_telefone + ' estão sem telefone');
   return p.join(' · ');
+}
+
+/* As opcoes do seletor "Quem recebe" (11/11/2026). O value e o json do
+   segmento, que o servidor normaliza e recusa se vier torto. So aparece o
+   que tem gente: roteiro ou destino com zero pessoas daria campanha vazia. */
+function poCampOpcoesPublico(s) {
+  const d = s || {};
+  const pessoas = n => n + (Number(n) === 1 ? ' pessoa' : ' pessoas');
+  const op = (seg, rotulo) => '<option value="' + esc(JSON.stringify(seg)) + '">' + esc(rotulo) + '</option>';
+  let h = op({ tipo: 'todos' }, 'Todos os clientes');
+  const rots = Array.isArray(d.roteiros) ? d.roteiros : [];
+  const esp = Array.isArray(d.espera) ? d.espera : [];
+  if (rots.length) h += '<optgroup label="Pediram um roteiro">' +
+    rots.map(r => op({ tipo: 'roteiro', slug: r.slug }, r.titulo + ' (' + pessoas(r.n) + ')')).join('') + '</optgroup>';
+  if (esp.length) h += '<optgroup label="Lista de espera">' +
+    esp.map(e => op({ tipo: 'espera', destino: e.destino }, e.destino + ' (' + pessoas(e.n) + ')')).join('') + '</optgroup>';
+  return h;
 }
 
 /* A trava do clique que gasta. Publico vazio nunca dispara, e custo nao
@@ -77,6 +94,7 @@ function poCampValidaCorpo(corpo) {
 let PO_CAMP_PREVIA = null;      // ultima previa recebida do servidor
 let PO_CAMP_OCUPADO = false;    // trava contra o segundo clique
 let PO_CAMP_ANDAMENTO = false;  // ja existe campanha rodando
+let PO_CAMP_SEG = '{"tipo":"todos"}';   // o publico escolhido no seletor
 
 /* O token vem de sb.auth.getSession() na hora, como no importador de
    contatos: guardado numa variavel ele vence sozinho e o endpoint passa a
@@ -118,16 +136,24 @@ async function poRenderCampanhas() {
   poCampMsg('#camp-resumo', 'Calculando o público...');
 
   await poCampCarregaAndamento();
+  await poCampCarregaPublicos();
 
+  /* A previa de UMA escolha. Se ela trocar o seletor antes de a resposta
+     chegar, a resposta velha e jogada fora: senao a tela mostraria o custo de
+     um publico e o botao criaria a campanha de outro. */
+  const pedido = PO_CAMP_SEG;
   let previa;
   try {
-    previa = await poCampPost('previa', {});
+    previa = await poCampPost('previa', { segmento: pedido });
   } catch (e) {
+    if (pedido !== PO_CAMP_SEG) return;
     poCampMsg('#camp-resumo', 'Não consegui calcular o público. Tente de novo.');
     poCampMsg('#camp-erro', e.message || '');
     return;
   }
+  if (pedido !== PO_CAMP_SEG) return;
 
+  previa.segmento = pedido;
   PO_CAMP_PREVIA = previa;
   poCampMsg('#camp-custo', poCampCustoBRL(previa.custo_centavos));
   poCampMsg('#camp-resumo', poCampResumoTexto(previa.resumo));
@@ -146,6 +172,20 @@ async function poRenderCampanhas() {
       'dividiriam o limite diário de envios.');
   }
   if (btn) btn.disabled = PO_CAMP_ANDAMENTO || !poCampPodeEnviar(previa);
+}
+
+/* Preenche o seletor com os roteiros que alguem pediu e os destinos da lista
+   de espera. Falha aqui nao trava a tela: fica so "Todos os clientes". A
+   escolha anterior e mantida quando ela ainda existe. */
+async function poCampCarregaPublicos() {
+  const sel = document.querySelector('#camp-publico');
+  if (!sel) return;
+  let s = { roteiros: [], espera: [] };
+  try { s = await poCampPost('segmentos', {}); } catch (e) { /* so "todos" */ }
+  sel.innerHTML = poCampOpcoesPublico(s);
+  const ok = [...sel.options].some(o => o.value === PO_CAMP_SEG);
+  if (!ok) PO_CAMP_SEG = '{"tipo":"todos"}';
+  sel.value = PO_CAMP_SEG;
 }
 
 /* A campanha em andamento fica visivel porque e ela que bloqueia uma nova:
@@ -221,7 +261,9 @@ async function poCampEnviar() {
        com outro publico e outro custo. */
     const c = await poCampPost('criar', {
       nome: nome, template: template, corpo: corpo,
-      total_confirmado: String(PO_CAMP_PREVIA.total)
+      total_confirmado: String(PO_CAMP_PREVIA.total),
+      // o publico da previa que ela confirmou, nao o que estiver no seletor agora
+      segmento: PO_CAMP_PREVIA.segmento
     });
     await poCampReservaAteOFim(c.campanha_id, c);
   } catch (e) {
@@ -341,6 +383,8 @@ function poCampLiga() {
   if (b2) b2.onclick = poCampContinuar;
   if (b3) b3.onclick = poCampDrenar;
   if (b4) b4.onclick = poCampCancelar;
+  const sel = document.querySelector('#camp-publico');
+  if (sel) sel.onchange = () => { PO_CAMP_SEG = sel.value; poRenderCampanhas(); };
 }
 
 /* Guarda de readyState, no padrao do painel/importar-contatos.js. Hoje o

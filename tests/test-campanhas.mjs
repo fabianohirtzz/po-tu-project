@@ -208,4 +208,30 @@ const painel = readFileSync(join(raiz, 'painel/index.html'), 'utf8');
 assert.ok(/src="campanhas\.js\?v=\d+"/.test(painel), 'campanhas.js entra com cache-buster');
 assert.ok(/data-view="campanhas"/.test(painel), 'a aba Transmissao existe no menu');
 
+
+/* ---------- quem recebe: o seletor do publico (11/11/2026) ----------
+   Todos os clientes, quem pediu um roteiro, ou quem esta na lista de espera
+   de um destino. A opcao carrega o json do segmento; o nome vem do banco e
+   sai escapado. A contagem e de quem pediu, antes das exclusoes (SAIR, fixo):
+   o numero exato de quem recebe e o da previa, logo abaixo. */
+{
+  const esc = 'function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c]));}';
+  const op = new Function(esc + pega('poCampOpcoesPublico') + ';return poCampOpcoesPublico;')();
+  const h = op({ roteiros: [{ slug: 'chile', titulo: 'Chile <b>', n: 2 }], espera: [{ destino: 'Itália', n: 3 }] });
+  assert.ok(h.startsWith('<option value="{&quot;tipo&quot;:&quot;todos&quot;}">Todos os clientes</option>'), 'todos vem primeiro');
+  assert.ok(h.includes('<optgroup label="Pediram um roteiro">'), 'grupo dos roteiros');
+  assert.ok(h.includes('&quot;slug&quot;:&quot;chile&quot;') && h.includes('Chile &lt;b&gt; (2 pessoas)'), 'roteiro com a contagem, escapado');
+  assert.ok(h.includes('<optgroup label="Lista de espera">') && h.includes('Itália (3 pessoas)'), 'destino da espera com a contagem');
+  const so = op({ roteiros: [], espera: [] });
+  assert.ok(!so.includes('optgroup'), 'sem ninguem pedindo nada, so "todos"');
+  assert.ok(op({ roteiros: [{ slug: 'x', titulo: 'X', n: 1 }], espera: [] }).includes('X (1 pessoa)'), 'singular');
+
+  // a previa e o criar mandam o MESMO segmento que a tela mostrou
+  assert.ok(/poCampPost\('previa',\s*\{\s*segmento:\s*pedido\s*\}\)/.test(src), 'a previa manda o segmento escolhido');
+  assert.ok(/segmento:\s*PO_CAMP_PREVIA\.segmento/.test(src), 'o criar manda o segmento da previa que ela confirmou, nao o seletor de agora');
+  assert.ok(/if\s*\(pedido\s*!==\s*PO_CAMP_SEG\)\s*return/.test(src), 'resposta de uma escolha antiga e ignorada (troca rapida no seletor)');
+  const html = readFileSync(join(raiz, 'painel/index.html'), 'utf8');
+  assert.ok(/<select[^>]*id="camp-publico"/.test(html), 'o seletor existe na tela');
+  assert.ok(/perderam uma data ou estão na lista de espera/.test(src), 'o resumo diz tambem da lista de espera');
+}
 console.log('test-campanhas OK');

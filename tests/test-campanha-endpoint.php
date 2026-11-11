@@ -35,6 +35,21 @@ function ce_base() {
     ];
 }
 
+/* Base dos casos segmentados (11/11/2026): G1 pediu o Chile pelo robo (sem
+   revisao), G2 e cliente revisado sem interesse, G3 pediu o Chile pelo site
+   (nome no campo roteiro), G4 esta na lista de espera da Italia. */
+function ce_base_seg() {
+    $b = ['wa_id'=>null, 'cliente'=>false, 'revisado'=>false, 'opt_out_at'=>null, 'payload_import'=>null,
+          'status'=>'novo', 'qualif_data'=>null, 'roteiro'=>'', 'interesses'=>[]];
+    return [
+        array_merge($b, ['id'=>'G1', 'nome'=>'Robo',    'telefone'=>'+5548999992001', 'interesses'=>['chile']]),
+        array_merge($b, ['id'=>'G2', 'nome'=>'Cliente', 'telefone'=>'+5548999992002', 'cliente'=>true, 'revisado'=>true]),
+        array_merge($b, ['id'=>'G3', 'nome'=>'Site',    'telefone'=>'+5548999992003', 'roteiro'=>'Chile e Deserto do Atacama']),
+        array_merge($b, ['id'=>'G4', 'nome'=>'Espera',  'telefone'=>'+5548999992004']),
+    ];
+}
+function ce_segmentado($caso) { return strpos($caso, 'seg-') === 0; }
+
 /* ============================================================
    FILHO: monta a requisicao e roda o endpoint.
 ============================================================ */
@@ -119,12 +134,34 @@ function ce_filho($caso) {
                                           'campanha_id'=>'CJA']; break;
         case 'cancelar':        $_POST = ['sb_token'=>'tok.valido', 'modo'=>'cancelar',
                                           'campanha_id'=>'CJA']; break;
+        case 'seg-previa-roteiro': $_POST['segmento'] = '{"tipo":"roteiro","slug":"chile"}'; break;
+        case 'seg-previa-espera':  $_POST['segmento'] = '{"tipo":"espera","destino":"Itália"}'; break;
+        case 'seg-previa-lixo':    $_POST['segmento'] = '{"tipo":"apagar"}'; break;
+        case 'seg-criar':          $_POST = array_merge($_POST, $criar, ['total_confirmado'=>'2',
+                                          'segmento'=>'{"tipo":"roteiro","slug":"chile"}']); break;
+        case 'seg-reservar':       $_POST = ['sb_token'=>'tok.valido', 'modo'=>'reservar', 'campanha_id'=>'CSEG',
+                                          // a TELA manda "todos": o servidor tem que ignorar e usar o da campanha
+                                          'segmento'=>'{"tipo":"todos"}']; break;
+        case 'seg-segmentos':      $_POST['modo'] = 'segmentos'; break;
     }
 
     wa_db_set_transport(function ($metodo, $url, $corpo, $headers) use ($caso, &$chamadas) {
         $chamadas[] = ['metodo'=>$metodo, 'url'=>$url, 'corpo'=>$corpo];   // headers NUNCA
 
+        if (strpos($url, 'po_roteiros') !== false) {
+            return ['status'=>200, 'body'=>json_encode([
+                ['slug'=>'chile', 'titulo'=>'Chile e Deserto do Atacama'],
+                ['slug'=>'peru-fascinante', 'titulo'=>'Peru Fascinante']])];
+        }
+        if (strpos($url, 'po_wa_espera') !== false) {
+            return ['status'=>200, 'body'=>json_encode([['lead_id'=>'G4', 'destino'=>'Itália']])];
+        }
         if (strpos($url, 'po_wa_campanhas') !== false) {
+            if ($metodo === 'GET' && $caso === 'seg-reservar') {
+                return ['status'=>200, 'body'=>json_encode([[
+                    'id'=>'CSEG', 'status'=>'rascunho', 'preco_centavos'=>31,
+                    'segmento'=>['tipo'=>'roteiro', 'slug'=>'chile', 'origem'=>'painel']]])];
+            }
             if ($metodo === 'GET') {
                 /* Leitura da lista de campanhas ilegivel. Se esta linha virar
                    "lista vazia", nasce a campanha gemea pela outra porta, com
@@ -195,7 +232,7 @@ function ce_filho($caso) {
         $off = (int) ($m[1] ?? 0);
         if ($off > 0) return ['status'=>200, 'body'=>'[]'];
         // 'criar-vazio': base sem ninguem elegivel.
-        $linhas = $caso === 'criar-vazio' ? [] : ce_base();
+        $linhas = $caso === 'criar-vazio' ? [] : (ce_segmentado($caso) ? ce_base_seg() : ce_base());
         return ['status'=>200, 'body'=>json_encode($linhas)];
     });
 
@@ -461,6 +498,8 @@ foreach ([
     // 00 morre em silencio: wa_camp_ddi_suspeito() passa a receber null sempre.
     // E a conferencia que o CLAUDE.md manda fazer antes do primeiro disparo pago.
     'payload_import' => 'sem esta coluna o alerta de numero estrangeiro morre calado',
+    'interesses'  => 'sem esta coluna o segmento por roteiro fica vazio, calado',
+    'roteiro'     => 'sem esta coluna quem pediu o roteiro pelo site some do segmento',
     'status'      => 'sem esta coluna quem perdeu por data nunca entra na transmissao',
     'qualif_data' => 'sem esta coluna quem perdeu por data nunca entra na transmissao',
 ] as $col => $porque) {
@@ -504,4 +543,32 @@ ok(strpos($src_fila, 'WA_CAMP_IDIOMA') !== false,
 ok(strpos($src_camp, 'WA_CAMP_IDIOMA') !== false,
    'e o criar confere contra a MESMA constante');
 
+
+/* ---------- transmissao segmentada (11/11/2026) ---------- */
+$r = ce_roda('seg-previa-roteiro');
+ok($r['codigo'] === 200 && $r['json']['total'] === 2, 'roteiro: robo e site entram, sem revisao (deu: ' . json_encode($r['json']) . ')');
+ok(!ce_escreveu($r), 'a previa segmentada nao escreve nada');
+$r = ce_roda('seg-previa-espera');
+ok($r['codigo'] === 200 && $r['json']['total'] === 1, 'espera: so quem esta na lista do destino');
+$r = ce_roda('seg-previa-lixo');
+ok($r['codigo'] === 400 && !ce_escreveu($r), 'segmento ilegivel e recusado, nunca vira "todos"');
+
+$r = ce_roda('seg-criar');
+ok($r['codigo'] === 200 && $r['json']['reservados'] === 2, 'criar segmentado reserva so o segmento (deu: ' . json_encode($r['json']) . ')');
+$posts = array_values(array_filter($r['chamadas'], fn($c) => $c['metodo'] === 'POST' && strpos($c['url'], 'po_wa_campanhas') !== false));
+$seg = json_decode($posts[0]['corpo'], true)['segmento'];
+ok(($seg['tipo'] ?? null) === 'roteiro' && ($seg['slug'] ?? null) === 'chile', 'o segmento fica gravado na campanha');
+
+$r = ce_roda('seg-reservar');
+$res = array_values(array_filter($r['chamadas'], fn($c) => $c['metodo'] === 'POST' && strpos($c['url'], 'po_wa_envios') !== false));
+$lids = array_map(fn($c) => json_decode($c['corpo'], true)['lead_id'] ?? null, $res);
+sort($lids);
+ok($lids === ['G1', 'G3'], 'a reserva usa o segmento GRAVADO na campanha, nunca o da tela (deu: ' . json_encode($lids) . ')');
+
+$r = ce_roda('seg-segmentos');
+ok($r['codigo'] === 200 && !ce_escreveu($r), 'o modo segmentos responde e nao escreve');
+ok(($r['json']['roteiros'][0] ?? null) === ['slug'=>'chile', 'titulo'=>'Chile e Deserto do Atacama', 'n'=>2],
+   'lista os roteiros com quantos pediram (deu: ' . json_encode($r['json']['roteiros'] ?? null) . ')');
+ok(count($r['json']['roteiros']) === 1, 'roteiro que ninguem pediu nao aparece (campanha vazia)');
+ok(($r['json']['espera'] ?? null) === [['destino'=>'Itália', 'n'=>1]], 'lista os destinos da espera com a contagem');
 echo "test-campanha-endpoint OK\n";
