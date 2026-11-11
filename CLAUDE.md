@@ -1827,7 +1827,21 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     **Trava nova no servidor: o texto do modelo precisa ter exatamente UMA
     variavel** (antes era so aviso na tela). O montador mora no `wa-template.php`
     (puro): o `templates.php` nao pode carregar o modulo do banco, e o ensaio usa o
-    mesmo montador. **Ainda nao criado na Meta:** precisa de sessao logada no painel.
+    mesmo montador. **CRIADO em 11/11/2026** pela aba Modelos (id
+    `29715640084699609`, PENDING, a Meta o devolve como `roteiro_pdf`).
+  - **O `WA_WABA_ID` DO SERVIDOR ESTAVA ERRADO** (`1150774113972883`, registrado em
+    26/10 como "a WABA real"). Toda chamada a conta devolvia `100/2388339 This API
+    is not supported for this WhatsApp Business Account`, e a tela so dizia "nao
+    consegui ler os modelos". **A conta dona do numero e `374665579072339`**
+    (aprovada, verificada, `ownership_type SELF`), descoberta pelo
+    `health_status.entities` do PROPRIO NUMERO. Trocada so essa linha do
+    `config.local.php`, conferido byte a byte. **Regra: a WABA certa e a que o
+    numero diz ser a dele**, nao a que uma tela do console mostra. O modo
+    `diagnostico` do `templates.php` (so GET, sem token na resposta) existe para
+    isso, e a listagem agora mostra o erro real da Meta.
+  - **Envio segue bloqueado por pagamento** (141006 na WABA). O nome de exibicao
+    do numero ainda nao foi aprovado ("display name has not been approved yet"),
+    o que limita o volume ate a aprovacao.
   - **Rascunho do fluxo alterado por REST com a service_role** (o MCP do Supabase
     estava fora): so cards novos e chaves novas no `config` de dois cards, com o
     resto conferido identico antes/depois. Nada publicado, nada ligado.
