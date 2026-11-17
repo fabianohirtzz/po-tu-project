@@ -49,7 +49,7 @@ function poAgrupaPessoas(leads) {
       mapa.set(chave, {
         chave, nome: '', tel: '', email: '', cidade: '',
         leads: [], total: 0, vendas: 0, valorVendido: 0,
-        ultimaData: null, temVenda: false,
+        ultimaData: null, temVenda: false, ehCliente: false,
       });
     }
     const p = mapa.get(chave);
@@ -79,6 +79,7 @@ function poAgrupaPessoas(leads) {
       p.temVenda = true;
       p.valorVendido += Number(l.ven) || 0;
     }
+    if (l.cliente === true) p.ehCliente = true;
     if (l.data && (!p.ultimaData || l.data > p.ultimaData)) p.ultimaData = l.data;
   });
 
@@ -160,9 +161,10 @@ async function poExcluiPessoas(pessoas) {
 /* Separada do render para poder ser testada: o nome vem do perfil do
    WhatsApp, que e dado de terceiro, e precisa sair escapado. */
 function poLinhaPessoa(p) {
+  // "Cliente" = aprovado na Revisao; "Ja viajou" = tem venda registrada.
   const etiqueta = p.temVenda
-    ? '<span class="cli-tag cli-tag--cliente">Cliente</span>'
-    : '<span class="cli-tag">Lead</span>';
+    ? '<span class="cli-tag cli-tag--cliente">Já viajou</span>'
+    : (p.ehCliente ? '<span class="cli-tag cli-tag--cliente">Cliente</span>' : '<span class="cli-tag">Lead</span>');
   const viagens = p.vendas === 1 ? '1 viagem' : p.vendas + ' viagens';
   const marcado = typeof PO_CLI_SEL !== 'undefined' && PO_CLI_SEL.has(p.chave);
   return '<tr data-chave="' + esc(p.chave) + '">' +
@@ -179,10 +181,23 @@ function poLinhaPessoa(p) {
     '</tr>';
 }
 
+/* Quem entra na aba Clientes (17/11/2026). Contato IMPORTADO so aparece
+   depois de passar pela Revisao como cliente: antes disso ele mora so na
+   Revisao, senao aparece nas duas abas ao mesmo tempo (a Lais leu isso como
+   duplicado) e aprovar nao muda nada na contagem. "Nao e cliente" sai das
+   duas listas e continua na base. Lead do site e do robo nao passa pela
+   Revisao e aparece sempre. Quem tem venda nunca some. */
+function poEntraEmClientes(l) {
+  if (!l || typeof l !== 'object') return false;
+  if (l.status === 'venda') return true;
+  if (!l.origemImport) return true;
+  return l.revisado === true && l.cliente === true;
+}
+
 function poPessoas() {
   // filtradasPessoas, nao filtered: a base de clientes ignora o filtro de
   // mes, senao a aba abre mostrando so quem deu sinal no mes corrente.
-  return poAgrupaPessoas(typeof filtradasPessoas === 'function' ? filtradasPessoas() : LEADS);
+  return poAgrupaPessoas((typeof filtradasPessoas === 'function' ? filtradasPessoas() : LEADS).filter(poEntraEmClientes));
 }
 
 function poRenderClientes() {

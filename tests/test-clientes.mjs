@@ -190,4 +190,29 @@ assert.ok(html.includes('data-chave="5548996048882"'), 'a linha carrega a chave 
   }
 }
 
+
+/* ---------- a aba Clientes so mostra quem JA passou pela Revisao (17/11/2026) ----------
+   Os 435 da agenda apareciam nas duas abas ao mesmo tempo, e a Laís lia como
+   duplicados; aprovar na Revisao nao mudava a contagem, porque eles ja estavam
+   la. Pendente fica so na Revisao; "nao e cliente" sai das duas listas. */
+{
+  const cF = new Function(pega('poEntraEmClientes') + pega('poLinhaPessoa') +
+    'function esc(s){return String(s==null?"":s)}function brl(n){return "R$ "+n}function brl2(n){return "R$ "+n}function fmtData(){return ""}' +
+    '; return {poEntraEmClientes, poLinhaPessoa};')();
+  assert.equal(cF.poEntraEmClientes({ origemImport: 'agenda-esposa', revisado: false }), false, 'pendente fica so na Revisao');
+  assert.equal(cF.poEntraEmClientes({ origemImport: 'agenda-esposa', revisado: true, cliente: false }), false, '"nao e cliente" nao aparece');
+  assert.equal(cF.poEntraEmClientes({ origemImport: 'agenda-esposa', revisado: true, cliente: true }), true, 'aprovado aparece');
+  assert.equal(cF.poEntraEmClientes({ origemImport: '', revisado: false }), true, 'lead do site e do robo aparece (nao passa pela Revisao)');
+  assert.equal(cF.poEntraEmClientes({ origemImport: 'agenda-esposa', revisado: false, status: 'venda' }), true,
+    'quem tem venda nunca some, mesmo pendente');
+
+  const base = { chave: 'x', nome: 'A', tel: '1', cidade: '', total: 1, vendas: 0, valorVendido: 0, ultimaData: null };
+  assert.ok(cF.poLinhaPessoa({ ...base, temVenda: false, ehCliente: true }).includes('>Cliente<'), 'aprovado na Revisao vira "Cliente"');
+  assert.ok(cF.poLinhaPessoa({ ...base, temVenda: true, ehCliente: true }).includes('Já viajou'), 'quem tem venda aparece como "Já viajou"');
+  assert.ok(cF.poLinhaPessoa({ ...base, temVenda: false, ehCliente: false }).includes('>Lead<'), 'lead do site continua "Lead"');
+
+  const fonte = readFileSync(new URL('../painel/clientes.js', import.meta.url), 'utf8');
+  assert.ok(/filter\(poEntraEmClientes\)/.test(fonte), 'a lista da aba passa pelo filtro');
+}
+
 console.log('test-clientes OK');
