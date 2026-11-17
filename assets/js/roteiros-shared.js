@@ -44,7 +44,7 @@
          roteiro nasce cronologica e sem viagem vencida sem ninguem lembrar de
          chamar nada. O `.order('ordem')` continua na consulta porque ele e o
          criterio de EMPATE de poPorSaida. */
-      return window.poPorSaida(window.poSemVencidos(res.data));
+      return window.poPorSaida(window.poComStatusDoDia(window.poSemVencidos(res.data)));
     } catch (e) { return null; }
   };
   // um roteiro por slug (RLS: público vê só ativo; painel logado vê rascunho também)
@@ -53,7 +53,7 @@
     try {
       var res = await sb.from('po_roteiros').select('*').eq('slug', slug).limit(1);
       if (res.error || !res.data || !res.data.length) return null;
-      return res.data[0];
+      return window.poComStatusDoDia([res.data[0]])[0];
     } catch (e) { return null; }
   };
 
@@ -288,6 +288,27 @@
     }).sort(function (a, b) {
       return a.k < b.k ? -1 : a.k > b.k ? 1 : a.i - b.i;
     }).map(function (x) { return x.r; });
+  };
+
+  /* O status que o roteiro mostra HOJE: do dia da saida ao ultimo dia da
+     viagem, "em_viagem" sozinho; fora disso, o que a Lais marcou. Semanal
+     nunca vira "em viagem". Espelho de po_status_do_dia (lib/po-datas.php). */
+  window.poStatusDoDia = function (roteiro, hoje) {
+    if (!roteiro || typeof roteiro !== 'object') return null;
+    var st = roteiro.status_viagem == null ? null : roteiro.status_viagem;
+    if (st === 'semanal') return st;
+    var h = hoje || window.poHoje();
+    var ini = window.poDataSaida(roteiro, h);
+    var fim = window.poDataFim(roteiro);
+    if (ini === null || fim === null) return st;
+    return (ini <= h && h <= fim) ? 'em_viagem' : st;
+  };
+
+  window.poComStatusDoDia = function (lista, hoje) {
+    return (lista || []).map(function (r) {
+      if (!r || typeof r !== 'object') return r;
+      return Object.assign({}, r, { status_viagem: window.poStatusDoDia(r, hoje) });
+    });
   };
 
   window.poSemVencidos = function (lista, hoje) {

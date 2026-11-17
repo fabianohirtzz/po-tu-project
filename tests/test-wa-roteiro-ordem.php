@@ -167,8 +167,13 @@ ok(preg_match('/\$roteiros = function \(\) use \(&\$catalogo\) \{(?:(?!\n    \})
    montando lista seria uma terceira ordem possivel. */
 $n_call = preg_match_all('/wa_fl_call\(\x27roteiros\x27\)/', $src, $m2);
 $n_env  = preg_match_all('/wa_fluxo_roteiros_venda\(wa_fl_call\(\x27roteiros\x27\)\)/', $src, $m3);
+/* 16/11/2026: o atalho `encerrado` le o catalogo envolvido em
+   wa_fluxo_roteiros_encerrados. Ele so RECONHECE um nome, nunca monta lista
+   numerada para o cliente, entao nao e uma terceira ordem possivel. */
+$n_enc  = preg_match_all('/wa_fluxo_roteiros_encerrados\(wa_fl_call\(\x27roteiros\x27\)\)/', $src, $m4);
 ok($n_call >= 2, 'ha ao menos as duas leituras conhecidas do catalogo, achei ' . $n_call);
-ok($n_call === $n_env + 1,
+ok($n_enc === 1, 'o atalho encerrado le o catalogo uma vez, envolvido');
+ok($n_call === $n_env + $n_enc + 1,
    'toda leitura do catalogo em wa-fluxo.php passa por wa_fluxo_roteiros_venda, fora a da closure: leituras=' . $n_call . ' envolvidas=' . $n_env);
 ok(preg_match('/wa_fluxo_roteiros_venda\(wa_fl_call\(\x27roteiros\x27\)\)/', $src) === 1,
    'o wa_fl_call de roteiros de wa_fluxo_proximo passa por wa_fluxo_roteiros_venda');

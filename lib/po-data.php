@@ -137,7 +137,10 @@ function po_rest_tabela($tabela, $query, $ttl = 600) {
    cliente escolheu no painel), e sem ele o empate dependeria da ordem que o
    PostgREST devolvesse. */
 function po_fetch_roteiros() {
-    return po_por_saida(po_sem_vencidos(po_fetch_roteiros_todos()));
+    /* + o status do dia (16/11/2026): entre a saida e o fim, "em_viagem"
+       sozinho. Como o robo le esta MESMA lista, ele tambem para de oferecer
+       a viagem que ja partiu sem ninguem mexer no painel. */
+    return po_por_saida(po_com_status_do_dia(po_sem_vencidos(po_fetch_roteiros_todos())));
 }
 
 /* A mesma lista COM as viagens que ja terminaram. Um chamador so: o sitemap.
@@ -154,7 +157,7 @@ function po_fetch_roteiros_todos() {
 
 function po_fetch_roteiro($slug) {
     $d = po_rest('select=*&ativo=eq.true&slug=eq.' . rawurlencode($slug) . '&limit=1');
-    return (is_array($d) && count($d)) ? $d[0] : null;
+    return (is_array($d) && count($d)) ? po_com_status_do_dia([$d[0]])[0] : null;
 }
 
 /* Pre-visualizacao do painel: o roteiro por ID, ativo ou nao, lido com o

@@ -2104,7 +2104,7 @@ assert.ok(F.poFluxoGaveta({ id: 'a', tipo: 'botoes', titulo: 'T', texto: 'x', op
 ============================================================ */
 
 /* ---------- os tres tipos, espelhados do PHP ---------- */
-assert.deepEqual(F.poAtalhoTipos(), ['palavras', 'roteiro', 'destino'],
+assert.deepEqual(F.poAtalhoTipos(), ['palavras', 'roteiro', 'destino', 'encerrado'],
   'os tres tipos de atalho, na mesma ordem do PHP');
 {
   const php = le('../lib/wa-fluxo.php');

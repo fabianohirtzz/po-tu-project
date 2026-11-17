@@ -453,7 +453,7 @@ function poFluxoVariaveis() {
    e esta - pedido explicito por uma pessoa ganha de palpite sobre a frase, e
    roteiro a venda e resposta melhor que "nao temos data". */
 function poAtalhoTipos() {
-  return ['palavras', 'roteiro', 'destino'];
+  return ['palavras', 'roteiro', 'destino', 'encerrado'];
 }
 
 /* O rotulo de cada tipo, na lingua da cliente. Separado da lista para a
@@ -465,7 +465,8 @@ function poAtalhoRotulo(tipo) {
      nao distinguia um do outro sem abrir cada um. */
   const r = { palavras: 'estas palavras',
               roteiro: 'nome de um roteiro à venda',
-              destino: 'nome de um destino sem data' };
+              destino: 'nome de um destino sem data',
+              encerrado: 'nome de um roteiro encerrado' };
   return Object.prototype.hasOwnProperty.call(r, String(tipo)) ? r[String(tipo)] : String(tipo);
 }
 

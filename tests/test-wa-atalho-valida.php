@@ -68,7 +68,7 @@ $um = wa_atalhos_do_card(['config' => ['atalhos' => [
 ]]]);
 ok(count($um) === 1 && $um[0]['tipo'] === 'palavras' && $um[0]['destino'] === 'hum', 'le o atalho bem formado');
 ok($um[0]['saudacao'] === 'Oi!', 'le a saudacao');
-ok(WA_ATALHO_TIPOS === ['palavras', 'roteiro', 'destino'], 'os tres tipos, nesta ordem, e a lista e fechada');
+ok(WA_ATALHO_TIPOS === ['palavras', 'roteiro', 'destino', 'encerrado'], 'os quatro tipos, nesta ordem, e a lista e fechada (encerrado entrou em 16/11/2026)');
 
 /* ---------- as cinco regras de FORMA (regra 15) ----------
    A Meta nao avisa nada disto: quem avisa e esta tela, antes de publicar. */

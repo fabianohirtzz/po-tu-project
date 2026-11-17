@@ -41,6 +41,7 @@ foreach ($casos as $c) {
         'saida'   => po_data_saida($r, $h),
         'fim'     => po_data_fim($r),
         'vencido' => po_roteiro_vencido($r, $h),
+        'status'  => po_status_do_dia($r, $h),
     ];
 }
 echo json_encode($out, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

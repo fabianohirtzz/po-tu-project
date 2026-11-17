@@ -78,7 +78,27 @@ CASOS.forEach(([nome, roteiro, hoje], i) => {
   assert.equal(pub.poDataSaida(roteiro, hoje), php[i].saida,   `saida [${nome}] js x php`);
   assert.equal(pub.poDataFim(roteiro),          php[i].fim,     `fim [${nome}] js x php`);
   assert.equal(pub.poVencido(roteiro, hoje),    php[i].vencido, `vencido [${nome}] js x php`);
+  assert.equal(pub.poStatusDoDia(roteiro, hoje), php[i].status,  `status do dia [${nome}] js x php`);
 });
+
+/* ---------- "Em viagem" sozinho, pela data (17/11/2026) ----------
+   Do dia da saida ao ultimo dia, o roteiro aparece como Em viagem no site sem
+   ninguem mexer no painel; no dia seguinte ao fim ele ja sumiu (vencido). */
+{
+  const tur = r('turquia', { periodo: 'De 27/10/26 à 12/11/26' });
+  assert.equal(pub.poStatusDoDia(tur, '2026-10-26'), null, 'antes da saida: o status do painel (nenhum)');
+  assert.equal(pub.poStatusDoDia(tur, '2026-10-27'), 'em_viagem', 'no dia da saida ja e Em viagem');
+  assert.equal(pub.poStatusDoDia(tur, '2026-11-12'), 'em_viagem', 'no ultimo dia ainda e Em viagem');
+  const chi = r('chile', { periodo: '25/11/26 a 02/12/26', status_viagem: 'ultimas_vagas' });
+  assert.equal(pub.poStatusDoDia(chi, '2026-11-17'), 'ultimas_vagas', 'antes da saida vale o que a Lais marcou');
+  assert.equal(pub.poStatusDoDia(chi, '2026-11-25'), 'em_viagem', 'na saida, Em viagem por cima do Ultimas vagas');
+  const peru = r('peru', { status_viagem: 'semanal', datas_texto: [{ titulo: 'Dez', datas: ['02/12/26'] }] });
+  assert.equal(pub.poStatusDoDia(peru, '2026-12-02'), 'semanal', 'semanal nunca vira Em viagem');
+  assert.equal(pub.poStatusDoDia(r('x', {}), '2026-11-17'), null, 'sem data, fica como esta');
+  const lista = pub.poComStatusDoDia([tur, chi], '2026-10-30');
+  assert.equal(lista[0].status_viagem, 'em_viagem', 'a lista sai com o status do dia');
+  assert.equal(tur.status_viagem, null, 'sem alterar o objeto original');
+}
 
 /* ---------- e concordam na ORDEM da lista inteira ----------
    Os 7 roteiros reais, medidos no banco em 05/11/2026, na ordem em que o
@@ -131,8 +151,10 @@ assert.deepEqual(
    Trava no ponto de chamada: a funcao pura certa e o chamador livre ja foi
    defeito neste projeto. Tela nova de roteiro tem que nascer ordenada. */
 const shared = le('assets/js/roteiros-shared.js');
-assert.ok(/poPorSaida\(window\.poSemVencidos\(res\.data\)\)/.test(shared),
-  'poFetchRoteiros devolve a lista ja ordenada e sem vencidos');
+assert.ok(/poPorSaida\(window\.poComStatusDoDia\(window\.poSemVencidos\(res\.data\)\)\)/.test(shared),
+  'poFetchRoteiros devolve a lista ja ordenada, sem vencidos e com o status do dia');
+assert.ok(/return window\.poComStatusDoDia\(\[res\.data\[0\]\]\)\[0\]/.test(shared),
+  'poFetchRoteiro (a pagina de um roteiro) tambem sai com o status do dia');
 
 /* ---------- e o main.js nao ordena por conta propria ----------
    Ele tinha um tripTime(rotulo) que exigia ano de 4 digitos enquanto todos os

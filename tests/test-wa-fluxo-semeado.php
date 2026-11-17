@@ -683,7 +683,11 @@ $CAT2 = [
   ['slug' => 'turquia', 'titulo' => 'Turquia com Antália', 'periodo' => 'De 27/10/26 a 12/11/26', 'ativo' => true, 'status_viagem' => null],
   ['slug' => 'chile-e-deserto-do-atacama', 'titulo' => 'Chile e Deserto do Atacama', 'periodo' => '25/11/26 a 02/12/26', 'ativo' => true, 'status_viagem' => 'ultimas_vagas'],
 ];
-wa_fluxo_set_deps(['roteiros' => function () use (&$CAT_LIDO, $CAT2) { $CAT_LIDO++; return $CAT2; }]);
+/* O "hoje" fica preso em 01/10/2026, quando os dois roteiros abaixo estavam a
+   venda: desde 16/11/2026 o robo tira da venda o que sai em 15 dias, e este
+   teste nao pode depender do calendario. */
+wa_fluxo_set_deps(['roteiros' => function () use (&$CAT_LIDO, $CAT2) { $CAT_LIDO++; return $CAT2; },
+                   'hoje'     => function () { return '2026-10-01'; }]);
 ok(wa_fl_dep('roteiros') !== 'po_fetch_roteiros', 'o catalogo esta injetado: o roteamento do card `roteiros` nao vai ao banco');
 
 $ctx2 = ['roteiro_slug' => null, 'tentativas' => 0, 'roteiros_enviados' => array_column($CAT2, 'slug')];

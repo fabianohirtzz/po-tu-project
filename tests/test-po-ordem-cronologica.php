@@ -152,4 +152,14 @@ ok(!in_array('turquia', $depois, true), 'no dia seguinte ao fim da viagem, a Tur
 ok($depois[0] === 'chile-e-deserto-do-atacama', 'e o Chile assume a frente');
 ok(end($depois) === 'peru-fascinante', 'o Peru segue por ultimo');
 
+/* "Em viagem" pela data (16/11/2026): as duas leituras do servidor saem com o
+   status do dia. Trava no PONTO DE CHAMADA, nao so na funcao pura. */
+$fonteData = str_replace("\r\n", "\n", file_get_contents(__DIR__ . '/../lib/po-data.php'));
+ok(strpos($fonteData, 'return po_por_saida(po_com_status_do_dia(po_sem_vencidos(po_fetch_roteiros_todos())));') !== false,
+   'a lista do site (e do robo) sai com o status do dia');
+ok(preg_match('/function po_fetch_roteiro\(\$slug\)[\s\S]{0,300}po_com_status_do_dia\(\[\$d\[0\]\]\)\[0\]/', $fonteData) === 1,
+   'a pagina de um roteiro tambem');
+$emv = po_com_status_do_dia([['slug' => 't', 'periodo' => 'De 27/10/26 à 12/11/26', 'status_viagem' => null]], '2026-11-01');
+ok($emv[0]['status_viagem'] === 'em_viagem', 'a Turquia em 01/11 aparece Em viagem');
+
 echo "OK test-po-ordem-cronologica\n";

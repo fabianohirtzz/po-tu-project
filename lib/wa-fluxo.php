@@ -69,7 +69,9 @@ const WA_CARD_ESPERA   = ['botoes','lista','roteiros'];          // cards que pa
    A ordem recomendada no card de boas-vindas e esta mesma: pedido explicito
    por uma pessoa ganha de palpite, e roteiro a venda e resposta melhor que
    "nao temos data". A ordem e DADO, no card, entao a cliente muda. */
-const WA_ATALHO_TIPOS  = ['palavras','roteiro','destino'];
+// `encerrado` (16/11/2026): o nome de um roteiro que esta no site mas saiu da
+// venda do robo (15 dias antes, em viagem ou esgotado).
+const WA_ATALHO_TIPOS  = ['palavras','roteiro','destino','encerrado'];
 const WA_CARD_TERMINAL = ['humano','fim'];            // cards sem saida
 // Destino de "sem resposta": so card que nao espera, senao o cron de timeout
 // agendaria uma espera dentro de outra.
@@ -316,6 +318,23 @@ function wa_fluxo_atalho($grafo, $card, $texto_cru, $ctx) {
             $achou['destino_nome'] = $nome;
             return $achou;
         }
+        /* Roteiro ENCERRADO: grava o slug ({roteiro}, PDF) e tambem o destino,
+           porque o que se oferece e a lista de espera. O destino, nesta ordem:
+           o que a PESSOA escreveu ("japao" -> Japao, mesmo que o roteiro se
+           chame Tesouros do Oriente), o que o TITULO nomeia ("Chile e Deserto
+           do Atacama" -> Chile), ou o proprio titulo. Assim ela entra na
+           mesma lista de quem pediu aquele destino. */
+        if ($a['tipo'] === 'encerrado') {
+            $enc = wa_fluxo_roteiros_encerrados(wa_fl_call('roteiros'));
+            $slug = wa_roteiro_unico($texto_cru, $enc);
+            if ($slug === null) continue;
+            $titulo = '';
+            foreach ($enc as $r) if ((string) $r['slug'] === $slug) { $titulo = trim((string) $r['titulo']); break; }
+            $achou['roteiro_slug'] = $slug;
+            $dests = (array) wa_fl_call('destinos');
+            $achou['destino_nome'] = wa_destino_unico($texto_cru, $dests) ?? wa_destino_unico($titulo, $dests) ?? $titulo;
+            return $achou;
+        }
     }
     return null;
 }
@@ -381,15 +400,56 @@ function wa_fluxo_ordena_roteiros($roteiros, $hoje = null) {
 /* O que esta a venda, JA em ordem de data (a lista que a pessoa le numerada e
    a mesma que casa a resposta por numero: ordenar aqui e o que garante que as
    duas nao divergem). Pura. */
-function wa_fluxo_roteiros_venda($roteiros) {
+function wa_fluxo_roteiros_venda($roteiros, $hoje = null) {
+    $hoje = $hoje === null ? wa_fluxo_hoje() : (string) $hoje;
     $venda = [];
     foreach ((array) $roteiros as $r) {
-        if (!is_array($r) || empty($r['ativo'])) continue;
-        if (in_array($r['status_viagem'] ?? null, ['esgotado', 'em_viagem'], true)) continue;
-        if (trim((string) ($r['slug'] ?? '')) === '' || trim((string) ($r['titulo'] ?? '')) === '') continue;
+        if (!wa_fluxo_roteiro_no_site($r)) continue;
+        if (wa_fluxo_fora_da_venda($r, $hoje)) continue;
         $venda[] = $r;
     }
-    return wa_fluxo_ordena_roteiros($venda);
+    return wa_fluxo_ordena_roteiros($venda, $hoje);
+}
+
+/* O robo para de vender o roteiro WA_FLUXO_DIAS_ANTES dias antes da saida
+   (pedido de 16/11/2026: "exatamente 15 dias" - saida em 25/11 sai da lista
+   no dia 10/11). O SITE continua mostrando ate a saida: por isso a regra mora
+   aqui e nao em po_fetch_roteiros, que o site tambem le. */
+const WA_FLUXO_DIAS_ANTES = 15;
+
+/* O "hoje" do robo. Injetavel para o teste nao depender do calendario; em
+   producao e o mesmo relogio do site (po_hoje, UTC). */
+function wa_fluxo_hoje() {
+    return isset($GLOBALS['WA_DEPS']['hoje']) ? (string) wa_fl_call('hoje') : po_hoje();
+}
+
+/* Esta publicado no site: ativo, com slug e titulo. */
+function wa_fluxo_roteiro_no_site($r) {
+    if (!is_array($r) || empty($r['ativo'])) return false;
+    return trim((string) ($r['slug'] ?? '')) !== '' && trim((string) ($r['titulo'] ?? '')) !== '';
+}
+
+/* Saiu da venda do robo: esgotado, em viagem, ou saindo em 15 dias ou menos.
+   Semanal nunca sai pela data (ele sai toda semana); sem data, fica. */
+function wa_fluxo_fora_da_venda($r, $hoje) {
+    if (in_array($r['status_viagem'] ?? null, ['esgotado', 'em_viagem'], true)) return true;
+    if (($r['status_viagem'] ?? null) === 'semanal') return false;
+    $ini = wa_roteiro_data_ini($r, $hoje);
+    if ($ini === null) return false;
+    $dias = (int) floor((strtotime($ini . ' 00:00:00 UTC') - strtotime($hoje . ' 00:00:00 UTC')) / 86400);
+    return $dias <= WA_FLUXO_DIAS_ANTES;
+}
+
+/* Os roteiros que ainda estao NO SITE mas sairam da venda do robo. Quem pede
+   um deles pelo nome ouve que ele encerrou e ganha a lista de espera (atalho
+   `encerrado`, pedido de 16/11/2026). Pura. */
+function wa_fluxo_roteiros_encerrados($roteiros, $hoje = null) {
+    $hoje = $hoje === null ? wa_fluxo_hoje() : (string) $hoje;
+    $out = [];
+    foreach ((array) $roteiros as $r) {
+        if (wa_fluxo_roteiro_no_site($r) && wa_fluxo_fora_da_venda($r, $hoje)) $out[] = $r;
+    }
+    return $out;
 }
 
 /* "1. Titulo (periodo)", sem travessao (regra de copy da casa), uma linha por roteiro, sem quebra no fim. Pura. */
@@ -716,7 +776,7 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
             $ond = 'No card ' . $nome($id) . ', o atalho ' . ($i + 1);
 
             if (!in_array($a['tipo'], WA_ATALHO_TIPOS, true)) {
-                $acha(17, $id, $ond . ' tem um tipo que nao existe. Use palavras, roteiro ou destino.');
+                $acha(17, $id, $ond . ' tem um tipo que nao existe. Use palavras, roteiro, destino ou roteiro encerrado.');
                 continue;
             }
             if ($a['destino'] === null || !$existe($a['destino'])) {
@@ -1012,9 +1072,10 @@ function wa_fluxo_valida($fluxo, $cards, $outros = []) {
                como "disse o destino", e e o UNICO que conta: e dele que sai
                `destino_nome`. `palavras` nao semeia nenhum dos dois. */
             foreach (wa_atalhos_do_card($c) as $a) {
+                // `encerrado` grava os DOIS: o slug e o destino da espera.
                 $viz[] = [$a['destino'],
-                          $a['tipo'] === 'roteiro' ? true : $tem,
-                          $a['tipo'] === 'destino' ? true : $dst];
+                          in_array($a['tipo'], ['roteiro', 'encerrado'], true) ? true : $tem,
+                          in_array($a['tipo'], ['destino', 'encerrado'], true) ? true : $dst];
             }
             foreach ($viz as [$d, $t, $x]) {
                 if (!$existe($d)) continue;
