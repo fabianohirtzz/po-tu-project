@@ -1863,7 +1863,7 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     da Lais; nenhuma tinha venda; 402 tinham CPF e 271 passaporte). Copia integral fora
     do Git em `~/.claude/projects/<projeto>/backups/po_leads-sem-telefone-crm-*.json`.
     Base foi de 812 para 197. Ficaram sem telefone so os 3 TESTE (mantidos ate validar) e
-    12 "EXEMPLO ..." que nao sao meus (provavelmente do Carlos).
+    12 "EXEMPLO ..." que nao sao meus (provavelmente do Carlos).
   - **Depois, no mesmo dia:** so FIXO tambem nao entra mais no importador (Fabiano: "nao
     vamos fazer lista de transmissao para telefone fixo"), e as **138 fichas do CRM so com
     fixo foram apagadas** (copia em `backups/po_leads-so-fixo-crm-*.json`). Base em 59.
@@ -1872,6 +1872,30 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     11 na Lista de espera, 0 falhas, lote registrado. Base em **525**. Os 466 entram
     `revisado=false`: so vao para a transmissao "todos os clientes" depois da aba Revisao.
   - **O Carlos tem liberdade total nas abas Leads e Relatorios.** Nao mexer nelas.
+- **INCIDENTE DA REVISAO + ROBO FECHA A VENDA (17/11/2026): NO AR.**
+  - A Lais marcou os 435 da agenda como cliente de uma vez; foram devolvidos para a
+    Revisao (copia do antes em `backups/po_leads-antes-de-desfazer-revisao-*.json`).
+    Os "duplicados" que ela via eram o MESMO registro nas duas abas: a aba Clientes
+    listava todo mundo. **Agora Clientes mostra so quem ja passou pela Revisao como
+    cliente** (`poEntraEmClientes`); pendente fica so na Revisao, "nao e cliente" sai
+    das duas, lead do site/robo e quem tem venda aparecem sempre. Etiqueta: "Cliente" =
+    aprovado, "Ja viajou" = tem venda. Por telefone so a Ilza repete (agenda + 2 forms).
+  - **Site: "Em viagem" pela data** (`po_status_do_dia` + `poStatusDoDia`, derivado,
+    nunca gravado; aplicado em `po_fetch_roteiros`/`po_fetch_roteiro` e nas duas
+    leituras do navegador). Do dia da saida ao ultimo dia; no dia seguinte ja e vencido.
+  - **Robo: sai da venda faltando 15 dias ou menos** (`WA_FLUXO_DIAS_ANTES`, "exatamente
+    15": saida 25/11 sai no dia 10/11). Semanal e sem data nunca saem. O SITE segue
+    mostrando ate a saida, por isso a regra mora em `wa_fluxo_roteiros_venda`.
+  - **Atalho `encerrado`** (4o tipo, `WA_ATALHO_TIPOS`): roteiro no site mas fora da
+    venda (15 dias, em viagem, esgotado) -> card "Roteiro encerrado" (`...025`), que
+    oferece a lista de espera pelo MESMO caminho do "Sem data" (015). O destino da
+    espera e o que a pessoa escreveu, senao o do titulo, senao o titulo.
+  - **Rascunho do fluxo:** card 025 criado, atalho `encerrado` antes do de destino no
+    001 e no 002, e o texto do 002 sem a lista que a Lais tinha DIGITADO (o card ja
+    anexa a lista automatica: publicado assim, o cliente receberia duas listas). Formato
+    da lista: o original, "1. Titulo (periodo)". Nada publicado, nada ligado.
+  - Pendente: os 9 contatos com destino no nome que parecem viagem passada/sobrenome
+    (decisao do Fabiano); Maria Carlota Boabaid com 2 numeros quase iguais.
   - **Formulario do site: NAO mexer** (decisao ainda nao tomada).
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
