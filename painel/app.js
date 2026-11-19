@@ -22,24 +22,40 @@ const STATUS={
   espera:{label:'Lista de espera',cls:'s-espera'},
   perdido:{label:'Perdido',cls:'s-perdido'}
 };
-// A cor mora aqui junto do rótulo: o donut e a legenda dos relatórios leem deste
-// dicionário. Manter uma segunda tabela de cores lá deixava origem nova sem cor
-// (e um "undefined" no meio do conic-gradient derruba o gradiente inteiro).
+/* As origens do lead. Meta Ads e Google Ads (13/11/2026) saem de 'pago', que
+   fica para o anuncio de plataforma desconhecida e para o que ja estava
+   gravado assim. Google Meu Negocio e ChatGPT e IAs entraram em 15/11/2026.
+   A ordem das chaves e a ordem dos filtros e o desempate das barras dos
+   Relatorios. A cor de cada origem mora so no CSS (selo e chip, que levam o
+   nome escrito): o relatorio deixou de ser uma rosca com uma cor por origem
+   (ver renderOrigens), entao origem nova nao precisa de cor de grafico. */
 const ORIG={
-  pago     :{label:'Pago',     cls:'pago',     cor:'var(--azul)'},
-  organico :{label:'Orgânico', cls:'organico', cor:'var(--st-venda)'},
-  social   :{label:'Social',   cls:'social',   cor:'var(--st-nego)'},
-  instagram:{label:'Instagram',cls:'instagram',cor:'#c13584'},
-  whatsapp :{label:'WhatsApp', cls:'whatsapp', cor:'#25D366'},
-  direto   :{label:'Direto',   cls:'direto',   cor:'#9aa4b2'}
+  meta      :{label:'Meta Ads',           cls:'meta'},
+  google    :{label:'Google Ads',         cls:'google'},
+  pago      :{label:'Pago (outro)',       cls:'pago'},
+  organico  :{label:'Orgânico',           cls:'organico'},
+  meunegocio:{label:'Google Meu Negócio', cls:'meunegocio'},
+  ia        :{label:'ChatGPT e IAs',      cls:'ia'},
+  social    :{label:'Social',             cls:'social'},
+  instagram :{label:'Instagram',          cls:'instagram'},
+  whatsapp  :{label:'WhatsApp',           cls:'whatsapp'},
+  direto    :{label:'Direto',             cls:'direto'}
 };
+/* As origens que sao midia paga, cada uma com o campo de investimento que a
+   paga. 'outros' e a coluna antiga `amount` do po_ad_spend: o gasto gravado
+   antes da separacao continua la e continua entrando no total. */
+const PO_PLATAFORMAS=[
+  {k:'meta',  gasto:'meta'},
+  {k:'google',gasto:'google'},
+  {k:'pago',  gasto:'outros'}
+];
 
 /* ---------- helpers ---------- */
 const brl=n=>n>0?n.toLocaleString('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0}):'—';
 const brl2=n=>(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0});
 function esc(s){return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function fmtData(iso){if(!iso)return '—';const d=new Date(iso);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'})+' · '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
-function isPago(o){return o==='pago';}
+function isPago(o){return PO_PLATAFORMAS.some(p=>p.k===o);}
 /* Ciclo de venda: dias entre a entrada do lead e o carimbo do fechamento.
    Null enquanto não fechou (e nas vendas anteriores à migration, que não têm
    carimbo — entram como "—" em vez de fingir um ciclo de 0 dias). */
@@ -49,7 +65,19 @@ function cicloDias(l){
   return d>=0?Math.round(d):null;
 }
 function fmtCiclo(n){return n==null?'—':(n===0?'menos de 1 dia':n+(n===1?' dia':' dias'));}
-function monthKey(iso){return (iso||'').slice(0,7);}
+/* Dia do lead no relogio de SAO PAULO, 'AAAA-MM-DD'. O created_at vem do banco
+   em UTC ("2026-11-01T01:30:00+00:00" e 31/10 as 22:30 aqui): cortar o texto
+   cru punha todo lead das 21h a meia-noite no dia seguinte, e o do ultimo dia
+   do mes no mes seguinte, enquanto a tabela mostrava a data certa. */
+function poDiaSP(iso){
+  const d=new Date(iso||'');if(!iso||isNaN(d))return '';
+  const f=poDiaSP.fmt||(poDiaSP.fmt=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}));
+  const p={};f.formatToParts(d).forEach(x=>{p[x.type]=x.value;});
+  return p.year+'-'+p.month+'-'+p.day;
+}
+function monthKey(iso){
+  return poDiaSP(iso).slice(0,7);
+}
 function monthLabel(key){if(key==='all')return 'Todos os meses';const[y,m]=key.split('-').map(Number);const s=new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});return s.charAt(0).toUpperCase()+s.slice(1).replace(' de ',' / ');}
 /* Trunca em limite de PALAVRA. O .slice(0,60) cru cortava no meio e gerou
    'um-roteiro-exclusivo-pelo-melhor-da-escandinavia-com-acompan' no banco.
@@ -95,21 +123,104 @@ async function loadData(){
   ]);
   if(e1){toast('Erro ao carregar leads: '+e1.message,true);}
   LEADS=(leadsData||[]).map(mapRow);
-  spend={};(spendData||[]).forEach(s=>{spend[s.month]=Number(s.amount)||0;});
+  spend={};(spendData||[]).forEach(s=>{spend[s.month]=poGastoDaLinha(s);});
   ROTEIROS=rotData||[];
   buildMonths();renderLeads();renderRoteiros();
+  /* Origem que chega depois do lead: o clique no WhatsApp do site (cliques.js)
+     e o nome dos anuncios e as vendas para a Meta (meta.js). EVENTO + MARCA,
+     nunca chamada direta: os dois carregam DEPOIS do app.js, e com o banco
+     respondendo rapido o loadData terminava antes de eles existirem. A
+     chamada com guarda de typeof simplesmente nao acontecia, em silencio
+     (achado abrindo o painel no ensaio). Cada um escuta o evento e, se os
+     leads ja chegaram antes de ele carregar, roda na hora. */
+  window.PO_LEADS_PRONTOS=true;
+  document.dispatchEvent(new Event('po:leads'));
   /* O contador da fila de revisao vive na navegacao: precisa ser preenchido
      na carga, senao a cliente so descobre que ha contato esperando se abrir
      a aba por acaso — e o contato nao revisado nao entra em campanha. */
   if(typeof poRenderRevisao==='function')poRenderRevisao();
 }
+/* Dominio de quem mandou a visita, sem o www. Vazio sem referrer e quando ele
+   e o proprio site (ou o preview): navegacao interna nao diz de onde a pessoa
+   veio. android-app://com.google.android... vira host e casa como Google. */
+function poRefHost(ref){
+  let h='';
+  try{h=new URL(String(ref||'')).hostname.toLowerCase();}catch(e){return '';}
+  h=h.replace(/^www\./,'');
+  if(/(^|\.)(pereiraoliveiraturismo\.com\.br|github\.io)$/.test(h)||h==='localhost'||h==='127.0.0.1')return '';
+  return h;
+}
+/* Canal automatico do lead, lido do que o proprio lead trouxe. A ORDEM e a
+   regra: id de clique vence UTM (quem carimbou foi a plataforma, nao alguem
+   montando link), UTM vence referrer, e o referrer vence o "nada".
+   O lead do anuncio que abre o WhatsApp chega sem UTM e com o ad_id da Meta:
+   antes ele caia em "Direto" e ficava fora do CPL e do ROAS.
+   O utm_source da Meta vem do {{site_source_name}}: fb, ig, msg, an. */
 function classifyChannel(r){
-  if(r.gclid) return 'pago';
-  const med=(r.utm_medium||'').toLowerCase();
-  if(/cpc|ppc|paid|ads/.test(med)) return 'pago';
-  if(/social|facebook|instagram|meta/.test(med)) return 'social';
-  if(r.utm_source||med) return 'organico';
+  if(r.gclid||r.gbraid||r.wbraid)return 'google';
+  if(r.ad_id||r.ctwa_clid)return 'meta';
+  const src=String(r.utm_source||'').trim().toLowerCase();
+  const med=String(r.utm_medium||'').trim().toLowerCase();
+  if(/cpc|ppc|paid|ads/.test(med)){
+    if(/google|adwords|youtube/.test(src))return 'google';
+    if(/facebook|instagram|meta/.test(src)||/^(fb|ig|msg|an)$/.test(src))return 'meta';
+    return 'pago';
+  }
+  /* Google Meu Negocio (Perfil da Empresa no Google). Sem UTM o clique no
+     perfil chega como busca do Google e cai em Organico: quem separa um do
+     outro e a UTM posta nos links do perfil. O padrao do projeto e
+     utm_campaign=google-meu-negocio; vale tambem o nome que os guias usam
+     (gmb, gbp, google-business-profile...). Depois da midia paga, como a
+     letra do codigo do WhatsApp (origem.js), e sempre como PALAVRA: "gmbh",
+     "viagem-de-negocios" e "economy-business" nao sao o perfil. Tudo aqui
+     dentro: o teste do site roda esta funcao sozinha. */
+  const perfil=[src,med,String(r.utm_campaign||'').toLowerCase()].join(' ').normalize('NFD').replace(/\p{M}/gu,'');
+  if(/(^|[^a-z0-9])(gmb|gbp|gmn)([^a-z0-9]|$)|(^|[^a-z0-9]|google)(meu[\W_]*negocio|my[\W_]*business|business[\W_]*profile)|perfil[\W_]*da[\W_]*empresa/.test(perfil))return 'meunegocio';
+  /* ChatGPT e outras IAs. O ChatGPT poe utm_source=chatgpt.com sozinho nos
+     links que mostra; as outras quase sempre chegam so pelo referrer (abaixo).
+     Pela FONTE, nunca pela campanha: "roteiros-com-chatgpt" e campanha de
+     quem montou o link. "meta" sozinho e a Meta; a IA dela e "meta.ai". */
+  if(/(^|[^a-z0-9])(chatgpt|openai|perplexity|gemini|copilot|claude|deepseek|grok|mistral)([^a-z0-9]|$)|(^|[^a-z0-9])meta\.ai([^a-z0-9]|$)/.test(src))return 'ia';
+  // A bio do Instagram (/link) manda utm_source=instagram&utm_medium=bio.
+  if(/instagram/.test(src)||src==='ig'||med==='bio')return 'instagram';
+  if(/social|facebook|instagram|meta/.test(med))return 'social';
+  if(src||med)return 'organico';
+  const host=poRefHost(r.referrer);
+  /* fbclid sem UTM: veio de link do Facebook/Instagram, mas a Meta poe o
+     fbclid em post pago E nao pago. Sem a UTM do anuncio nao da para dizer
+     que foi anuncio, entao fica na rede de onde veio. */
+  if(r.fbclid)return /(^|\.)instagram\./.test(host)?'instagram':'social';
+  if(host){
+    if(/(^|\.)instagram\./.test(host))return 'instagram';
+    if(/(^|\.)(facebook|fb)\./.test(host))return 'social';
+    /* O app do Google Maps no Android manda referrer android-app://, e link
+       que sai do Maps so sai da ficha da empresa. O Maps na web chega como
+       google.com, igual a busca: ali so a UTM separa. */
+    if(/^(com\.google\.android\.apps\.maps|maps\.google\.[a-z.]+)$/.test(host))return 'meunegocio';
+    /* As IAs pelo referrer. O modo IA e os resumos do Google chegam como
+       google.com, iguais a busca: esses nao tem como separar. */
+    if(/(^|\.)(chatgpt\.com|openai\.com|perplexity\.ai|claude\.ai|deepseek\.com|meta\.ai|grok\.com|mistral\.ai)$|^(gemini|bard)\.google\.com$|^copilot\.microsoft\.com$/.test(host))return 'ia';
+    return 'organico';   // busca do Google/Bing, outro site
+  }
+  // Sem nada do site: o robo grava origem 'whatsapp' no primeiro contato.
+  if(r.origem==='whatsapp')return 'whatsapp';
   return 'direto';
+}
+/* O id de clique do lead, encurtado para a gaveta: e o que prova, na hora de
+   conferir uma campanha de teste, que o rastreio pegou. */
+/* Como a origem do lead do WhatsApp foi ligada ao clique no site
+   (painel/cliques.js). "provavel" fica escrito: foi pelo horario, nao pelo
+   codigo, e quem le a ficha precisa saber a diferenca. */
+function poCasadoRotulo(v){return v==='codigo'?'Ligado pelo código':(v==='horario'?'Provável (pelo horário)':'—');}
+function poIdClique(l){
+  const c=(rot,v)=>rot+' '+(v.length>14?v.slice(0,14)+'…':v);
+  if(l.gclid)return c('gclid',l.gclid);
+  if(l.gbraid)return c('gbraid',l.gbraid);
+  if(l.wbraid)return c('wbraid',l.wbraid);
+  if(l.ctwaClid)return c('ctwa_clid',l.ctwaClid);
+  if(l.fbclid)return c('fbclid',l.fbclid);
+  if(l.adId)return 'anúncio '+l.adId;
+  return '—';
 }
 function mapRow(r){
   const auto=classifyChannel(r);
@@ -120,6 +231,14 @@ function mapRow(r){
     origemRaw:r.origem||'—',origemAuto:auto,origem:eff,
     // Lead de anuncio que leva ao WhatsApp chega sem UTM, com o ad_id da Meta.
     camp:r.utm_campaign||(r.ad_id?'Anúncio '+r.ad_id:'')||r.origem||'—',land:r.landing_page||'—',
+    fonte:[r.utm_source,r.utm_medium].filter(Boolean).join(' / ')||'—',
+    gclid:r.gclid||'',adId:r.ad_id||'',ctwaClid:r.ctwa_clid||'',
+    gbraid:r.gbraid||'',wbraid:r.wbraid||'',fbclid:r.fbclid||'',
+    // A linha crua: o casamento de cliques (cliques.js) decide pelos campos
+    // de origem do banco e reclassifica o lead com mapRow(raw) depois.
+    raw:r,origemCasada:r.origem_casada||'',
+    // Na Meta, utm_term={{adset.name}} e utm_content={{ad.id}}: o anuncio exato
+    anuncio:[r.utm_term,r.utm_content].filter(Boolean).join(' / ')||'—',
     status:r.status||'semresposta',orc:Number(r.orcamento)||0,ven:Number(r.venda)||0,
     notas:Array.isArray(r.notas)?r.notas:[],vendaAt:r.venda_at||null,
     waId:r.wa_id||'',
@@ -134,7 +253,7 @@ function mapRow(r){
 }
 function buildMonths(){
   const set=[...new Set(LEADS.map(l=>monthKey(l.data)).filter(Boolean))].sort().reverse();
-  if(!set.length){const now=new Date();set.push(now.toISOString().slice(0,7));}
+  if(!set.length)set.push(monthKey(new Date().toISOString()));
   // Preserva o mês escolhido ao recarregar (ex.: depois de cadastrar um lead
   // antigo); só cai no mais recente se o mês atual sumiu da lista.
   if(!F.month||(F.month!=='all'&&!set.includes(F.month)))F.month=set[0];
@@ -340,7 +459,19 @@ function openDrawer(id){
   poGavetaEspera(l.id);
   $('#dr-ciclo').textContent=fmtCiclo(cicloDias(l));
   $('#dr-canal').textContent=(ORIG[l.origemAuto]||ORIG.direto).label;
-  $('#dr-camp').textContent=l.camp;$('#dr-land').textContent=l.land;$('#dr-desc').textContent=l.msg;
+  // Nome do anuncio da Meta no lugar do numero, quando o meta.js ja o conhece.
+  $('#dr-camp').textContent=typeof poCampanhaDoLead==='function'?poCampanhaDoLead(l):l.camp;
+  $('#dr-land').textContent=l.land;$('#dr-desc').textContent=l.msg;
+  if($('#dr-nomear')){
+    $('#dr-nomear').hidden=!(l.adId&&typeof poMetaNomear==='function');
+    $('#dr-nomear').onclick=async()=>{if(await poMetaNomear(l.adId))$('#dr-camp').textContent=poCampanhaDoLead(l);};
+  }
+  /* Com guarda: o deploy e FTP arquivo a arquivo, e este app.js no ar antes do
+     index.html novo derrubaria a gaveta inteira com TypeError. */
+  if($('#dr-fonte'))$('#dr-fonte').textContent=l.fonte;
+  if($('#dr-clique'))$('#dr-clique').textContent=poIdClique(l);
+  if($('#dr-anuncio'))$('#dr-anuncio').textContent=l.anuncio;
+  if($('#dr-casado'))$('#dr-casado').textContent=poCasadoRotulo(l.origemCasada);
   $('#e-status').value=l.status;$('#e-orig').value=l.origem;
   $('#e-orc').value=l.orc||'';$('#e-ven').value=l.ven||'';
   $('#e-pdata').checked=l.perdeuData;poPdataVisivel();
@@ -421,13 +552,20 @@ $('#scrim').onclick=()=>{closeDrawer();closeRot();closeNewLead();poFechaFicha();
    data real do fechamento, que alimenta o ciclo de venda dos relatorios.
 
    venda_at que ja existe nunca e reescrito: mesma regra do poPatchStatus
-   do funil. */
+   do funil.
+
+   A origem manual so e gravada quando DIFERE da automatica. O select abre
+   mostrando a origem efetiva, e gravar o que ele mostra a cada Salvar
+   congelava a classificacao do dia: o lead nunca mais seria reclassificado
+   (nem pela correcao da classificacao, nem pelo rastreio que chega depois).
+   Igual a automatica = null = "siga a automatica". */
 function poPatchGaveta(campos,lead,agora){
   const ven=Number(campos.ven)||0;
   const venMudou=ven!==(Number(lead.ven)||0);
   const status=(ven>0&&venMudou)?'venda':campos.status;
   const vendaAt=status==='venda'?(lead.vendaAt||agora):null;
-  const p={status,origem_manual:campos.origem,orcamento:Number(campos.orc)||0,venda:ven,venda_at:vendaAt};
+  const orig=campos.origem||null;
+  const p={status,origem_manual:(orig&&orig!==lead.origemAuto)?orig:null,orcamento:Number(campos.orc)||0,venda:ven,venda_at:vendaAt};
   /* "Perdeu so pela data": qualif_data=false, a mesma coluna que o robo grava.
      So mexe em lead Perdido: fora dele o robo grava true no qualificado. */
   if(status==='perdido'){
@@ -445,7 +583,7 @@ $('#dr-save').onclick=async()=>{
   const {error}=await sb.from('po_leads').update(patch).eq('id',l.id);
   btn.disabled=false;btn.textContent='Salvar';
   if(error){toast('Erro ao salvar: '+error.message,true);return;}
-  l.status=patch.status;l.origem=patch.origem_manual;l.orc=patch.orcamento;l.ven=patch.venda;l.vendaAt=patch.venda_at;
+  l.status=patch.status;l.origem=patch.origem_manual||l.origemAuto;l.orc=patch.orcamento;l.ven=patch.venda;l.vendaAt=patch.venda_at;
   if('qualif_data' in patch)l.perdeuData=patch.qualif_data===false;
   $('#e-status').value=l.status;$('#dr-ciclo').textContent=fmtCiclo(cicloDias(l));
   const f=$('#save-flash');f.classList.add('on');setTimeout(()=>f.classList.remove('on'),1600);
@@ -492,27 +630,70 @@ $('#nd-save').onclick=async()=>{
 };
 
 /* ============================================================ RELATÓRIOS */
-function syncSpendInput(){
-  const inp=$('#spend-input');$('#spend-month-lbl').textContent=monthLabel(F.month);
-  if(F.month==='all'){inp.value=Object.values(spend).reduce((a,b)=>a+b,0);inp.readOnly=true;inp.style.opacity=.5;}
-  else{inp.value=spend[F.month]||0;inp.readOnly=false;inp.style.opacity=1;}
+/* Investimento do mes por plataforma. Uma linha do po_ad_spend vira
+   {meta,google,outros}; 'outros' e a coluna antiga `amount`. Sem a migration
+   de 13/11 as colunas meta/google nao vem, e o gasto antigo aparece inteiro em
+   "Outros": nada some do ROAS de meses passados. */
+function poGastoDaLinha(s){return {meta:Number(s&&s.meta)||0,google:Number(s&&s.google)||0,outros:Number(s&&s.amount)||0};}
+function poGastoParaLinha(month,g){return {month,meta:Number(g.meta)||0,google:Number(g.google)||0,amount:Number(g.outros)||0};}
+function poGastoTotal(g){return (Number(g&&g.meta)||0)+(Number(g&&g.google)||0)+(Number(g&&g.outros)||0);}
+/* O gasto do recorte: o mes escolhido, ou a soma de todos em "Todos os meses". */
+function poGastoDoMes(gastos,month){
+  if(month!=='all')return Object.assign({meta:0,google:0,outros:0},gastos[month]);
+  return Object.values(gastos||{}).reduce((a,g)=>({meta:a.meta+(g.meta||0),google:a.google+(g.google||0),outros:a.outros+(g.outros||0)}),{meta:0,google:0,outros:0});
 }
-$('#spend-input').onchange=async e=>{
-  if(F.month==='all')return;const amount=Number(e.target.value)||0;spend[F.month]=amount;
-  const {error}=await sb.from('po_ad_spend').upsert({month:F.month,amount},{onConflict:'month'});
+function curGasto(){return poGastoDoMes(spend,F.month);}
+function syncSpendInput(){
+  $('#spend-month-lbl').textContent=monthLabel(F.month);
+  const g=curGasto(),soLeitura=F.month==='all';
+  $$('.spend-in').forEach(inp=>{inp.value=g[inp.dataset.plat]||0;inp.readOnly=soLeitura;inp.style.opacity=soLeitura?.5:1;});
+}
+/* Grava a linha do mes INTEIRA (as tres plataformas): o upsert por `month`
+   substitui a linha, e mandar so a plataforma editada zeraria as outras. */
+$$('.spend-in').forEach(inp=>inp.onchange=async()=>{
+  if(F.month==='all')return;
+  const g=poGastoDoMes(spend,F.month);g[inp.dataset.plat]=Number(inp.value)||0;spend[F.month]=g;
+  const {error}=await sb.from('po_ad_spend').upsert(poGastoParaLinha(F.month,g),{onConflict:'month'});
   if(error){toast('Erro ao salvar investimento: '+error.message,true);return;}
   renderReports();toast('Investimento salvo.');
-};
+});
 $('#rep-importados').onchange=e=>{F.importados=e.target.checked;renderReports();};
-function curSpend(){return F.month==='all'?Object.values(spend).reduce((a,b)=>a+b,0):(spend[F.month]||0);}
+function curSpend(){return poGastoTotal(curGasto());}
 /* A base importada fica FORA do relatorio por padrao. As 775 fichas do CRM
    entraram com created_at=hoje e status=semresposta: contadas no denominador,
    derrubam a conversao do mes para perto de zero e medem a coisa errada — elas
    nao sao leads captados este mes, sao clientes antigos de outro sistema.
    O controle deixa ver o total quando a pergunta for essa. */
+/* Os Relatorios NAO usam o filtro de origem (15/11/2026). Os chips moram so na
+   aba Leads, e o escolhido la seguia valendo aqui sem aparecer: com "Meta Ads"
+   marcado, total, conversao e funil mostravam so a Meta, e o CPL e o ROAS
+   dividiam o investimento de TODAS as plataformas pelos leads dela. Os
+   Relatorios ja abrem cada origem (barras e tabela por plataforma). Mesma regra
+   do Funil e da aba Clientes: cada tela tem o seu recorte. */
 function rowsForReports(){
-  return poCorteImportados(LEADS.filter(inMonth),F)
-              .filter(l=>F.orig==='todos'||l.origem===F.orig);
+  return poCorteImportados(LEADS.filter(inMonth),F);
+}
+/* As origens do periodo, da maior para a menor; empate fica na ordem do ORIG
+   (a dos filtros). Origem que o ORIG nao conhece (valor antigo gravado a mao)
+   conta como Direto, como no selo: senao viraria uma segunda barra "Direto". */
+function poOrigensOrdenadas(rows){
+  const n={};rows.forEach(l=>{const k=ORIG[l.origem]?l.origem:'direto';n[k]=(n[k]||0)+1;});
+  const ordem=Object.keys(ORIG);
+  return Object.entries(n).sort((a,b)=>b[1]-a[1]||ordem.indexOf(a[0])-ordem.indexOf(b[0]));
+}
+/* Leads por origem em BARRAS ORDENADAS, numa cor so (15/11/2026). Era uma
+   rosca com uma cor por origem: com 10 origens ela deixa de ser lida, e "mais
+   cores" e exatamente o que a skill de graficos proibe acima de ~7 classes.
+   O nome de cada barra e texto, entao origem nova nao pede cor nova aqui; a
+   cor unica mora no CSS (.bar-row--orig). Com guarda: no FTP o app.js sobe
+   antes do index.html, e o antigo nao tem a lista. */
+function renderOrigens(rows){
+  const el=$('#orig-bars');if(!el)return;
+  const ord=poOrigensOrdenadas(rows),max=ord.length?ord[0][1]:1;
+  el.innerHTML=ord.map(([k,v])=>`<div class="bar-row bar-row--orig"><div class="bar-lbl">${esc(ORIG[k].label)}</div>`
+    +`<div class="bar-track"><div class="bar-fill" style="width:${v/max*100}%"></div></div>`
+    +`<div class="bar-n">${v}<span class="bar-pct">${Math.round(v/rows.length*100)}%</span></div></div>`).join('')
+    ||'<div class="card-sub">Sem dados no período.</div>';
 }
 function renderReports(){
   const rows=rowsForReports();const total=rows.length;
@@ -538,12 +719,7 @@ function renderReports(){
     <div class="kpi ${roi>=0?'k-green':''}"><div class="kpi-l">ROI (pago)</div><div class="kpi-n">${sp>0?(roi>=0?'+':'')+roi.toFixed(0):'—'}<small>${sp>0?'%':''}</small></div><div class="kpi-sub">${brl2(sp)} investido</div></div>
     <div class="kpi k-green"><div class="kpi-l">Ciclo de venda médio</div><div class="kpi-n">${cicloMed==null?'—':cicloMed.toFixed(0)}<small>${cicloMed==null?'':' dias'}</small></div><div class="kpi-sub">${ciclos.length?'sobre '+ciclos.length+' venda'+(ciclos.length>1?'s':''):'nenhuma venda fechada'}</div></div>`;
   renderCiclos(ciclos);
-  const byOrig={};Object.keys(ORIG).forEach(k=>byOrig[k]=0);rows.forEach(l=>{byOrig[l.origem]=(byOrig[l.origem]||0)+1;});
-  const corOrig=k=>(ORIG[k]||ORIG.direto).cor;
-  let acc=0,segs=[];Object.entries(byOrig).forEach(([k,v])=>{if(v&&total){const pct=v/total*100;segs.push(`${corOrig(k)} ${acc}% ${acc+pct}%`);acc+=pct;}});
-  $('#donut').style.background=`conic-gradient(${segs.join(',')||'#e4e7eb 0 100%'})`;
-  $('#donut').innerHTML=`<div class="donut-c"><b>${total}</b><span>leads</span></div>`;
-  $('#donut-legend').innerHTML=Object.entries(byOrig).filter(([,v])=>v).map(([k,v])=>`<div class="legend-row"><span class="legend-dot" style="background:${corOrig(k)}"></span>${(ORIG[k]||ORIG.direto).label}<span class="pct">${total?(v/total*100).toFixed(0):0}%</span><span class="n">${v}</span></div>`).join('')||'<div class="card-sub">Sem dados no período.</div>';
+  renderOrigens(rows);
   const order=['novo','atendimento','negociacao','venda','semresposta','espera','perdido'];
   const byStatus={};order.forEach(s=>byStatus[s]=rows.filter(l=>l.status===s).length);
   const maxS=Math.max(1,...Object.values(byStatus));
@@ -555,7 +731,88 @@ function renderReports(){
   $('#m-roi').textContent=sp>0?(roi>=0?'+':'')+roi.toFixed(0)+'%':'—';$('#m-roi').style.color=roi>=0?'var(--st-venda)':'var(--st-perdido)';
   $('#m-cpl').textContent=cpl>0?brl2(Math.round(cpl)):'—';$('#m-vpago').textContent=brl2(venPago);$('#m-ticket').textContent=brl2(Math.round(ticket));
   renderTimeline(rows);
+  renderPlataformas(rows);
 }
+/* Midia paga por plataforma. Cada lead conta na plataforma da sua origem
+   EFETIVA (a manual vence a automatica, como no resto do painel), e venda so
+   conta em status 'venda', a mesma regra do KPI. A linha "Total pago" bate
+   com o ROAS e o CPL dos cards de cima: sao a mesma conta. */
+function poMidiaPorPlataforma(rows,gasto){
+  const conta=(k,leads,inv)=>{
+    const vendas=leads.filter(l=>l.status==='venda');
+    const fat=vendas.reduce((s,l)=>s+(Number(l.ven)||0),0);
+    return {k,inv,leads:leads.length,vendas:vendas.length,fat,
+      cpl:inv>0&&leads.length?inv/leads.length:null,roas:inv>0?fat/inv:null};
+  };
+  const lista=rows||[];
+  const linhas=PO_PLATAFORMAS.map(p=>conta(p.k,lista.filter(l=>l.origem===p.k),Number(gasto&&gasto[p.gasto])||0));
+  linhas.push(conta('total',lista.filter(l=>isPago(l.origem)),poGastoTotal(gasto)));
+  return linhas;
+}
+/* Conversoes offline do Google Ads, no modelo de importacao por GCLID (Metas >
+   Conversoes > Uploads). Entra o lead com gclid, em status 'venda' e com data
+   de fechamento. O arquivo leva TODAS as vendas, nao so as do mes: o Google
+   ignora a repetida pelo Order ID (o id do lead), entao subir de novo nao conta
+   venda em dobro. Fica de fora quem clicou ha mais de 90 dias, que o Google
+   recusa. A hora sai no fuso de Sao Paulo, declarado na primeira linha. */
+const PO_GADS_PRAZO_DIAS=90;
+function poHoraSP(iso){
+  const d=new Date(iso);if(isNaN(d))return '';
+  const p={};
+  new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit',
+    hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(d).forEach(x=>{p[x.type]=x.value;});
+  return p.year+'-'+p.month+'-'+p.day+' '+p.hour+':'+p.minute+':'+p.second;
+}
+function poCsvGoogleAds(leads,nome,agora){
+  const t0=new Date(agora).getTime(),prazo=PO_GADS_PRAZO_DIAS*86400000;
+  const ok=[];let fora=0,semData=0;
+  (leads||[]).forEach(l=>{
+    if(!l.gclid||l.status!=='venda')return;
+    if(!l.vendaAt){semData++;return;}
+    if(t0-new Date(l.data).getTime()>prazo){fora++;return;}
+    ok.push(l);
+  });
+  const cel=v=>{const s=String(v==null?'':v);return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+  const linhas=['Parameters:TimeZone=America/Sao_Paulo',
+    'Google Click ID,Conversion Name,Conversion Time,Conversion Value,Conversion Currency,Order ID'];
+  ok.forEach(l=>{
+    const v=Math.round((Number(l.ven)||0)*100)/100;
+    linhas.push([l.gclid,nome,poHoraSP(l.vendaAt),v>0?String(v):'',v>0?'BRL':'',l.id].map(cel).join(','));
+  });
+  return {csv:linhas.join('\n')+'\n',n:ok.length,fora,semData};
+}
+/* Com guarda: com o index.html antigo no ar a tabela nao existe, e um
+   TypeError aqui derrubaria os Relatorios inteiros. */
+function renderPlataformas(rows){
+  const tb=$('#plat-rows');if(!tb)return;
+  tb.innerHTML=poMidiaPorPlataforma(rows,curGasto()).map(x=>`<tr class="${x.k==='total'?'plat-total':''}">
+    <td>${x.k==='total'?'Total pago':origBadge(x.k)}</td>
+    <td class="num">${brl2(x.inv)}</td>
+    <td class="num">${x.leads}</td>
+    <td class="num">${x.cpl==null?'—':brl2(Math.round(x.cpl))}</td>
+    <td class="num">${x.vendas}</td>
+    <td class="num">${brl2(x.fat)}</td>
+    <td class="num">${x.roas==null?'—':x.roas.toFixed(1)+'x'}</td></tr>`).join('');
+  const info=$('#gads-info');if(!info)return;
+  const r=poCsvGoogleAds(LEADS,'-',new Date().toISOString());
+  const pl=(n,s,p)=>n+' '+(n===1?s:p);
+  info.textContent=pl(r.n,'venda com gclid pronta','vendas com gclid prontas')+' para exportar'
+    +(r.fora?'. '+pl(r.fora,'ficou','ficaram')+' de fora (clique com mais de 90 dias, o Google recusa)':'')
+    +(r.semData?'. '+pl(r.semData,'venda sem','vendas sem')+' data de fechamento':'')+'.';
+}
+if($('#gads-nome')){try{const v=localStorage.getItem('po_gads_nome');if(v)$('#gads-nome').value=v;}catch(e){}}
+if($('#gads-csv'))$('#gads-csv').onclick=()=>{
+  const nome=($('#gads-nome')?$('#gads-nome').value:'').trim();
+  if(!nome){toast('Escreva o nome da conversão exatamente como está no Google Ads.',true);return;}
+  try{localStorage.setItem('po_gads_nome',nome);}catch(e){}
+  const r=poCsvGoogleAds(LEADS,nome,new Date().toISOString());
+  if(!r.n){toast('Nenhuma venda com gclid para exportar.',true);return;}
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([r.csv],{type:'text/csv;charset=utf-8'}));
+  a.download='conversoes-google-ads-'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  toast(r.n===1?'1 venda exportada.':r.n+' vendas exportadas.');
+};
 /* Ciclo por lead: barra proporcional ao mais lento, do mais rápido ao mais lento. */
 function renderCiclos(ciclos){
   const box=$('#cycle-list'),foot=$('#cycle-foot');
@@ -578,7 +835,7 @@ function renderTimeline(rows){
     $('#tl-axis').innerHTML=keys.map(k=>`<span>${k.slice(5)}/${k.slice(2,4)}</span>`).join('');return;
   }
   const[y,m]=F.month.split('-').map(Number),days=new Date(y,m,0).getDate();
-  const by=new Array(days+1).fill(0);rows.forEach(l=>{const d=Number((l.data||'').slice(8,10));if(d>=1&&d<=days)by[d]++;});
+  const by=new Array(days+1).fill(0);rows.forEach(l=>{const d=Number(poDiaSP(l.data).slice(8,10));if(d>=1&&d<=days)by[d]++;});
   const max=Math.max(1,...by);let html='';for(let d=1;d<=days;d++)html+=`<div class="tl-bar" style="height:${by[d]/max*100}%"><span>${by[d]}</span></div>`;
   $('#timeline').innerHTML=html;$('#tl-axis').innerHTML='<span>01</span><span>08</span><span>15</span><span>22</span><span>'+days+'</span>';
 }

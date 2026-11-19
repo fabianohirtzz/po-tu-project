@@ -92,6 +92,8 @@ if (!defined('PO_TEST')) {
     echo po_footer();
     echo po_wa_float();
     // menu mobile e reveal-on-scroll; o resto do roteiro.js e no-op aqui
+    echo '<script src="/assets/js/origem.js?v=2"></script>' . "\n";
+    echo '<script src="/assets/js/rastreio.js?v=1"></script>' . "\n";
     echo '<script src="/assets/js/roteiro.js?v=5"></script>' . "\n";
     echo '</body></html>';
 }

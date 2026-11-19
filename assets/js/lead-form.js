@@ -66,7 +66,7 @@ function initLeadForm() {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const data = new FormData(form);
+    const data = poAplicaOrigem(new FormData(form));
 
     // honeypot
     if ((data.get('website') || '').trim() !== '') {
@@ -97,7 +97,12 @@ function initLeadForm() {
       utm_source: data.get('utm_source') || null,
       utm_medium: data.get('utm_medium') || null,
       utm_campaign: data.get('utm_campaign') || null,
+      utm_term: data.get('utm_term') || null,
+      utm_content: data.get('utm_content') || null,
       gclid: data.get('gclid') || null,
+      gbraid: data.get('gbraid') || null,
+      wbraid: data.get('wbraid') || null,
+      fbclid: data.get('fbclid') || null,
       referrer: data.get('referrer') || null,
       landing_page: data.get('landing_page') || null
     };
@@ -115,17 +120,67 @@ function initLeadForm() {
     } catch (e) { /* sem backend PHP: usa fallback abaixo */ }
 
     if (!done && sb) {
-      try { const { error } = await sb.from('po_leads').insert(lead); if (!error) done = true; } catch (e) { /* noop */ }
+      try {
+        let { error } = await sb.from('po_leads').insert(lead);
+        // Coluna de origem que o banco ainda nao tem (migration atrasada):
+        // grava sem ela. Perder o lead por causa de um campo de origem, nunca.
+        if (error && error.code === 'PGRST204') ({ error } = await sb.from('po_leads').insert(poSemOrigemNova(lead)));
+        if (!error) done = true;
+      } catch (e) { /* noop */ }
     }
 
     if (done) {
       form.reset(); // restaura o roteiro fixo (value do input) automaticamente
       setMsg('ok', 'Recebemos seus dados. Nossa equipe entra em contato em breve com os valores.');
+      poAvisaLead(lead);
     } else {
       setMsg('err', 'Não foi possível enviar agora. Tente novamente em instantes.');
     }
     if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
   });
+}
+
+/* ============================================================
+   Origem do lead (13/11/2026). Ela sai da memoria do site
+   (assets/js/origem.js), nao so da URL desta pagina: quem chega pelo
+   anuncio no roteiro e preenche em /contato, ou volta dias depois, ainda
+   manda o gclid e a UTM da chegada. Sem o origem.js (ou se ele falhar),
+   ficam os campos ocultos que a pagina ja tinha: o comportamento de antes.
+   Nada aqui pode impedir o envio do lead.
+============================================================ */
+function poAplicaOrigem(data) {
+  'use strict';
+  try {
+    const o = window.poOrigem && typeof window.poOrigem.campos === 'function' ? window.poOrigem.campos() : null;
+    if (o) Object.keys(o).forEach((k) => data.set(k, o[k] == null ? '' : String(o[k])));
+  } catch (e) { /* segue com os campos ocultos */ }
+  return data;
+}
+/* Os campos de origem que entraram em 13/11. Se o banco ainda nao os tem,
+   a gravacao de reserva tenta de novo sem eles (o enviar.php faz o mesmo). */
+function poSemOrigemNova(lead) {
+  'use strict';
+  const o = Object.assign({}, lead);
+  ['utm_term', 'utm_content', 'gbraid', 'wbraid', 'fbclid'].forEach((k) => { delete o[k]; });
+  return o;
+}
+
+/* ============================================================
+   Aviso de lead gravado (fase 4 do rastreio, 13/11/2026). Quem conta a
+   conversao para o Google Ads e para o Pixel da Meta e o
+   assets/js/rastreio.js; o formulario so diz que um lead ENTROU, e so
+   depois de gravar, por qualquer dos dois caminhos. O honeypot finge
+   sucesso para o robo e nunca chega aqui: spam virando conversao ensinaria
+   o lance automatico a comprar mais spam. O aviso nao leva dado pessoal
+   (nome, telefone, e-mail): so o roteiro e a origem do formulario.
+============================================================ */
+function poAvisaLead(lead) {
+  'use strict';
+  try {
+    document.dispatchEvent(new CustomEvent('po:lead', {
+      detail: { roteiro: lead.roteiro || '', origem: lead.origem || '' }
+    }));
+  } catch (e) { /* o lead ja gravou: a medicao nunca atrapalha */ }
 }
 
 /* ============================================================

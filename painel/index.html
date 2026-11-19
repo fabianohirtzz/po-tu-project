@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="painel.css?v=21">
+<link rel="stylesheet" href="painel.css?v=25">
 <link rel="stylesheet" href="fluxo.css?v=12">
 </head>
 <body>
@@ -120,8 +120,12 @@
         </div>
         <div class="chip-group" id="orig-filter">
           <button class="chip active" data-orig="todos">Todas origens</button>
-          <button class="chip c-pago" data-orig="pago">Pago</button>
+          <button class="chip c-meta" data-orig="meta">Meta Ads</button>
+          <button class="chip c-google" data-orig="google">Google Ads</button>
+          <button class="chip c-pago" data-orig="pago">Pago (outro)</button>
           <button class="chip c-org" data-orig="organico">Orgânico</button>
+          <button class="chip c-gmn" data-orig="meunegocio">Google Meu Negócio</button>
+          <button class="chip c-ia" data-orig="ia">ChatGPT e IAs</button>
           <button class="chip c-social" data-orig="social">Social</button>
           <button class="chip c-insta" data-orig="instagram">Instagram</button>
           <button class="chip c-wpp" data-orig="whatsapp">WhatsApp</button>
@@ -199,10 +203,14 @@
     <section class="view" id="view-reports">
       <div class="spend-box">
         <div>
-          <div class="lbl">Investimento em anúncios — <span id="spend-month-lbl">—</span></div>
-          <div class="hint">Digite o gasto do mês. ROAS e ROI são calculados sobre as vendas do período.</div>
+          <div class="lbl">Investimento em anúncios: <span id="spend-month-lbl">—</span></div>
+          <div class="hint">Digite o gasto do mês em cada plataforma. ROAS, ROI e CPL saem das vendas do período.</div>
         </div>
-        <div class="spend-input"><span>R$</span><input type="number" id="spend-input" value="0" step="100"></div>
+        <div class="spend-ins">
+          <label class="spend-input"><b>Meta</b><span>R$</span><input type="number" class="spend-in" data-plat="meta" value="0" step="100"></label>
+          <label class="spend-input"><b>Google</b><span>R$</span><input type="number" class="spend-in" data-plat="google" value="0" step="100"></label>
+          <label class="spend-input"><b>Outros</b><span>R$</span><input type="number" class="spend-in" data-plat="outros" value="0" step="100"></label>
+        </div>
       </div>
       <label class="rep-opt"><input type="checkbox" id="rep-importados">
         Incluir a base importada (<span id="rep-imp-n">0</span> contatos)</label>
@@ -211,7 +219,7 @@
         <div class="card">
           <div class="card-title">Leads por origem</div>
           <div class="card-sub">De onde vieram os contatos no período</div>
-          <div class="donut-wrap"><div class="donut" id="donut"></div><div class="legend" id="donut-legend"></div></div>
+          <div class="bars" id="orig-bars"></div>
         </div>
         <div class="card">
           <div class="card-title">Funil de status</div>
@@ -237,6 +245,25 @@
           <div class="spec-row"><span class="spec-k">Custo por lead (pago)</span><span class="spec-v" id="m-cpl">—</span></div>
           <div class="spec-row"><span class="spec-k">Vendas atribuídas a pago</span><span class="spec-v" id="m-vpago">—</span></div>
           <div class="spec-row"><span class="spec-k">Ticket médio</span><span class="spec-v" id="m-ticket">—</span></div>
+        </div>
+        <div class="card full plat-card">
+          <div class="card-title">Mídia paga por plataforma</div>
+          <div class="card-sub">Investimento, leads e retorno de cada plataforma no período</div>
+          <div class="plat-wrap">
+            <table class="plat-tbl">
+              <thead><tr><th>Plataforma</th><th class="num">Investimento</th><th class="num">Leads</th><th class="num">CPL</th><th class="num">Vendas</th><th class="num">Faturado</th><th class="num">ROAS</th></tr></thead>
+              <tbody id="plat-rows"></tbody>
+            </table>
+          </div>
+          <div class="gads-exp">
+            <div class="field"><label for="gads-nome">Nome da conversão no Google Ads</label><input id="gads-nome" value="Venda" autocomplete="off"></div>
+            <button class="btn-soft" id="gads-csv" type="button">
+              <svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+              Exportar vendas para o Google Ads (CSV)
+            </button>
+            <div class="gads-hint"><span id="gads-info"></span> Suba o arquivo em Google Ads, Metas, Conversões, Uploads. O nome precisa ser igual ao da ação de conversão de lá.</div>
+            <div class="gads-hint" id="meta-capi-info"></div>
+          </div>
         </div>
         <div class="card full">
           <div class="card-title">Ciclo de venda por lead</div>
@@ -629,7 +656,11 @@
     <div class="spec-row"><span class="spec-k">Ciclo de venda</span><span class="spec-v" id="dr-ciclo"></span></div>
     <div class="dr-section-l">Origem (rastreada)</div>
     <div class="spec-row"><span class="spec-k">Canal</span><span class="spec-v" id="dr-canal"></span></div>
-    <div class="spec-row"><span class="spec-k">Campanha</span><span class="spec-v" id="dr-camp"></span></div>
+    <div class="spec-row"><span class="spec-k">Fonte / mídia</span><span class="spec-v" id="dr-fonte"></span></div>
+    <div class="spec-row"><span class="spec-k">ID do clique</span><span class="spec-v mono" id="dr-clique"></span></div>
+    <div class="spec-row"><span class="spec-k">Campanha</span><span class="spec-v"><span id="dr-camp"></span> <button type="button" class="dr-mini" id="dr-nomear" hidden>Dar nome</button></span></div>
+    <div class="spec-row"><span class="spec-k">Conjunto / anúncio</span><span class="spec-v" id="dr-anuncio"></span></div>
+    <div class="spec-row"><span class="spec-k">Clique no site</span><span class="spec-v" id="dr-casado"></span></div>
     <div class="spec-row"><span class="spec-k">Página de entrada</span><span class="spec-v" id="dr-land"></span></div>
     <div class="dr-section-l">Mensagem</div>
     <div class="dr-desc" id="dr-desc"></div>
@@ -651,8 +682,12 @@
     <div class="field">
       <label>Origem (sobrescrever manualmente)</label>
       <select id="e-orig">
-        <option value="pago">Tráfego pago</option>
+        <option value="meta">Meta Ads</option>
+        <option value="google">Google Ads</option>
+        <option value="pago">Pago (outra plataforma)</option>
         <option value="organico">Orgânico</option>
+        <option value="meunegocio">Google Meu Negócio</option>
+        <option value="ia">ChatGPT e IAs</option>
         <option value="social">Social</option>
         <option value="instagram">Instagram</option>
         <option value="whatsapp">WhatsApp</option>
@@ -699,8 +734,12 @@
           <option value="whatsapp">WhatsApp</option>
           <option value="instagram">Instagram</option>
           <option value="social">Social</option>
-          <option value="pago">Tráfego pago</option>
+          <option value="meta">Meta Ads</option>
+          <option value="google">Google Ads</option>
+          <option value="pago">Pago (outra plataforma)</option>
           <option value="organico">Orgânico</option>
+          <option value="meunegocio">Google Meu Negócio</option>
+          <option value="ia">ChatGPT e IAs</option>
           <option value="direto">Direto</option>
         </select>
       </div>
@@ -782,7 +821,9 @@
 <script src="video-encode.js?v=2"></script>
 <script src="fone.js?v=2"></script>
 <script src="datas.js?v=4"></script>
-<script src="app.js?v=28"></script>
+<script src="app.js?v=34"></script>
+<script src="cliques.js?v=1"></script>
+<script src="meta.js?v=1"></script>
 <script src="clientes.js?v=3"></script>
 <script src="funil.js?v=3"></script>
 <script src="conversa.js?v=1"></script>

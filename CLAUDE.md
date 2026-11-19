@@ -1815,6 +1815,11 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     lado do site da saida (`roteiro.css?v=13` em todas as paginas). **Fora do ar
     ate a migration da saida:** `painel/app.js?v=26`, `campanhas.js?v=3` e o
     `painel/index.html` que pede os dois.
+    **CONFERIDO EM 19/11/2026: a migration da saida RODOU e o painel subiu.** Pela API
+    publica (`select=saida&limit=0`, sem ler linha): `po_roteiros.saida` responde 200,
+    assim como todas as colunas das migrations de 30/10 a 13/11 (controle: coluna
+    inventada da 400/42703). O painel no ar pede `app.js?v=28`, `campanhas.js?v=3` e
+    `painel.css?v=21`.
   - **Modelo com o PDF do roteiro (commit `96c81ec`, no ar).** Texto aprovado pela
     Lais, nome `po_roteiro_interesse`: PDF no TOPO (a Meta so aceita documento no
     cabecalho, por isso "No PDF acima"), `{{1}}` = NOME DO ROTEIRO (nao da pessoa),
@@ -1863,7 +1868,7 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     da Lais; nenhuma tinha venda; 402 tinham CPF e 271 passaporte). Copia integral fora
     do Git em `~/.claude/projects/<projeto>/backups/po_leads-sem-telefone-crm-*.json`.
     Base foi de 812 para 197. Ficaram sem telefone so os 3 TESTE (mantidos ate validar) e
-    12 "EXEMPLO ..." que nao sao meus (provavelmente do Carlos).
+    12 "EXEMPLO ..." que nao sao meus (provavelmente do Carlos).
   - **Depois, no mesmo dia:** so FIXO tambem nao entra mais no importador (Fabiano: "nao
     vamos fazer lista de transmissao para telefone fixo"), e as **138 fichas do CRM so com
     fixo foram apagadas** (copia em `backups/po_leads-so-fixo-crm-*.json`). Base em 59.
@@ -1873,6 +1878,364 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
     `revisado=false`: so vao para a transmissao "todos os clientes" depois da aba Revisao.
   - **O Carlos tem liberdade total nas abas Leads e Relatorios.** Nao mexer nelas.
   - **Formulario do site: NAO mexer** (decisao ainda nao tomada).
+- **RASTREIO DE ORIGEM, FASE 1, O PAINEL (13/11/2026): FEITO NA BRANCH `origem-fase1`,
+  NADA NO AR.** Escopo da reuniao de 10/11: Leads, Origens e Relatorios livres, fluxo do
+  robo intocado (nenhum `lib/wa-*` mudou). Teste: `tests/test-origem-painel.mjs`.
+  - **Classificacao (`classifyChannel`), a ordem e a regra:** id de clique > UTM >
+    referrer > origem do robo. gclid/gbraid/wbraid = Google Ads; `ad_id`/`ctwa_clid` =
+    Meta Ads (antes o lead do anuncio que abre o WhatsApp caia em **Direto** e ficava fora
+    do ROAS); UTM paga decide pela fonte (`{{site_source_name}}` fb/ig/msg/an = Meta,
+    casando a palavra inteira); bio do Instagram = Instagram; referrer de busca ou de
+    outro site = Organico (navegacao interna e preview nao contam); `origem='whatsapp'`
+    do robo = WhatsApp. O 'pago' antigo virou "Pago (outro)".
+  - **A gaveta so grava `origem_manual` quando difere da automatica.** Antes, todo Salvar
+    gravava o que o select mostrava (a automatica) e congelava a classificacao do dia: o
+    lead nunca mais era reclassificado. A migration **opcional**
+    `2026-11-13-origem-manual-carimbada.sql` (SELECT de conferencia + UPDATE) devolve a
+    null o que o painel antigo carimbou. Rodar **depois** do painel novo.
+  - **Investimento por plataforma:** `po_ad_spend` ganha `meta` e `google`
+    (`2026-11-13-ad-spend-plataforma.sql`, **rodar ANTES do app.js novo**, senao o
+    investimento para de salvar com PGRST204). `amount` vira "Outros" e o total e a soma:
+    nada some do ROAS de meses passados. Tabela "Midia paga por plataforma"; a linha
+    Total e a MESMA conta dos cards de ROAS e CPL.
+  - **CSV de conversoes offline do Google Ads:** modelo de importacao por GCLID, fuso
+    `America/Sao_Paulo`, `Order ID` = id do lead (subir de novo nao duplica), leva todas as
+    vendas com gclid e deixa de fora clique com mais de 90 dias (o Google recusa). O nome
+    da conversao tem que ser igual ao da acao criada no Google Ads.
+  - **Cores:** Meta violeta `#8a7dfa`, Google ambar `#a16207`. Azul de marca colidia com
+    Social e Pago (dE 3,2, medido no validador de paleta). No cabecalho escuro da gaveta
+    o selo usa o tom claro.
+  - **O Chrome headless da maquina do Carlos tambem nao desce de 500px.** A foto "a 390"
+    e recorte de uma pagina de 500 e parece estouro antigo: medir `window.innerWidth`
+    antes de concluir. Foi a medida que mostrou o estouro real desta branch: a tabela de
+    600px alargava a `.rep-grid` inteira (todos os cards a 710px numa tela de 500).
+    `.plat-card{min-width:0}`, travado em teste.
+  - **Deploy:** a migration do gasto primeiro; depois `painel.css?v=25`, `app.js?v=34` (as fases 2 e 3, o canal do Google Meu Negócio e o das IAs subiram os dois) e o
+    `painel/index.html` por ultimo. Os elementos novos tem guarda de nulo, entao a ordem
+    invertida no FTP nao derruba a gaveta nem os Relatorios.
+  - **Proximas fases:** 2 (memoria de origem no site por 90 dias), 3A (codigo "ref" no
+    WhatsApp do site, casado fora do robo), 3B (nome da campanha pela API de Marketing e a
+    venda de volta para a Meta pela API de Conversoes), 4 (eventos do Google Ads e do
+    Pixel, IDs vazios no config ate o Carlos preencher).
+- **RASTREIO DE ORIGEM, FASE 2, A MEMORIA DO SITE (13/11/2026): FEITO NA MESMA BRANCH,
+  NADA NO AR.** Teste: `tests/test-origem-site.mjs` (roda o `origem.js` de verdade num
+  navegador de mentira, uma execucao por pagina aberta; 25/25 mutantes).
+  - **`assets/js/origem.js` em toda pagina publica** (as 5 estaticas no `<head>` com
+    `defer`; `roteiro.php`, `roteiros.php` e `faq.php` junto dos outros scripts). Guarda
+    no `localStorage` (`po_origem`), por **90 dias**, a UTM inteira, `gclid`/`gbraid`/
+    `wbraid`/`fbclid`, o referrer de fora e a pagina de entrada. **Antes o formulario lia
+    so a URL da propria pagina:** quem chegava pelo anuncio no roteiro e preenchia em
+    `/contato`, ou voltava dias depois, virava lead sem origem.
+  - **Regras (`decide()`):** campanha (UTM ou id de clique) so e trocada por campanha, e
+    entra INTEIRA (nunca a UTM de uma visita com o gclid de outra); site de fora nunca
+    apaga campanha (quem clicou no anuncio e voltou pela busca veio do anuncio); visita
+    direta e navegacao interna nao gravam. Sem armazenamento, vale o que a pagina tem.
+  - **O `lead-form.js` (`?v=4`) le a memoria no ENVIO** (`poAplicaOrigem`), nao na carga,
+    entao a ordem dos scripts nao importa. A marcacao do formulario NAO mudou (a regra de
+    11/11 de nao mexer no formulario segue: nenhum campo visivel, nada de UX).
+  - **A mesma lista de campos em quatro lugares** (`origem.js`, reserva do `lead-form.js`,
+    `enviar.php` e colunas do `po_leads`), travada em teste. Teto de 500 nos dois lados.
+  - **Migration `2026-11-13-leads-ids-clique.sql`** (gbraid, wbraid, fbclid, e garante
+    utm_term/utm_content). **Rodar ANTES do `enviar.php` e do `lead-form.js` novos.** Se
+    rodar depois, nenhum lead se perde: os dois tentam de novo SEM as colunas novas ao
+    receber `PGRST204`; so os ids de clique daquele intervalo ficam de fora.
+  - **O `enviar.php` foi conferido com PHP de verdade** (8.2 portatil, ver a fase 3): `php -l`
+    limpo e a suite inteira verde.
+  - **Painel (`app.js?v=34`):** `fbclid` sem UTM vira Social ou Instagram (a Meta poe o
+    fbclid em post pago e nao pago); a gaveta ganha "Conjunto / anuncio" (`utm_term` e
+    `utm_content`) e mostra gbraid, wbraid e fbclid no "ID do clique".
+  - **Conferido no Chrome real**, num ensaio que troca o Supabase e o `fetch` por dubles
+    (nada gravado no banco): chegada com `gclid` numa visita, formulario enviado em
+    outra sem parametro nenhum, e o `enviar.php` recebeu o gclid, a UTM e a pagina de
+    entrada da chegada.
+  - **Deploy:** a migration primeiro; `assets/js/origem.js` e `assets/js/lead-form.js`
+    antes das paginas (o `?v=` novo com o arquivo velho carimba o velho por um mes); o
+    `enviar.php`; as 5 paginas HTML e os 3 PHP; o painel como na fase 1.
+  - **Privacidade:** e armazenamento no navegador do visitante para medir anuncio. A
+    politica de privacidade ainda nao cita isso; e texto do site, fica com o Fabiano.
+- **RASTREIO DE ORIGEM, FASES 3A E 3B (13/11/2026): FEITAS NA MESMA BRANCH, NADA NO AR.**
+  Testes: `test-origem-whatsapp.php`, `test-origem-cliques.mjs`, `test-meta.php` e
+  `test-meta-painel.mjs` (35/35 mutantes). Suite inteira: **101/101**.
+  - **3A, WhatsApp do site.** Com campanha na memoria (UTM ou id de clique), o toque em
+    qualquer botao do WhatsApp da agencia (`wa.me/5548996048882`) abre com o texto
+    "Ola! Vim pelo site e quero mais informacoes. (ref G-KTRBX)", e o `origem.js` manda
+    por `sendBeacon` a origem inteira ao `clique.php` (publico, so POST, codigo em formato
+    fechado, grava com a service_role em `po_origem_cliques`, que anonimo nao le). Visita
+    sem campanha abre o WhatsApp como antes. G = Google, M = Meta, S = outra campanha (so
+    pista para quem le a conversa; o teste exige que concorde com o classificador).
+  - **O painel (`painel/cliques.js`) liga o clique ao lead:** por CODIGO (a mensagem
+    recebida trouxe o codigo, certeza) ou pelo HORARIO (provavel: exatamente UM clique
+    livre ate 15 min antes do primeiro contato de UM lead novo do robo; na duvida nao
+    liga). So preenche origem de lead que nao tem nenhuma, e marca o clique ANTES de
+    escrever o lead (`.is('lead_id', null)`: duas abas nunca ligam o mesmo clique). A
+    ficha mostra "Clique no site". Nada do robo e escrito: so le `po_wa_mensagens`.
+  - **O codigo e SO CONSOANTE, e essa e a trava do robo:** sem vogal nao forma palavra
+    (nao casa destino, roteiro nem atalho) e sem digito nao vira "escolhi o roteiro 7".
+    O teste passa o texto real com 3.000 codigos pelas funcoes DE VERDADE do robo. Ele le
+    os atalhos da migration semeada, nao os do banco: **se a cliente criar atalho por
+    palavra com "site", "informacoes", "vim", "quero" ou "mais", o texto tem que mudar.**
+  - **3B, Meta.** `anuncios-meta.php` busca na API de Marketing o nome do anuncio, do
+    conjunto e da campanha (`META_ADS_TOKEN`, com ads_read) para `po_anuncios_meta`; a
+    ficha mostra o nome no lugar de "Anuncio <id>" e tem "Dar nome" (o nome a mao vence).
+    `meta-conversao.php` devolve a venda com `ctwa_clid` dos ultimos 7 dias como
+    Purchase pela API de Conversoes para Mensagens (`META_DATASET_ID`, `WA_WABA_ID`, e
+    `META_CAPI_TOKEN` ou, vazio, o `WA_TOKEN`; precisa de `whatsapp_business_manage_events`).
+    Roda ao abrir o painel; o status aparece nos Relatorios. `modo=diagnostico` so LE o
+    conjunto de dados ligado a conta do WhatsApp, para preencher o `META_DATASET_ID`.
+  - **A Meta NAO deduplica esses eventos (guia oficial).** Cada venda e reservada em
+    `po_meta_conversoes` (lead_id e chave primaria) antes do envio; falha tenta ate 3
+    vezes; "enviando" que ficou para tras nunca e reenviado (a Meta pode ter recebido);
+    erro lendo os envios anteriores nunca vira "nada foi enviado". O painel so LE essa
+    tabela. O token vai so no cabecalho, nunca na URL. `PO_META_GRAPH` = `WA_GRAPH`, e o
+    teste exige que andem juntas (o `test-wa-graph.php` vigia a validade).
+  - **Defeito achado ABRINDO o painel no ensaio:** o `loadData` chamava os modulos novos
+    direto, com guarda `typeof`; com o banco respondendo rapido ele terminava antes de
+    `cliques.js`/`meta.js` carregarem, e a chamada nao acontecia, em silencio. Agora o
+    `app.js` dispara o evento `po:leads` e deixa `window.PO_LEADS_PRONTOS`; cada modulo
+    roda pelo evento ou na hora. O teste roda os dois arquivos nas DUAS ordens de carga.
+  - **Conferido no Chrome real**, com o `php -S` servindo a pagina REAL do roteiro (leitura
+    publica do Supabase) e um roteador que so REGISTRA o `/clique.php`: chegada pelo
+    anuncio com `gclid`, volta sem parametro, toque em "Reserve pelo WhatsApp", texto com
+    `(ref G-...)` e o clique registrado com gclid, UTM e pagina de entrada.
+  - **Deploy:** as migrations `2026-11-13-origem-cliques.sql` e
+    `2026-11-13-meta-anuncios-conversoes.sql`; `lib/po-clique.php` antes do `clique.php`;
+    `lib/po-meta.php` antes de `anuncios-meta.php` e `meta-conversao.php`;
+    `assets/js/origem.js` (`?v=2`) antes das 8 paginas; no painel `cliques.js?v=1`,
+    `meta.js?v=1`, `app.js?v=34`, `painel.css?v=25` e o `index.html` por ultimo. Config
+    nova no `config.local.php`, inerte vazia: `META_ADS_TOKEN`, `META_DATASET_ID`,
+    `META_CAPI_TOKEN`.
+  - **PHP para testar sem instalar nada** (a maquina do Carlos nao tem): o zip oficial de
+    `downloads.php.net/~windows` (conferir o sha256 contra o `releases.json`), um
+    `php.ini` com mbstring, curl e openssl, e `curl.cainfo` apontando para o
+    `ca-bundle.crt` do Git for Windows (sem ele o `test-po-data.php` falha por HTTPS).
+- **RASTREIO DE ORIGEM, FASE 4, EVENTOS DE ANUNCIO (13/11/2026): FEITA NA MESMA BRANCH,
+  NADA NO AR, E INERTE ATE OS IDS EXISTIREM.** Novo: `assets/js/rastreio.js` (`?v=1`) e
+  `tests/test-rastreio.mjs` (28/28 mutantes). Suite inteira: **102/102**.
+  - **O que mede, para tres destinos independentes:** Pixel da Meta (PageView em toda
+    pagina, ViewContent na pagina de UM roteiro com o nome do `<h1>` e o slug, Lead no
+    formulario, Contact no WhatsApp); Google Ads (uma conversao do formulario e outra do
+    WhatsApp, cada uma pelo seu rotulo); GA4 (`generate_lead` e `clique_whatsapp`).
+  - **A tag `GT-TNH4L3BV` so tem o GA4 `G-MBJHCTJZWZ`** (lido no container publico em
+    13/11/2026), nenhuma conta do Google Ads. Por isso o `rastreio.js` faz ele mesmo o
+    `gtag('config', 'AW-...')`, o que tambem liga o vinculador de conversao (o gclid da
+    chegada vai para um cookie do proprio site).
+  - **Inerte com os IDS vazios, como esta no Git:** nada da Meta carrega (nenhum
+    `fbevents.js`, nenhum cookie) e nada vai para o Google Ads. **So o GA4 recebe os dois
+    eventos ja no deploy**: a tag ja estava na pagina e o Google Analytics ja esta na
+    politica de privacidade.
+  - **So mede no dominio de producao** (`pereiraoliveiraturismo.com.br`, com ou sem www).
+    localhost, preview do GitHub Pages e endereco parecido nao medem nada, nem o GA4:
+    teste de formulario na maquina de quem desenvolve viraria conversao, e o lance
+    automatico do Google Ads aprende com conversao falsa. **A previa do painel tambem nao
+    carrega o arquivo** (`if (!$previa)` no `roteiro.php`).
+  - **Conversao so de lead que GRAVOU.** O `lead-form.js` (`?v=5`) dispara `po:lead` no
+    `document` dentro do `if (done)`, pelos dois caminhos (enviar.php ou reserva do
+    Supabase). O honeypot finge sucesso para o robo e nunca avisa: spam virando conversao
+    ensinaria o lance a comprar spam. O aviso leva SO `{roteiro, origem}`; nome, telefone
+    e e-mail nunca saem para Meta nem Google. O teste roda o `lead-form.js` de verdade:
+    honeypot, pressa, campo faltando, e-mail torto, servidor recusando, reserva gravando e
+    reserva falhando. Formulario sem mudanca de marcacao nem de UX.
+  - **Cada destino liga sozinho e nenhum derruba o outro:** Pixel que quebra no evento nao
+    leva junto a conversao do Google Ads; Google Ads que recusa a conversao nao leva junto
+    o GA4. Rotulo sem a conta (AW-) nao mede nada. ID fora do formato fica desligado.
+  - **`poRastreio.ligado` no console (F12) diz o que esta medindo naquela pagina**:
+    producao, meta, googleAds, conversaoFormulario, conversaoWhatsapp.
+  - **O WhatsApp da agencia e a MESMA expressao do `origem.js`** (o teste confere): os dois
+    ouvem o mesmo toque, um poe o codigo `(ref ...)` e o outro conta o Contact.
+  - **COMO LIGAR, nesta ordem:**
+    1. **A politica de privacidade primeiro (texto do Fabiano).** Hoje ela so cita o
+       Google Analytics. Tem que declarar o Pixel da Meta e o Google Ads: cookie de
+       anuncio no navegador e a visita mandada para a Meta e o Google para medir anuncio e
+       montar publico. **A suite recusa `META_PIXEL` preenchido sem a palavra "pixel" na
+       politica, e `GOOGLE_ADS` sem "Google Ads".** Conferir tambem a "correspondencia
+       avancada automatica" do Pixel no Gerenciador de Eventos: ligada, a Meta le os campos
+       do formulario (e-mail, telefone) e manda com hash, o que a politica tambem precisa
+       dizer; senao, desligar.
+    2. **Google Ads:** duas conversoes de site com codigo manual, contagem "Uma":
+       "Formulario enviado" e "Clique no WhatsApp". O snippet de cada uma traz
+       `send_to: 'AW-XXXXXXXXX/ROTULO'`: a parte antes da barra vai em `GOOGLE_ADS`, cada
+       rotulo no seu campo. **Nao deixar tambem como primaria a importacao do
+       `generate_lead` do GA4**, senao o mesmo lead conta duas vezes.
+    3. **Meta:** o ID do conjunto de dados (Pixel) em `META_PIXEL`. Se for o mesmo conjunto
+       do `META_DATASET_ID` (fase 3B), o site e as vendas do WhatsApp ficam no mesmo lugar
+       no Gerenciador de Eventos.
+    4. Preencher o bloco `IDS` no topo do `assets/js/rastreio.js`, subir o `?v=` nas 8
+       paginas e o sha no `assets/assets-lock.json` (o `test-cache-buster-site.mjs` diz
+       quais e qual sha), rodar a suite, e subir **o `rastreio.js` antes das paginas**.
+    5. Conferir no ar: `poRastreio.ligado` no console, o "Testar eventos" da Meta e o Tag
+       Assistant do Google.
+  - **Como foi visto no Chrome sem mandar nada para a Meta nem para o Google** (39/39): um
+    servidor local faz papel de proxy (`--proxy-server`) e serve os arquivos do repo com o
+    HOSTNAME DE PRODUCAO em http (o rastreio so liga la; `--disable-features=HttpsUpgrades`),
+    finge o `/enviar.php` e o `/clique.php` (nenhum lead gravado) e **recusa todo
+    CONNECT**: nenhum HTTPS sai, o `fbevents.js` e o `gtag.js` nunca carregam, e o que
+    sobra para conferir e exatamente a fila do `fbq` e o `dataLayer`. O CONNECT recusado
+    para `connect.facebook.net` e a prova de rede de que o Pixel liga, e a ausencia dele,
+    de que nao liga. A pagina de roteiro passou pelo `php -S` de verdade. **Clique por CDP
+    em elemento com `.reveal` tem que esperar a posicao parar** e conferir com
+    `elementFromPoint`: o primeiro ensaio "falhou" porque o clique caiu onde o botao
+    estava antes da animacao.
+  - **Deploy (junto com as fases 1 a 3 desta branch):** `assets/js/rastreio.js` e
+    `assets/js/lead-form.js` (`?v=5`) **antes** das 8 paginas (as 5 HTML, `roteiro.php`,
+    `roteiros.php` e `faq.php`). Nenhuma migration nova, nada no `config.local.php`.
+- **MIGRATIONS DAS FASES 1 A 3 RODADAS (15/11/2026), pelo Carlos no SQL Editor, e
+  CONFERIDAS pela API publica** (chave anon, sem ler dado de cliente): as colunas `meta`/
+  `google` do `po_ad_spend`, `gbraid`/`wbraid`/`fbclid`/`utm_term`/`utm_content`/
+  `origem_casada` do `po_leads` e as tres tabelas novas (`po_origem_cliques`,
+  `po_anuncios_meta`, `po_meta_conversoes`, coluna por coluna) respondem 200, ou seja,
+  o PostgREST ja as enxerga. **RLS conferida:** insert anonimo vazio (que nunca grava,
+  porque falharia na coluna obrigatoria) volta `42501` nas tres tabelas novas, entao o
+  anonimo e barrado antes da constraint. Com isso o deploy das fases 1 a 4 nao depende
+  mais de banco. **A opcional `origem-manual-carimbada.sql` nao da para conferir pela
+  chave publica:** se ela rodou antes do painel novo, o painel antigo volta a carimbar
+  no proximo Salvar, entao ela tem que rodar de novo DEPOIS do deploy (o passo 1 do
+  arquivo mostra o que ela vai mudar).
+  **O Carlos rodou ela em 19/11/2026, ANTES do deploy.** Sem dano: conferido no
+  `app.js?v=28` publicado, o classificador dele e exatamente o que o SQL transcreve, entao
+  as linhas limpas mostram a mesma origem de antes. Mas a gaveta dele grava
+  `origem_manual:campos.origem` a cada Salvar, e todo lead salvo daqui ate o deploy volta
+  a ficar carimbado. **Rodar o arquivo DE NOVO (passo 1 para conferir, passo 2 para
+  aplicar) logo depois de subir o `app.js?v=34`**, antes de alguem escolher origem a mao
+  no painel novo: uma escolha deliberada igual a classificacao antiga seria apagada junto.
+- **PREVIA LOCAL ANTES DO DEPLOY (15/11/2026): `tools\preview-local.cmd`** (dois cliques)
+  ou `php -S 127.0.0.1:8000 -t . tools/preview-local.php`. O roteador imita as URLs limpas
+  do `.htaccess`, roda as paginas PHP de verdade e **FINGE o `/enviar.php` e o
+  `/clique.php`**: o banco e um so (o de producao), e o formulario de verdade numa previa
+  criaria lead real. **Modo gravar** (servidor iniciado com `PO_PREVIA_GRAVA=1`): o
+  `/enviar.php` local responde que falhou e o formulario cai na reserva dele (insert
+  anonimo), entao o lead entra no banco REAL, sem e-mail, para ver o caminho inteiro ate o
+  painel. So no `/contato` (a pagina de roteiro nao carrega o supabase-js). **Apagar o lead
+  de teste pela aba Clientes, e com telefone que ninguem da base tem**: la excluir a ficha
+  apaga TODOS os leads do mesmo telefone. **O painel local entra com o login de verdade e Salvar grava no banco
+  de verdade**; sem `config.local.php`, nenhum endpoint local tem a service_role (Meta,
+  transmissao e afins respondem "nao configurado"). O rastreio de anuncio fica desligado
+  ali de proposito (so mede em producao). O roteador sai na primeira linha fora do
+  `php -S` (PHP_SAPI), entao subir `tools/` por engano nao abre nada no ar. **O PHP
+  portatil da maquina do Carlos mora em `C:\Users\carla\php`** (copiado da pasta
+  temporaria da fase 3, que o Windows pode limpar); o `.cmd` usa o `php` do PATH quando
+  existe e cai nesse.
+- **A `/link` GANHA A UTM DA BIO NA CHEGADA (15/11/2026): FEITO NA BRANCH `origem-fase1`,
+  NADA NO AR.** O link da bio é limpo (com UTM ele apareceria inteiro no perfil) e o
+  navegador do Instagram quase nunca manda referrer, então a chegada não tinha origem:
+  o WhatsApp **da própria /link** abria sem o código `(ref ...)` (o `origem.js` só põe
+  código com campanha), o formulário só herdava a bio se a pessoa tocasse num card, e o
+  GA4 contava visita direta. Agora o script inline `po-link-bio`, no `<head>` da
+  `link.html` e **antes da tag do Google**, põe `utm_source=instagram&utm_medium=bio&
+  utm_campaign=link` na URL por `history.replaceState`. Fica como veio: visita com UTM
+  própria (story, ou a `ig/social/link_in_bio` que o Instagram às vezes põe sozinho), com
+  gclid/gbraid/wbraid, ou com referrer de outro site ou do próprio site. **fbclid não
+  conta como UTM** (o Instagram o põe sozinho; sem a bio ele classificaria como Social).
+  Teste: seção 10 do `test-origem-site.mjs`, 13/13 mutantes. **Consequência:** visita
+  direta à `/link` conta como bio; para usar a `/link` em outro canal, mandar com UTM
+  própria (`/link?utm_source=facebook&utm_medium=bio`). Sobe junto com o deploy das fases.
+- **O código do WhatsApp só vira origem do lead SOZINHO com o webhook ligado.** O
+  `cliques.js` casa o código lendo `po_wa_mensagens` e o lead nasce do robô; com o app
+  fora do webhook, o código só aparece na conversa no celular da Laís, e o clique fica
+  em `po_origem_cliques` sem dono. Quem conta os cliques por origem nesse meio tempo é o
+  GA4 (`clique_whatsapp` e o clique de saída da medição otimizada).
+- **Google Meu Negócio: CANAL PRÓPRIO NO PAINEL (15/11/2026), FEITO NA BRANCH
+  `origem-fase1`, NADA NO AR, e o perfil ainda precisa ser reivindicado.** Padrão de UTM
+  para todo link do perfil:
+  `utm_source=google&utm_medium=organic&utm_campaign=google-meu-negocio&utm_content=<botão>`
+  (`site`, `agendamento`, `post-<slug>`, `produto-<slug>`). Sem UTM o clique no perfil
+  chega como busca do Google e cai em Orgânico: **é a UTM que separa o perfil da busca.**
+  - **Canal `meunegocio`** ("Google Meu Negócio") em `ORIG`, filtro, gaveta, cadastro
+    manual, selo e fatia da rosca. A chave vai para `origem_manual` quando escolhida à mão;
+    a coluna é texto livre (a lista fechada mora só no painel), então **não há migration**.
+  - **`classifyChannel`:** depois do id de clique e **depois da mídia paga** (a mesma ordem
+    da letra do código no `origem.js`, que fica `S`), casa `gmb`/`gbp`/`gmn` como palavra
+    inteira, `meu negocio`, `my business`, `business profile` e `perfil da empresa`, em
+    fonte, meio ou campanha, sem caixa nem acento. "gmbh", "viagem-de-negocios" e
+    "economy-business" (classe de voo!) **não** casam, e há teste. Sem UTM, o referrer do
+    **app do Google Maps** (`android-app://com.google.android.apps.maps`) e
+    `maps.google.*` também viram o perfil: link que sai do Maps só sai da ficha. O Maps
+    na web chega como `google.com`, igual à busca.
+  - **A regra mora DENTRO do `classifyChannel`**, sem função auxiliar: o
+    `test-origem-site.mjs` roda essa função sozinha (com o `poRefHost`).
+  - **Cor `#991b1b`** (vermelho do pino do Maps), medida com o validador da skill de
+    gráficos: a mais perto é Google Ads (15,1 normal, 11,0 daltonismo). Selo 7,2:1, chip
+    ativo 8,3:1, tom `#f87171` no cabeçalho escuro da gaveta (6,2:1). Roxo media mais,
+    mas roxo já é a Meta. (Hoje a cor de origem vive só no selo e no chip: ver o item
+    das IAs, que trocou a rosca por barras.)
+  - **A barra de origens passou a ROLAR de lado** (`.chip-group{overflow-x:auto}`,
+    `.chip{flex:0 0 auto;white-space:nowrap}`). Medido no painel real sem login: com
+    `overflow:hidden`, a 500px Instagram, WhatsApp e Direto ficavam **cortados e
+    impossíveis de tocar** e a 1024px os nomes quebravam em duas linhas; o 10º filtro
+    piorava as duas coisas.
+  - **A trava do selo ficou mais precisa:** `.dr-head .orig.meta{` também contém
+    `.orig.meta{`, então o teste passava com o selo da tabela apagado (achado na rodada
+    de mutação, 25/25 mortos). Agora a regra tem que começar a linha.
+  - **Deploy:** `app.js?v=34` e `painel.css?v=25` antes do `painel/index.html` (junto
+    com o canal das IAs, abaixo).
+  - O botão de WhatsApp do perfil vai direto ao `wa.me` e não passa pelo site, então não
+    leva código; ligações também não passam pelo site. Os dois só aparecem no
+    "Desempenho" do perfil e, vinculando o perfil ao GA4, nos relatórios de lá.
+- **Canal "ChatGPT e IAs" + "Leads por origem" em BARRAS (15/11/2026): FEITO NA BRANCH
+  `origem-fase1`, NADA NO AR.** Pedido do Carlos, que viu visitas vindas do ChatGPT.
+  Antes elas caíam em Orgânico, junto com a busca (havia até teste dizendo isso).
+  - **Canal `ia`:** o ChatGPT põe `utm_source=chatgpt.com` sozinho nos links que mostra; as
+    outras IAs chegam pelo referrer. Pela **fonte** da UTM: `chatgpt`, `openai`,
+    `perplexity`, `gemini`, `copilot`, `claude`, `deepseek`, `grok`, `mistral` como
+    palavra inteira, e `meta.ai` (`meta` sozinho é a Meta). **Nunca pela campanha**
+    ("roteiros-com-chatgpt" é campanha de quem montou o link), e "claudete" não é o
+    Claude (é nome de gente). Pelo referrer: `chatgpt.com`, `openai.com`, `perplexity.ai`,
+    `gemini.google.com`, `copilot.microsoft.com`, `claude.ai`, `deepseek.com`, `meta.ai`,
+    `grok.com`, `mistral.ai`. Depois do id de clique e da mídia paga (anúncio dentro de IA
+    é pago); letra do código do WhatsApp `S`. **Limite:** o modo IA e os resumos do Google
+    chegam como `google.com`, iguais à busca.
+  - **"Leads por origem" deixou de ser rosca:** com 10 origens ela não é lida, e a skill de
+    gráficos é explícita (acima de ~7 classes, "nunca resolva com mais cores": barras
+    ordenadas ou tabela). Agora são **barras da maior para a menor, numa cor só**
+    (`--azul`), com o nome escrito, a quantidade e a parte do total (`renderOrigens`,
+    `poOrigensOrdenadas`). Empate fica na ordem dos filtros; origem desconhecida conta
+    como Direto (antes virava uma segunda fatia "Direto"). **O `ORIG` não guarda mais
+    cor:** a cor de cada origem mora só no CSS (selo e chip, que têm o nome escrito), e
+    origem nova não pede cor nova no relatório. A rosca saiu do HTML, do JS e do CSS.
+  - **Cor do selo das IAs `#1e293b`** (quase preto, a cor do ChatGPT): a mais distante
+    de todos os selos no olho normal e no daltonismo (a mais perto, 11,3). Texto 12,6:1,
+    chip 14,6:1, tom `#e2e8f0` no cabeçalho escuro da gaveta.
+  - **Achado ABRINDO a tela, com o teste verde:** `.bar-row--orig` declarada antes de
+    `.bar-row` perdia a cascata (mesma especificidade, vence a última) e a parte do total
+    quebrava em duas linhas. Agora há trava de ordem. É a segunda vez que este projeto
+    tropeça nisso (a primeira foi a barra de zoom do fluxo).
+  - **Faixa de acento:** a ferramenta de edição gravou a faixa U+0300 a U+036F como os próprios
+    caracteres combinantes, invisíveis no fonte. Trocado por `\p{M}` (flag `u`). O
+    `slugify` antigo tem o mesmo padrão invisível e ficou como estava.
+  - **Testes:** `test-origem-painel.mjs` (casos das IAs, seção 7 das barras com o
+    `renderOrigens` rodando de verdade) e a tabela da letra no `test-origem-site.mjs`.
+    Mutação 34/34. **Deploy:** `app.js?v=34` e `painel.css?v=25` antes do
+    `painel/index.html`; sem migration (`origem_manual` é texto livre).
+  - **GA4 (configuração, não código):** um grupo de canais personalizado com o canal
+    "IA" (fonte casa a regex das IAs) acima de "Referência" separa o mesmo tráfego lá.
+- **REVISÃO DOS RELATÓRIOS (16/11/2026), pedido do Carlos: dois defeitos de dado
+  corrigidos na branch `origem-fase1`, NADA NO AR.** Conferido rodando o `renderReports`
+  de verdade com leads de exemplo (sem login nem dado de cliente).
+  - **O filtro de origem da aba Leads valia nos Relatórios sem aparecer lá.** Os chips
+    moram só na aba Leads; o escolhido seguia filtrando o relatório, e o CPL e o ROAS
+    dividiam o investimento de TODAS as plataformas pelos leads da origem marcada.
+    Medido: com "Meta Ads", CPL R$ 1.000 no lugar de R$ 500 e ROAS 5,0x no lugar de
+    10,0x; com "Orgânico", ROAS 0,0x e ROI −100%. **Agora `rowsForReports` ignora o
+    filtro de origem** (cada tela tem seu recorte, como Funil e Clientes); o relatório
+    já abre cada origem nas barras e na tabela por plataforma.
+  - **Mês e dia saíam do texto UTC do banco.** Lead de 31/10 às 22:30 (Brasília)
+    contava em novembro, com a tabela mostrando "31 de out"; todo lead das 21h à
+    meia-noite caía no dia seguinte do gráfico "Leads ao longo do mês". Agora
+    `poDiaSP()` dá o dia no relógio de São Paulo e `monthKey` usa ele (vale para Leads,
+    Funil, Clientes, Relatórios e o seletor de mês). O investimento é por mês digitado,
+    então não muda. `test-filtros.mjs` confere em qualquer fuso da máquina; mutação 7/7.
+  - **Definições que ficaram como estão, a decidir com o Carlos:** (1) **"ROI" usa o
+    valor da venda, não a margem**: é ROAS − 1 em %, não lucro (pacote de R$ 10 mil com
+    R$ 1 mil de anúncio mostra +900%); (2) **"Ticket médio" no card de mídia paga conta
+    TODAS as vendas**, não só as de anúncio; (3) **ROAS e conversão são por safra**: o
+    mês conta as vendas dos leads que ENTRARAM nele, então mês recente começa baixo e
+    sobe conforme fecha venda; (4) o "Funil de status" separa "Sem resposta" (o status de
+    nascença de TODO lead do formulário) de "Contato feito", e o quadro do Funil junta
+    os dois (divergência já registrada).
+  - **Risco para quando o robô for ligado:** contato da agenda importada que escrever e
+    comprar segue na MESMA ficha (o robô acha pelo `wa_id`), que tem `origem_import` e
+    data da importação: a venda fica fora do relatório, a não ser com "Incluir a base
+    importada" marcado.
+  - **Deploy:** `app.js?v=34` antes do `painel/index.html`; nada de banco.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro

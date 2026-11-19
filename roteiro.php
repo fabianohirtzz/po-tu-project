@@ -465,7 +465,11 @@ if (!defined('PO_TEST')) {
     // #lb (lightbox da galeria): assets/js/roteiro.js procura este id; sem ele
     // a galeria fica sem clique, em silencio (ver comentario em po_lightbox_html()).
     echo po_lightbox_html();
+    echo '<script src="/assets/js/origem.js?v=2"></script>' . "\n";
+    // Previa do painel nao mede: a cliente conferindo o rascunho (e testando o
+    // formulario dele) viraria visita e conversao de anuncio.
+    if (!$previa) echo '<script src="/assets/js/rastreio.js?v=1"></script>' . "\n";
     echo '<script src="/assets/js/roteiro.js?v=5"></script>' . "\n";
-    echo '<script src="/assets/js/lead-form.js?v=3"></script>' . "\n";
+    echo '<script src="/assets/js/lead-form.js?v=5"></script>' . "\n";
     echo '</body></html>';
 }

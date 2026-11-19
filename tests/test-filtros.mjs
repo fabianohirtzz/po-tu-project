@@ -17,7 +17,7 @@ function pega(nome) {
   return m[0] + '\n';
 }
 const ctx = new Function(
-  pega('monthKey') + pega('poFiltraLeads') +
+  pega('poDiaSP') + pega('monthKey') + pega('poFiltraLeads') +
   '; return {poFiltraLeads};'
 )();
 const { poFiltraLeads } = ctx;
@@ -194,5 +194,43 @@ const repImportadosTag = (painel.match(/<input[^>]*id="rep-importados"[^>]*>/) |
 assert.ok(repImportadosTag, 'existe o checkbox #rep-importados');
 assert.ok(!/checked/.test(repImportadosTag),
   'a caixa "incluir a base importada" comeca desmarcada');
+
+/* ---------- mes e dia no relogio de SAO PAULO (15/11/2026) ----------
+   O created_at vem do banco em UTC. Pelo texto cru, o lead de 31/10 as 22:30
+   (01/11 01:30 em UTC) contava em NOVEMBRO, enquanto a tabela mostrava
+   "31 de out": todo lead das 21h a meia-noite caia no dia seguinte, e o do
+   ultimo dia do mes no mes seguinte. A conta tem que valer em qualquer fuso
+   da maquina, entao o teste nao depende do TZ de quem roda. */
+const T = new Function(pega('poDiaSP') + pega('monthKey') + '; return {poDiaSP, monthKey};')();
+assert.equal(T.poDiaSP('2026-11-01T01:30:00+00:00'), '2026-10-31', '22:30 de 31/10 em Sao Paulo e dia 31');
+assert.equal(T.monthKey('2026-11-01T01:30:00+00:00'), '2026-10', 'e conta em outubro');
+assert.equal(T.monthKey('2026-11-01T03:00:00+00:00'), '2026-11', 'meia-noite de 01/11 em Sao Paulo ja e novembro');
+assert.equal(T.monthKey('2026-11-01T02:59:59.999+00:00'), '2026-10', 'um instante antes ainda e outubro');
+assert.equal(T.poDiaSP('2026-11-10T14:00:00Z'), '2026-11-10', 'durante o dia nada muda');
+for (const ruim of ['', null, undefined, 'lixo']) assert.equal(T.monthKey(ruim), '', 'data ruim vira vazio: ' + ruim);
+assert.ok(/monthKey\(new Date\(\)\.toISOString\(\)\)/.test(pega('buildMonths')),
+  'sem lead nenhum, o mes do seletor tambem e o de Sao Paulo');
+
+/* O grafico "Leads ao longo do mes" usa o mesmo dia. */
+const barras = {};
+const $ = s => (barras[s] = barras[s] || { innerHTML: '' });
+const linhaDoTempo = new Function('$', 'F', pega('poDiaSP') + pega('monthKey') + pega('renderTimeline') + 'return renderTimeline;');
+linhaDoTempo($, { month: '2026-11' })([{ data: '2026-11-10T02:00:00+00:00' }, { data: '2026-11-10T15:00:00+00:00' }]);
+const porDia = [...barras['#timeline'].innerHTML.matchAll(/<span>(\d+)<\/span>/g)].map(m => Number(m[1]));
+assert.equal(porDia[8], 1, 'o lead de 09/11 as 23h (Sao Paulo) conta no dia 9');
+assert.equal(porDia[9], 1, 'e o de 10/11 a tarde no dia 10');
+
+/* ---------- os Relatorios NAO usam o filtro de origem (15/11/2026) ----------
+   Os chips de origem moram so na aba Leads, e o escolhido la seguia valendo
+   nos Relatorios sem aparecer: com "Meta Ads" marcado, o total, a conversao e
+   o funil mostravam so a Meta, e o CPL e o ROAS dividiam o investimento de
+   TODAS as plataformas pelos leads dela (medido: CPL R$ 1.000 no lugar de
+   R$ 500, ROAS 5,0x no lugar de 10,0x; com "Organico", ROI de -100%). */
+const rel = new Function('LEADS', 'F',
+  pega('poDiaSP') + pega('monthKey') + pega('inMonth') + pega('poCorteImportados') + pega('rowsForReports') + 'return rowsForReports();');
+const doMes = [{ id: 1, origem: 'meta', data: '2026-11-05T15:00:00Z' }, { id: 2, origem: 'organico', data: '2026-11-06T15:00:00Z' },
+  { id: 3, origem: 'google', data: '2026-10-06T15:00:00Z' }, { id: 4, origem: 'meta', data: '2026-11-07T15:00:00Z', origemImport: 'agenda' }];
+assert.deepEqual(rel(doMes, { month: '2026-11', orig: 'meta', importados: false }).map(l => l.id), [1, 2],
+  'com "Meta Ads" marcado na aba Leads, os Relatorios seguem com todas as origens do mes (e sem a base importada)');
 
 console.log('test-filtros OK');

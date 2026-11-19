@@ -41,8 +41,16 @@
     "sha": "6f60516bd48f7b28"
   },
   "lead-form.js": {
-    "v": 3,
-    "sha": "8317e84e2c2fdbd4"
+    "v": 5,
+    "sha": "ffe7f716f2b961ef"
+  },
+  "origem.js": {
+    "v": 2,
+    "sha": "46691ae6770e0ffe"
+  },
+  "rastreio.js": {
+    "v": 1,
+    "sha": "10404d4186716585"
   },
   "link.js": {
     "v": 3,

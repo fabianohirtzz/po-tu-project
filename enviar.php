@@ -75,6 +75,14 @@ if ($t < 0)      { bloqueiaSpam('sem carimbo de tempo (post direto / sem JS)'); 
 
 function campo($k) { return isset($_POST[$k]) ? trim((string) $_POST[$k]) : ''; }
 
+/* Origem do lead: texto que vem de fora (URL de anuncio, referrer). Teto de
+   500 por campo, o mesmo do assets/js/origem.js, para nada virar texto sem
+   fim no banco. */
+function campoOrigem($k) {
+    $v = campo($k);
+    return function_exists('mb_substr') ? mb_substr($v, 0, 500, 'UTF-8') : substr($v, 0, 500);
+}
+
 $nome      = campo('nome');
 $telefone  = campo('telefone');
 $email     = campo('email');
@@ -150,10 +158,24 @@ function salvarSupabase($url, $key, array $dados) {
     ]);
     $resp = curl_exec($ch);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    /* Coluna de origem que o banco ainda nao tem (a migration dos ids de
+       clique rodou DEPOIS deste arquivo subir): grava de novo sem os campos
+       que entraram em 13/11. Perder o lead inteiro por causa de um campo de
+       origem e o pior resultado possivel. Uma tentativa so: sem eles a lista
+       nao encolhe mais, e a recursao para. */
+    if ($code === 400 && is_string($resp) && strpos($resp, 'PGRST204') !== false) {
+        $sem = array_diff_key($dados, array_flip(['utm_term', 'utm_content', 'gbraid', 'wbraid', 'fbclid']));
+        if (count($sem) < count($dados)) {
+            error_log('PO Supabase: coluna de origem ausente, gravando o lead sem ela: ' . $resp);
+            salvarSupabase($url, $key, $sem);
+            return;
+        }
+    }
     if ($resp === false || $code < 200 || $code >= 300) {
         error_log('PO Supabase insert falhou (' . $code . '): ' . $resp);
     }
-    curl_close($ch);
 }
 
 salvarSupabase($SUPABASE_URL, $SUPABASE_SERVICE_KEY, [
@@ -165,12 +187,17 @@ salvarSupabase($SUPABASE_URL, $SUPABASE_SERVICE_KEY, [
     'roteiro'      => $roteiro,
     'mensagem'     => $mensagem,
     'origem'       => campo('origem'),
-    'utm_source'   => campo('utm_source'),
-    'utm_medium'   => campo('utm_medium'),
-    'utm_campaign' => campo('utm_campaign'),
-    'gclid'        => campo('gclid'),
-    'referrer'     => campo('referrer'),
-    'landing_page' => campo('landing_page'),
+    'utm_source'   => campoOrigem('utm_source'),
+    'utm_medium'   => campoOrigem('utm_medium'),
+    'utm_campaign' => campoOrigem('utm_campaign'),
+    'utm_term'     => campoOrigem('utm_term'),
+    'utm_content'  => campoOrigem('utm_content'),
+    'gclid'        => campoOrigem('gclid'),
+    'gbraid'       => campoOrigem('gbraid'),
+    'wbraid'       => campoOrigem('wbraid'),
+    'fbclid'       => campoOrigem('fbclid'),
+    'referrer'     => campoOrigem('referrer'),
+    'landing_page' => campoOrigem('landing_page'),
 ]);
 
 $mail = new PHPMailer(true);

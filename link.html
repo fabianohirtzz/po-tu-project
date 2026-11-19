@@ -3,9 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- A /link é o destino da bio do Instagram, e o link da bio é LIMPO (com
+       UTM ele apareceria inteiro no perfil). Como o navegador do Instagram
+       quase nunca manda referrer, a chegada aqui não tinha origem nenhuma: o
+       WhatsApp desta página abria sem o código (ref ...), o formulário só
+       herdava a bio se a pessoa tocasse num card, e o GA4 contava visita
+       direta. Por isso a página põe a UTM da bio na própria URL, ANTES de a
+       tag do Google e a memória de origem lerem.
+       Fica como veio: visita com UTM própria (story, ou a que o Instagram às
+       vezes põe sozinho) ou com id de clique do Google, e visita com referrer
+       de outro site ou do próprio site. O fbclid não conta como UTM, porque o
+       Instagram o põe sozinho. tests/test-origem-site.mjs roda este script. -->
+  <script id="po-link-bio">
+  (function () {
+    try {
+      var u = new URL(window.location.href), q = u.searchParams;
+      var proprios = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid', 'gbraid', 'wbraid'];
+      for (var i = 0; i < proprios.length; i++) if (q.get(proprios[i])) return;
+      var ref = '';
+      try { ref = new URL(document.referrer).hostname; } catch (e) { ref = ''; }
+      if (ref && !/(^|\.)instagram\./.test(ref)) return;
+      q.set('utm_source', 'instagram');
+      q.set('utm_medium', 'bio');
+      q.set('utm_campaign', 'link');
+      window.history.replaceState(window.history.state, '', u.pathname + '?' + q.toString() + u.hash);
+    } catch (e) { /* a página segue como veio */ }
+  })();
+  </script>
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=GT-TNH4L3BV"></script>
   <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','GT-TNH4L3BV');</script>
+  <!-- Memoria de origem (UTM, gclid, fbclid) por 90 dias: o formulario le daqui. -->
+  <script src="assets/js/origem.js?v=2" defer></script>
+  <!-- Eventos de anuncio (Pixel da Meta, Google Ads, GA4): desligados ate os IDs existirem. -->
+  <script src="assets/js/rastreio.js?v=1" defer></script>
   <title>Links — Pereira Oliveira Turismo</title>
   <meta name="description" content="Roteiros internacionais em grupo, com data marcada. Reserve pelo formulário ou fale com a equipe no WhatsApp.">
   <!-- noindex: pagina de destino de bio, conteudo fino e duplicado do site.
