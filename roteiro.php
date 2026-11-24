@@ -246,14 +246,16 @@ function po_roteiro_html($r, ?array $outros = null) {
     /* INVESTIMENTO */
     if (count($valores)) {
         $h .= '<section class="sec invest" id="investimento"><div class="wrap"><div class="invest__head reveal">'
-            . '<p class="tag" style="margin-bottom:14px">Investimento</p><h2>Valor por pessoa.</h2><p>Investimento aproximado por pessoa. Valores sujeitos a alteração, apenas cotação.</p></div>'
+            . '<p class="tag" style="margin-bottom:14px">Investimento</p><h2>Valor por pessoa.</h2><p>Investimento aproximado por pessoa. Valores sujeitos a alteração conforme cotação do câmbio na data do orçamento/pagamento.</p></div>'
             . '<div class="invest__cards' . (count($valores) < 2 ? ' invest__cards--single' : '') . '">';
         foreach ($valores as $i => $v) {
             $v = is_array($v) ? $v : [];
             $h .= '<div class="pcard' . ($i === 0 ? ' pcard--feat' : '') . ' reveal">'
                 . (!empty($v['tag']) ? '<div class="pcard__tag">' . po_e($v['tag']) . '</div>' : '')
                 . (!empty($v['de']) ? '<div class="pcard__from">' . po_e($v['de']) . '</div>' : '')
-                . '<div class="pcard__val">' . po_e($v['valor'] ?? '') . '</div>'
+                . (trim((string) ($v['valor'] ?? '')) !== '' ? '<div class="pcard__val">' . po_e($v['valor']) . '</div>' : '')
+                . (trim((string) ($v['valor2'] ?? '')) !== ''
+                    ? '<div class="pcard__val pcard__val--moeda" style="font-size:clamp(1.4rem,2.6vw,1.9rem);margin-top:10px;color:rgba(255,255,255,.82)">' . po_e($v['valor2']) . '</div>' : '')
                 . (!empty($v['extra']) ? '<p class="pcard__extra">' . po_e($v['extra']) . '</p>' : '') . '</div>';
         }
         $h .= '</div><div class="invest__foot reveal"><p class="invest__note">Valores sujeitos a alteração sem aviso prévio. Apenas cotação.</p>'
@@ -397,9 +399,17 @@ function po_roteiro_jsonld($r) {
     ];
     if (!empty($r['capa_url'])) $j['image'] = $r['capa_url'];
     $v = po_arr($r['valores'] ?? []);
-    if (count($v) && !empty($v[0]['valor'])) {
-        $raw   = (string) $v[0]['valor'];
-        $moeda = (strpos($raw, '€') !== false) ? 'EUR' : ((strpos($raw, 'US$') !== false) ? 'USD' : 'BRL');
+    /* Preco do Offer: o valor em reais; sem ele, o em dolar ou euro. A moeda
+       vem do que a cliente digitou (EUR/€, USD/US$/U$); sem sinal, BRL. */
+    $raw = '';
+    if (count($v) && is_array($v[0])) {
+        foreach (['valor', 'valor2'] as $k) {
+            $c = trim((string) ($v[0][$k] ?? ''));
+            if (preg_match('~\d~', $c)) { $raw = $c; break; }
+        }
+    }
+    if ($raw !== '') {
+        $moeda = preg_match('~€|\bEUR\b|euro~iu', $raw) ? 'EUR' : (preg_match('~US\$|U\$|\bUSD\b|d[oó]lar~iu', $raw) ? 'USD' : 'BRL');
         $num   = preg_replace('~[^\d,\.]~', '', $raw);
         $num   = str_replace(['.', ','], ['', '.'], $num);
         if ($num !== '' && is_numeric($num)) {

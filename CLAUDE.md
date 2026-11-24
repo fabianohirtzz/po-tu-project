@@ -1906,6 +1906,19 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
   **O `painel/index.html` do servidor tem mudancas do Carlos (Leads/Relatorios: canais
   Meta/Google, investimento por plataforma, `painel.css?v=25`) que NAO estao no repo.**
   Nunca subir o `index.html` do repo por cima: aplicar a mudanca na copia do servidor.
+- **VALOR EM REAIS + VALOR EM DOLAR/EURO NO ROTEIRO (24/11/2026): NO AR.** Cada card
+  de valor da gaveta tem "Valor em reais" (`valor`) e "Valor em dolar ou euro" (`valor2`),
+  texto livre (a cliente digita R$, EUR, USD). Sem coluna nova: os dois vivem no jsonb
+  `valores`, entao roteiro antigo sai igual. A pagina mostra os dois no card (reais
+  primeiro, o outro menor embaixo); o JSON-LD usa reais e, sem ele, o em moeda, com a
+  moeda lida do texto (EUR/€, USD/US$/U$; o "EUR 7.695" antigo virava BRL). Texto do
+  investimento: "Valores sujeitos a alteracao conforme cotacao do cambio na data do
+  orcamento/pagamento." `tests/test-roteiro-valor-moeda.php`.
+  **O servidor estava a frente do `main`:** `painel/app.js`, `roteiro.php` e
+  `painel/index.html` publicados sao os da branch `origin/origem-fase1` do Carlos
+  (origens Meta/Google, rastreio). A mudanca foi aplicada SOBRE as copias do servidor
+  (painel em `app.js?v=35` no ar; no repo `v=29`). Ao mergear a branch do Carlos, o
+  conflito em `app.js`/`roteiro.php` e so este trecho, e a versao do ar e a que vale.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro

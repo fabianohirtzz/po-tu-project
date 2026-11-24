@@ -637,8 +637,9 @@ function repItemDia(d={}){return `<div class="rep-item"><button type="button" cl
 function repItemVal(v={}){return `<div class="rep-item"><button type="button" class="rm">✕</button>
   <div class="field-2"><div class="field"><label>Rótulo</label><input class="rv-tag" value="${esc(v.tag||'')}"></div>
   <div class="field"><label>Prefixo (ex: a partir de)</label><input class="rv-de" value="${esc(v.de||'')}"></div></div>
-  <div class="field-2"><div class="field"><label>Valor</label><input class="rv-valor" value="${esc(v.valor||'')}"></div>
-  <div class="field"><label>Complemento</label><input class="rv-extra" value="${esc(v.extra||'')}"></div></div></div>`;}
+  <div class="field-2"><div class="field"><label>Valor em reais</label><input class="rv-valor" placeholder="ex: R$ 28.745,00" value="${esc(v.valor||'')}"></div>
+  <div class="field"><label>Valor em dólar ou euro</label><input class="rv-valor2" placeholder="ex: EUR 5.890 ou USD 2.693" value="${esc(v.valor2||'')}"></div></div>
+  <div class="field"><label>Complemento</label><input class="rv-extra" value="${esc(v.extra||'')}"></div></div>`;}
 function arrToLines(a){return (a||[]).map(x=>typeof x==='string'?x:(x.cidade?x.cidade+': '+x.hotel:JSON.stringify(x))).join('\n');}
 function roteiroForm(r){
   r=r||{};
@@ -928,7 +929,7 @@ $('#rdr-del').onclick=async()=>{if(!editRot)return;if(!confirm('Excluir este rot
 function collectRoteiro(){
   const lines=id=>($('#'+id).value||'').split('\n').map(s=>s.trim()).filter(Boolean);
   const dias=[...$('#r-dias-rep').children].map(it=>({n:Number(it.querySelector('.rd-n').value)||null,data:it.querySelector('.rd-data').value.trim(),dia_semana:it.querySelector('.rd-sem').value.trim(),cidades:it.querySelector('.rd-cid').value.trim(),descricao:it.querySelector('.rd-desc').value.trim(),refeicoes:it.querySelector('.rd-ref').value.trim()})).filter(d=>d.cidades||d.descricao);
-  const valores=[...$('#r-val-rep').children].map(it=>({tag:it.querySelector('.rv-tag').value.trim(),de:it.querySelector('.rv-de').value.trim(),valor:it.querySelector('.rv-valor').value.trim(),extra:it.querySelector('.rv-extra').value.trim()})).filter(v=>v.valor);
+  const valores=[...$('#r-val-rep').children].map(it=>({tag:it.querySelector('.rv-tag').value.trim(),de:it.querySelector('.rv-de').value.trim(),valor:it.querySelector('.rv-valor').value.trim(),valor2:it.querySelector('.rv-valor2').value.trim(),extra:it.querySelector('.rv-extra').value.trim()})).filter(v=>v.valor||v.valor2);
   const galeria=[...$('#r-gal-wrap').querySelectorAll('.gal-thumb')].map(t=>t.dataset.url).filter(Boolean);
   return {
     slug:curSlug(),titulo:$('#r-titulo').value.trim(),subtitulo:$('#r-subtitulo').value.trim(),
@@ -995,7 +996,7 @@ const PREENCHE_IDS=['r-titulo','r-slug','r-subtitulo','r-periodo','r-dias','r-no
 function estadoForm(){
   const a={};PREENCHE_IDS.forEach(id=>{a[id]=($('#'+id)||{}).value||'';});
   a.temDias=[...$('#r-dias-rep').children].some(it=>it.querySelector('.rd-cid').value.trim()||it.querySelector('.rd-desc').value.trim());
-  a.temValores=[...$('#r-val-rep').children].some(it=>it.querySelector('.rv-valor').value.trim());
+  a.temValores=[...$('#r-val-rep').children].some(it=>it.querySelector('.rv-valor').value.trim()||it.querySelector('.rv-valor2').value.trim());
   a.temGaleria=!!$('#r-gal-wrap').querySelector('.gal-thumb');
   return a;
 }
