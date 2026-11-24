@@ -1897,6 +1897,15 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
   - Pendente: os 9 contatos com destino no nome que parecem viagem passada/sobrenome
     (decisao do Fabiano); Maria Carlota Boabaid com 2 numeros quase iguais.
   - **Formulario do site: NAO mexer** (decisao ainda nao tomada).
+- **AGENDA DO MARIDO SEM MARCADOR (24/11/2026): NO AR.** O Toninho nao marca "PO"/"CIASC",
+  entao a origem `agenda-marido` dispensa o marcador (`WA_IMPORT_ORIGENS_SEM_MARCADOR`):
+  entra todo contato com celular, `revisado=false`, para triar na Revisao (filtro novo
+  "So da agenda do marido", pela ORIGEM). A agenda da esposa segue exigindo marcador.
+  Duplicado nao entra de novo: a auditoria casa pelo celular contra a base inteira
+  (Revisao, Clientes, site, robo) e so preenche campo vazio da ficha existente.
+  **O `painel/index.html` do servidor tem mudancas do Carlos (Leads/Relatorios: canais
+  Meta/Google, investimento por plataforma, `painel.css?v=25`) que NAO estao no repo.**
+  Nunca subir o `index.html` do repo por cima: aplicar a mudanca na copia do servidor.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro
