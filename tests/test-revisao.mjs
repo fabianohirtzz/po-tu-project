@@ -475,6 +475,12 @@ assert.ok(!/A agenda tem médico, fornecedor e família/.test(painel),
   assert.deepEqual(c2.poRevPorMarcador(ls, 'PO').map(l => l.id), ['1'], 'filtro so PO');
   assert.deepEqual(c2.poRevPorMarcador(ls, 'CIASC').map(l => l.id), ['2'], 'filtro so CIASC');
   assert.equal(c2.poRevPorMarcador(ls, '').length, 3, 'sem filtro, todos');
+  // agenda do marido nao tem marcador: o filtro e pela ORIGEM (24/11/2026)
+  const lm = [{ id: 'a', origemImport: 'agenda-marido', agendaRaw: 'FN:Dentista' },
+              { id: 'b', origemImport: 'agenda-esposa', agendaRaw: raw },
+              { id: 'c', origemImport: 'agenda-marido', agendaRaw: 'FN:Joao PO' }];
+  assert.deepEqual(c2.poRevPorMarcador(lm, 'MARIDO').map(l => l.id), ['a', 'c'], 'filtro so agenda do marido');
+  assert.deepEqual(c2.poRevPorMarcador(lm, 'PO').map(l => l.id), ['b', 'c'], 'PO segue pelo nome');
   const h = c2.poLinhaRevisaoContato({ id: '1', nome: 'Ana Exemplo', agendaRaw: raw.replace('Ana Exemplo', '<b>Ana'), revisado: false });
   assert.ok(h.includes('rev-agenda') && h.includes('&lt;b&gt;Ana'), 'o nome da agenda aparece, escapado');
   assert.ok(h.includes('rev-mk--po'), 'a etiqueta PO aparece na linha');

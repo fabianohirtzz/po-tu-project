@@ -75,6 +75,9 @@ function poRevMarcador(nomeAgenda) {
 
 function poRevPorMarcador(leads, marcador) {
   if (!marcador) return leads || [];
+  /* A agenda do marido entra sem marcador (24/11/2026), entao o filtro dela
+     e pela origem, nao pelo nome. */
+  if (marcador === 'MARIDO') return (leads || []).filter(l => l && l.origemImport === 'agenda-marido');
   return (leads || []).filter(l => poRevMarcador(poRevNomeAgenda(l && l.agendaRaw)) === marcador);
 }
 

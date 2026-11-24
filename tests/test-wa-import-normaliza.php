@@ -64,6 +64,23 @@ ok(wa_import_cpf('') === '', 'cpf vazio');
 $semMarca = ['nome'=>'Dentista', 'telefones'=>['48999990000'], 'emails'=>[], 'org'=>'', 'raw'=>'x'];
 ok(wa_import_candidato($semMarca, 'agenda-esposa') === null, 'agenda sem marcador: descartado');
 
+// --- agenda do marido (Toninho) NAO usa marcador (24/11/2026): entra tudo
+// que tem celular, com o nome intacto, e vai para a Revisao como pendente
+// (nao e CRM). Sem celular continua fora.
+ok(wa_import_dispensa_marcador('agenda-marido') === true, 'agenda do marido dispensa o marcador');
+ok(wa_import_dispensa_marcador('agenda-esposa') === false, 'agenda da esposa segue exigindo');
+ok(wa_import_dispensa_marcador('xyz') === false, 'origem desconhecida exige marcador');
+$mar = wa_import_candidato($semMarca, 'agenda-marido');
+ok($mar !== null, 'agenda do marido sem marcador: entra');
+ok($mar['nome'] === 'Dentista', 'nome intacto');
+ok($mar['wa_id'] === '+5548999990000', 'celular vira wa_id');
+ok($mar['anotacao'] === '', 'sem marcador, sem anotacao de destino');
+ok(wa_import_eh_crm('agenda-marido') === false, 'agenda do marido NAO e CRM: entra pendente de revisao');
+ok(wa_import_candidato(['nome'=>'Padaria', 'telefones'=>['48 3222-0000'], 'raw'=>'z'], 'agenda-marido') === null,
+   'agenda do marido so com fixo: fora');
+ok(wa_import_candidato(['nome'=>'Sem Numero', 'telefones'=>[], 'raw'=>'z'], 'agenda-marido') === null,
+   'agenda do marido sem telefone: fora');
+
 // --- candidato de agenda COM marcador: nome limpo, celular em E.164, wa_id setado
 $comMarca = ['nome'=>'Lourdete Ramos - PO', 'telefones'=>['(48) 99999-1111','48 3222-0000'],
              'emails'=>['l@x.com'], 'org'=>'', 'raw'=>'BEGIN...'];

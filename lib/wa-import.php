@@ -187,12 +187,26 @@ function wa_import_eh_crm($origem) {
     return in_array((string) $origem, WA_IMPORT_ORIGENS_CRM, true);
 }
 
+/* Agenda que NAO usa marcador (24/11/2026): o Toninho nao marca "PO" nem
+   "CIASC" nos contatos dele, entao a agenda do marido entra inteira (quem tem
+   celular) e a triagem fica toda na aba Revisao - entra revisado=false, como
+   qualquer agenda. Nao e CRM: nao vira cliente sozinha. Duplicado nao entra
+   de novo porque a auditoria casa pelo celular contra a base INTEIRA
+   (Revisao, Clientes, leads do site e do robo). Lista fechada: origem
+   desconhecida continua exigindo o marcador. */
+const WA_IMPORT_ORIGENS_SEM_MARCADOR = ['agenda-marido'];
+
+function wa_import_dispensa_marcador($origem) {
+    return in_array((string) $origem, WA_IMPORT_ORIGENS_SEM_MARCADOR, true);
+}
+
 function wa_import_candidato($contato, $origem, $padroes = null) {
     $ehCrm = wa_import_eh_crm($origem);
     $nomeBruto = (string) ($contato['nome'] ?? '');
 
-    // Agenda: so entra quem tem o marcador. CRM entra sempre.
-    if (!$ehCrm && !wa_import_tem_marcador($nomeBruto, $padroes)) return null;
+    // Agenda: so entra quem tem o marcador, salvo a que dispensa. CRM entra sempre.
+    if (!$ehCrm && !wa_import_dispensa_marcador($origem)
+        && !wa_import_tem_marcador($nomeBruto, $padroes)) return null;
 
     $celulares = []; $fixos = [];
     foreach (($contato['telefones'] ?? []) as $t) {

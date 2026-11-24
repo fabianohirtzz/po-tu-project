@@ -204,7 +204,9 @@ foreach ($contatos as $ct) {
     if ($c) $cands[] = $c;                 // sem marcador "PO"/"CIASC" ou sem telefone fica de fora
 }
 if (!$cands) {
-    cfail(422, 'Nenhum contato elegivel: na agenda, so entram os marcados com "PO" ou "CIASC" no nome e com telefone.');
+    cfail(422, wa_import_dispensa_marcador($origem)
+        ? 'Nenhum contato elegivel: o arquivo nao tem nenhum contato com celular.'
+        : 'Nenhum contato elegivel: na agenda, so entram os marcados com "PO" ou "CIASC" no nome e com celular.');
 }
 
 /* Destino anotado depois do marcador ("- PO Egito") vira lista de espera
