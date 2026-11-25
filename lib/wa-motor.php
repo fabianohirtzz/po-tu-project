@@ -369,10 +369,13 @@ function wa_atalho($wa_id, $texto) {
         wa_lead_set($wa_id, ['status' => 'negociacao', 'proposta_at' => gmdate('c')]);
         return 'proposta';
     }
-    if (strpos($t, '#fechou') === 0) {
+    /* #contrato e o nome que a equipe usa (contrato assinado = venda, reuniao
+       de 24/11/2026); #fechou segue valendo. O valor e OPCIONAL: sem ele a
+       venda entra com valor 0 e e completada na gaveta do lead. */
+    if (strpos($t, '#fechou') === 0 || strpos($t, '#contrato') === 0) {
         $campos = ['status' => 'venda', 'venda_at' => gmdate('c')];
-        // "#fechou 22900" ou "#fechou 22.900,50"
-        if (preg_match('/#fechou\s+([\d.,]+)/', $t, $m)) {
+        // "#contrato 22900", "#contrato 22.900,50" ou "#contrato R$ 22.900"
+        if (preg_match('/^#(?:fechou|contrato)\s+(?:r\$\s*)?([\d.,]+)/u', $t, $m)) {
             $n = str_replace(['.', ','], ['', '.'], $m[1]);
             if (is_numeric($n)) $campos['venda'] = (float) $n;
         }
@@ -500,6 +503,14 @@ function wa_processar($ev) {
     }
 
     // Primeiro contato: cria lead e contato.
+    if (!$conv && ($ja = wa_lead($wa_id)) && !empty($ja['cliente'])) {
+        /* Cliente da base (aprovado na Revisao): o robo nao atende. Decisao de
+           25/11/2026: robo so para numero novo. Cliente antigo recebendo menu
+           de robo soa frio, e quem esta em viagem escreve para a equipe. */
+        wa_conversa_set($wa_id, ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
+        wa_nota_lead($wa_id, 'Cliente da base escreveu no WhatsApp. O robô não atende clientes: a conversa fica com a equipe.');
+        return 'cliente_base';
+    }
     if (!$conv && ($ja = wa_lead($wa_id))) {
         /* A pessoa ja tem ficha (CRM, agenda, site) e escreve pela primeira
            vez. A ficha e a dona (regra 1 do Armando): so preenche o que esta

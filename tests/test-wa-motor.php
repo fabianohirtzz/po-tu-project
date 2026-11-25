@@ -124,6 +124,13 @@ ok($acao === 'venda', "atalho #fechou registra venda (deu: $acao)");
 ok($DB['po_leads'][0]['status'] === 'venda', 'lead em venda');
 ok((float) $DB['po_leads'][0]['venda'] === 22900.0, 'valor da venda gravado');
 ok(!empty($DB['po_leads'][0]['venda_at']), 'carimba venda_at, que alimenta o ciclo');
+// #contrato e o mesmo atalho, com o valor opcional e aceitando "R$"
+$DB['po_leads'][0]['status'] = 'negociacao'; $DB['po_leads'][0]['venda'] = 0;
+ok(wa_processar(ev('eco', '#contrato R$ 31.450,50')) === 'venda', '#contrato registra venda');
+ok($DB['po_leads'][0]['status'] === 'venda' && (float) $DB['po_leads'][0]['venda'] === 31450.5, '#contrato com R$ grava o valor');
+$DB['po_leads'][0]['status'] = 'negociacao'; $DB['po_leads'][0]['venda'] = 0;
+ok(wa_processar(ev('eco', '#Contrato')) === 'venda', '#contrato sem valor tambem vale');
+ok($DB['po_leads'][0]['status'] === 'venda' && (float) $DB['po_leads'][0]['venda'] === 0.0, 'sem valor: venda com valor 0, completado na gaveta');
 
 // --- 7. PDF enviado por ela depois da entrega tambem marca proposta
 zera();
@@ -186,6 +193,25 @@ zera();
 $DB['po_leads'][] = ['id' => 'L2', 'wa_id' => $WA, 'telefone' => $WA, 'nome' => '', 'status' => 'semresposta', 'origem' => 'importado'];
 wa_processar(ev('mensagem', 'oi'));
 ok($DB['po_leads'][0]['nome'] === 'Maria', 'ficha sem nome ganha o nome do perfil');
+
+// --- 10c. CLIENTE da base (aprovado na Revisao): o robo nao atende, a conversa
+// nasce com a equipe (decisao de 25/11/2026: robo so para numero novo).
+zera();
+$DB['po_leads'][] = ['id' => 'L3', 'wa_id' => $WA, 'telefone' => $WA, 'nome' => 'Dona Cliente', 'status' => 'semresposta',
+    'origem' => 'importado', 'cliente' => true];
+$ENVIADAS = [];
+$acao = wa_processar(ev('mensagem', 'oi Lais, tudo bem?'));
+ok($acao === 'cliente_base', "cliente da base nao entra no fluxo (deu: $acao)");
+ok(!$ENVIADAS, 'o robo nao manda nada para cliente da base');
+ok($DB['po_wa_conversas'][0]['estado'] === 'humano', 'a conversa nasce com a equipe');
+ok(!empty($DB['po_leads'][0]['notas']), 'e a ficha explica por que o robo nao atendeu');
+$ENVIADAS = [];
+ok(wa_processar(ev('mensagem', 'quero ver as viagens')) === 'silenciado', 'e segue calado nas mensagens seguintes');
+ok(!$ENVIADAS, 'nada sai');
+// quem ainda nao e cliente (pendente ou "nao e cliente") continua com o robo
+zera();
+$DB['po_leads'][] = ['id' => 'L4', 'wa_id' => $WA, 'telefone' => $WA, 'nome' => 'Lead', 'status' => 'semresposta', 'cliente' => false];
+ok(wa_processar(ev('mensagem', 'oi')) === 'fluxo', 'ficha que nao e cliente segue no fluxo');
 
 // --- 11. roteiro sem PDF nao pode travar: manda o link da pagina
 zera();
