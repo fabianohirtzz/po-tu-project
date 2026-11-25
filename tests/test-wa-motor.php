@@ -166,6 +166,27 @@ ok($DB['po_wa_conversas'][0]['roteiro_slug'] === 'escandinavia', 'o roteiro do a
 ok($DB['po_leads'][0]['ctwa_clid'] === 'ARxyz', 'atribuicao do anuncio gravada no lead');
 ok($DB['po_leads'][0]['origem'] === 'pago', 'e a origem vira pago');
 
+// --- 10b. quem JA esta na base (CRM, agenda, site) e escreve pela primeira vez:
+// a ficha e a dona (regra 1 do Armando). Antes, o primeiro contato fazia
+// update com nome do perfil, status 'novo' e origem 'whatsapp': a venda
+// voltava para "Contato feito" e saia do faturamento, em silencio.
+zera();
+$DB['po_leads'][] = ['id' => 'L1', 'wa_id' => $WA, 'telefone' => '(48) 90000-0001', 'nome' => 'Maria da Agenda',
+    'status' => 'venda', 'venda' => 22900, 'origem' => 'importado', 'ad_id' => null, 'ctwa_clid' => null];
+$acao = wa_processar(ev('mensagem', 'oi', ['ad_id' => '999', 'ctwa_clid' => 'ARabc']));
+ok($acao === 'fluxo', "cliente da base tambem e atendido pelo fluxo (deu: $acao)");
+ok(count($DB['po_leads']) === 1, 'nao cria ficha nova');
+$L = $DB['po_leads'][0];
+ok($L['nome'] === 'Maria da Agenda', 'o nome da ficha nao vira o nome do perfil');
+ok($L['status'] === 'venda' && $L['venda'] === 22900, 'a venda continua venda');
+ok($L['origem'] === 'importado', 'a origem nao muda');
+ok($L['telefone'] === '(48) 90000-0001', 'o telefone editado a mao nao e sobrescrito');
+ok($L['ad_id'] === '999' && $L['ctwa_clid'] === 'ARabc', 'a atribuicao do anuncio entra no que estava vazio');
+zera();
+$DB['po_leads'][] = ['id' => 'L2', 'wa_id' => $WA, 'telefone' => $WA, 'nome' => '', 'status' => 'semresposta', 'origem' => 'importado'];
+wa_processar(ev('mensagem', 'oi'));
+ok($DB['po_leads'][0]['nome'] === 'Maria', 'ficha sem nome ganha o nome do perfil');
+
 // --- 11. roteiro sem PDF nao pode travar: manda o link da pagina
 zera();
 wa_processar(ev('mensagem', 'oi'));

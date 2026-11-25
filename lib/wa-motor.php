@@ -500,7 +500,20 @@ function wa_processar($ev) {
     }
 
     // Primeiro contato: cria lead e contato.
-    if (!$conv) {
+    if (!$conv && ($ja = wa_lead($wa_id))) {
+        /* A pessoa ja tem ficha (CRM, agenda, site) e escreve pela primeira
+           vez. A ficha e a dona (regra 1 do Armando): so preenche o que esta
+           vazio. Gravar status 'novo' aqui tirava a venda do faturamento, e
+           nome/origem/telefone sobrescreviam o que a equipe cadastrou. */
+        $vazio = function ($k) use ($ja) { return trim((string) ($ja[$k] ?? '')) === ''; };
+        $campos = [];
+        if ($vazio('nome') && trim((string) $nome) !== '') $campos['nome'] = $nome;
+        if ($vazio('ad_id') && !empty($ev['ad_id']))         $campos['ad_id'] = $ev['ad_id'];
+        if ($vazio('ctwa_clid') && !empty($ev['ctwa_clid'])) $campos['ctwa_clid'] = $ev['ctwa_clid'];
+        if ($campos) wa_lead_set($wa_id, $campos);
+        wa_conversa_set($wa_id, ['estado' => 'novo']);
+        $conv = wa_conversa($wa_id);
+    } elseif (!$conv) {
         wa_lead_set($wa_id, [
             'nome'      => $nome,
             'telefone'  => $wa_id,
