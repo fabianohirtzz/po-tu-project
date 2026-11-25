@@ -166,6 +166,11 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
           <input type="text" id="cli-q" placeholder="Buscar por nome, telefone ou cidade (ex.: turismo)">
         </div>
+        <select class="fselect" id="cli-marcador" aria-label="Mostrar">
+          <option value="">Todos os clientes</option>
+          <option value="PO">Só os marcados com PO</option>
+          <option value="CIASC">Só os do CIASC</option>
+        </select>
         <button class="btn btn-danger" id="cli-excluir" type="button" disabled>Excluir selecionados</button>
       </div>
       <div class="table-wrap">
@@ -784,7 +789,7 @@
 <script src="fone.js?v=2"></script>
 <script src="datas.js?v=4"></script>
 <script src="app.js?v=29"></script>
-<script src="clientes.js?v=4"></script>
+<script src="clientes.js?v=5"></script>
 <script src="funil.js?v=3"></script>
 <script src="conversa.js?v=1"></script>
 <script src="importar-contatos.js?v=6"></script>

@@ -23,7 +23,7 @@ function pegaFone(nome) {
 const poE164Src = pegaFone('poE164');
 
 const ctx = new Function(
-  poE164Src + pega('poDigitos') + pega('poChavePessoa') + pega('poAgrupaPessoas') +
+  poE164Src + pega('poDigitos') + pega('poChavePessoa') + pega('poMarcadorDoLead') + pega('poAgrupaPessoas') +
   '; return {poDigitos, poChavePessoa, poAgrupaPessoas};'
 )();
 const { poChavePessoa, poAgrupaPessoas } = ctx;
@@ -133,8 +133,8 @@ assert.equal(semTelSemId.length, 2, 'dois leads sem telefone e sem id viram duas
 // dado de terceiro. Sem escapar, um nome com "<img onerror>" executa
 // script dentro do painel da cliente.
 const ctxUi = new Function(
-  poE164Src + pega('poDigitos') + pega('poChavePessoa') + pega('poAgrupaPessoas') +
-  pega('poLinhaPessoa') +
+  poE164Src + pega('poDigitos') + pega('poChavePessoa') + pega('poMarcadorDoLead') + pega('poAgrupaPessoas') +
+  pega('poEtiquetaMarcador') + pega('poLinhaPessoa') +
   'function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c]));}' +
   'function brl(n){return n>0?("R$ "+n):"—";}' +
   'function fmtData(d){return d?"01 set":"—";}' +
@@ -196,7 +196,7 @@ assert.ok(html.includes('data-chave="5548996048882"'), 'a linha carrega a chave 
    duplicados; aprovar na Revisao nao mudava a contagem, porque eles ja estavam
    la. Pendente fica so na Revisao; "nao e cliente" sai das duas listas. */
 {
-  const cF = new Function(pega('poEntraEmClientes') + pega('poLinhaPessoa') +
+  const cF = new Function(pega('poEntraEmClientes') + pega('poEtiquetaMarcador') + pega('poLinhaPessoa') +
     'function esc(s){return String(s==null?"":s)}function brl(n){return "R$ "+n}function brl2(n){return "R$ "+n}function fmtData(){return ""}' +
     '; return {poEntraEmClientes, poLinhaPessoa};')();
   assert.equal(cF.poEntraEmClientes({ origemImport: 'agenda-esposa', revisado: false }), false, 'pendente fica so na Revisao');
@@ -213,6 +213,53 @@ assert.ok(html.includes('data-chave="5548996048882"'), 'a linha carrega a chave 
 
   const fonte = readFileSync(new URL('../painel/clientes.js', import.meta.url), 'utf8');
   assert.ok(/filter\(poEntraEmClientes\)/.test(fonte), 'a lista da aba passa pelo filtro');
+}
+
+/* ---------- etiqueta PO / CIASC na aba Clientes (25/11/2026) ----------
+   O importador tira o marcador do nome para a ficha ficar limpa, mas quem
+   estava marcado "PO" na agenda e lead em potencial. A etiqueta vem do nome
+   ORIGINAL da agenda (payload_import.raw), pela mesma regra da Revisao. */
+{
+  const rev = readFileSync(new URL('../painel/revisao.js', import.meta.url), 'utf8');
+  const pegaRev = n => { const m = rev.match(new RegExp('function ' + n + '\\([\\s\\S]*?\\n\\}')); assert.ok(m, n); return m[0]; };
+  const cM = new Function(poE164Src + pegaRev('poRevNomeAgenda') + pegaRev('poRevMarcador') +
+    pega('poDigitos') + pega('poChavePessoa') + pega('poMarcadorDoLead') + pega('poAgrupaPessoas') +
+    pega('poFiltraMarcador') + pega('poEtiquetaMarcador') + pega('poLinhaPessoa') +
+    'function esc(s){return String(s==null?"":s).replace(/</g,"&lt;")}function brl(n){return "R$ "+n}function fmtData(){return ""}' +
+    '; return {poAgrupaPessoas, poFiltraMarcador, poLinhaPessoa, poMarcadorDoLead};')();
+
+  const vc = fn => ['BEGIN:VCARD', 'VERSION:3.0', 'FN:' + fn, 'TEL:+5548999990000', 'END:VCARD'].join(String.fromCharCode(10));
+  assert.equal(cM.poMarcadorDoLead({ agendaRaw: vc('Ana Souza - PO Egito') }), 'PO', 'PO na agenda vira PO');
+  assert.equal(cM.poMarcadorDoLead({ agendaRaw: vc('Bia CIASC') }), 'CIASC', 'CIASC na agenda vira CIASC');
+  assert.equal(cM.poMarcadorDoLead({ agendaRaw: vc('Poliana Reis') }), '', '"Poliana" nao e marcador');
+  assert.equal(cM.poMarcadorDoLead({ agendaRaw: '{"cpf":"x"}' }), '', 'ficha do CRM (JSON) nao tem marcador');
+  assert.equal(cM.poMarcadorDoLead({}), '', 'lead do site nao tem marcador');
+
+  const ps = cM.poAgrupaPessoas([
+    { id: 1, tel: '(48) 99999-0001', nome: 'Ana', agendaRaw: vc('Ana Souza PO'), data: '2026-01-01' },
+    { id: 2, tel: '+5548999990001', nome: 'Ana Souza', data: '2026-02-01' },
+    { id: 3, tel: '(48) 99999-0002', nome: 'Bia', agendaRaw: vc('Bia CIASC'), data: '2026-01-01' },
+    { id: 4, tel: '(48) 99999-0003', nome: 'Caio', data: '2026-01-01' },
+  ]);
+  const por = n => ps.find(p => p.nome.startsWith(n));
+  assert.equal(por('Ana').marcador, 'PO', 'a pessoa herda o marcador de qualquer uma das fichas dela');
+  assert.equal(por('Bia').marcador, 'CIASC');
+  assert.equal(por('Caio').marcador, '', 'sem marcador, sem etiqueta');
+
+  assert.deepEqual(cM.poFiltraMarcador(ps, 'PO').map(p => p.nome), ['Ana Souza'], 'filtro so PO');
+  assert.deepEqual(cM.poFiltraMarcador(ps, 'CIASC').map(p => p.nome), ['Bia'], 'filtro so CIASC');
+  assert.equal(cM.poFiltraMarcador(ps, '').length, 3, 'sem filtro, todos');
+
+  const base = { chave: 'x', nome: 'A', tel: '1', cidade: '', total: 1, vendas: 0, valorVendido: 0, ultimaData: null };
+  assert.ok(cM.poLinhaPessoa({ ...base, marcador: 'PO' }).includes('<span class="rev-mk rev-mk--po">PO</span>'), 'linha mostra a etiqueta PO');
+  assert.ok(cM.poLinhaPessoa({ ...base, marcador: 'CIASC' }).includes('rev-mk--ciasc'), 'linha mostra a etiqueta CIASC');
+  assert.ok(!cM.poLinhaPessoa({ ...base, marcador: '' }).includes('rev-mk'), 'sem marcador, sem etiqueta');
+
+  const fonte = readFileSync(new URL('../painel/clientes.js', import.meta.url), 'utf8');
+  assert.ok(/poFiltraMarcador\(poFiltraPessoas\(/.test(fonte), 'a lista da aba passa pelo filtro do marcador');
+  assert.ok(/#fi-nome'\)\.innerHTML = esc\(p\.nome\) \+ poEtiquetaMarcador\(p\.marcador\)/.test(fonte), 'a ficha mostra a etiqueta');
+  const html = readFileSync(new URL('../painel/index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="cli-marcador"'), 'a tela tem o filtro #cli-marcador');
 }
 
 console.log('test-clientes OK');

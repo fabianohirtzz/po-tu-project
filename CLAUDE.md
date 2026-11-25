@@ -1919,6 +1919,7 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
   (origens Meta/Google, rastreio). A mudanca foi aplicada SOBRE as copias do servidor
   (painel em `app.js?v=35` no ar; no repo `v=29`). Ao mergear a branch do Carlos, o
   conflito em `app.js`/`roteiro.php` e so este trecho, e a versao do ar e a que vale.
+- **ETIQUETA PO/CIASC NA ABA CLIENTES (25/11/2026): NO AR** (`clientes.js?v=5`). A pessoa leva a etiqueta se qualquer ficha dela veio marcada da agenda; a regra e a MESMA da Revisao (`poRevMarcador` sobre o nome original em `payload_import.raw`), sem coluna nova. Filtro `#cli-marcador` (Todos / So PO / So CIASC) e etiqueta tambem na ficha. O `index.html` do servidor foi PATCHADO na copia de la (tem mudancas do Carlos).
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro

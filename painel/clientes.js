@@ -35,6 +35,21 @@ function poChavePessoa(lead, idx) {
   return 'sem-tel:pos:' + String(idx);
 }
 
+/* PO, CIASC ou nada (25/11/2026). O importador tira o marcador do nome para
+   a ficha ficar limpa, mas quem a Lais marcou "PO" na agenda e lead em
+   potencial. A regra e a MESMA da Revisao (revisao.js), lida do nome
+   original guardado em payload_import.raw; ficha do CRM e lead do site nao
+   tem nome de agenda e ficam sem etiqueta. */
+function poMarcadorDoLead(l) {
+  if (!l || typeof poRevMarcador !== 'function' || typeof poRevNomeAgenda !== 'function') return '';
+  return poRevMarcador(poRevNomeAgenda(l.agendaRaw));
+}
+
+function poFiltraMarcador(pessoas, marcador) {
+  if (!marcador) return pessoas || [];
+  return (pessoas || []).filter(p => p && p.marcador === marcador);
+}
+
 function poAgrupaPessoas(leads) {
   const mapa = new Map();
 
@@ -49,7 +64,7 @@ function poAgrupaPessoas(leads) {
       mapa.set(chave, {
         chave, nome: '', tel: '', email: '', cidade: '',
         leads: [], total: 0, vendas: 0, valorVendido: 0,
-        ultimaData: null, temVenda: false, ehCliente: false,
+        ultimaData: null, temVenda: false, ehCliente: false, marcador: '',
       });
     }
     const p = mapa.get(chave);
@@ -80,6 +95,8 @@ function poAgrupaPessoas(leads) {
       p.valorVendido += Number(l.ven) || 0;
     }
     if (l.cliente === true) p.ehCliente = true;
+    // a pessoa e PO se qualquer uma das fichas dela veio marcada da agenda
+    if (!p.marcador) p.marcador = poMarcadorDoLead(l);
     if (l.data && (!p.ultimaData || l.data > p.ultimaData)) p.ultimaData = l.data;
   });
 
@@ -160,6 +177,13 @@ async function poExcluiPessoas(pessoas) {
 
 /* Separada do render para poder ser testada: o nome vem do perfil do
    WhatsApp, que e dado de terceiro, e precisa sair escapado. */
+/* Texto fixo (PO ou CIASC), nunca dado: a classe e o rotulo saem de uma
+   lista fechada, entao nada da agenda chega cru ao HTML. */
+function poEtiquetaMarcador(mk) {
+  return mk === 'PO' || mk === 'CIASC'
+    ? ' <span class="rev-mk rev-mk--' + mk.toLowerCase() + '">' + mk + '</span>' : '';
+}
+
 function poLinhaPessoa(p) {
   // "Cliente" = aprovado na Revisao; "Ja viajou" = tem venda registrada.
   const etiqueta = p.temVenda
@@ -170,7 +194,7 @@ function poLinhaPessoa(p) {
   return '<tr data-chave="' + esc(p.chave) + '">' +
     '<td class="cli-ck"><input type="checkbox" aria-label="Selecionar" data-ck="' + esc(p.chave) + '"' +
       (marcado ? ' checked' : '') + '></td>' +
-    '<td><div class="c-name">' + esc(p.nome) + '</div>' +
+    '<td><div class="c-name">' + esc(p.nome) + poEtiquetaMarcador(p.marcador) + '</div>' +
          '<div class="c-sub">' + esc(p.cidade || '—') + '</div></td>' +
     '<td class="mono">' + esc(p.tel) + '</td>' +
     '<td>' + etiqueta + '</td>' +
@@ -202,7 +226,8 @@ function poPessoas() {
 
 function poRenderClientes() {
   const qEl = document.querySelector('#cli-q');
-  const pessoas = poFiltraPessoas(poPessoas(), qEl ? qEl.value : '');
+  const mkEl = document.querySelector('#cli-marcador');
+  const pessoas = poFiltraMarcador(poFiltraPessoas(poPessoas(), qEl ? qEl.value : ''), mkEl ? mkEl.value : '');
   const tb = document.querySelector('#cli-rows');
   if (!tb) return;
   tb.innerHTML = pessoas.length
@@ -262,6 +287,11 @@ function poCliLigaBarra() {
     q.dataset.ligado = '1';
     q.oninput = () => poRenderClientes();
   }
+  const mk = document.querySelector('#cli-marcador');
+  if (mk && !mk.dataset.ligado) {
+    mk.dataset.ligado = '1';
+    mk.onchange = () => poRenderClientes();
+  }
 }
 
 /* ---------- ficha ---------- */
@@ -276,7 +306,7 @@ function poAbreFicha(chave) {
     if (LEADS.length < antes) poFechaFicha();
   };
 
-  document.querySelector('#fi-nome').textContent = p.nome;
+  document.querySelector('#fi-nome').innerHTML = esc(p.nome) + poEtiquetaMarcador(p.marcador);
   document.querySelector('#fi-tel').textContent  = p.tel;
   document.querySelector('#fi-mail').textContent = p.email || '—';
   document.querySelector('#fi-cid').textContent  = p.cidade || '—';
