@@ -136,6 +136,8 @@ function wa_sim_deps() {
     });
 
     wa_fluxo_set_deps([
+        // no simulador nada chega a um celular: a pausa do PDF so atrasaria a tela
+        'pausa' => function ($segundos) {},
         'insert' => function ($tabela, $dados) use ($col) {
             $col->escritas[] = ['tipo' => 'insert', 'tabela' => $tabela, 'feito' => false];
             return ['id' => 'sim-insert'];

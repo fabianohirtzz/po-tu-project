@@ -49,8 +49,19 @@ function wa_fl_dep($nome) {
         'send_buttons' => 'wa_send_buttons',
         'send_list'    => 'wa_send_list',
         'send_doc'     => 'wa_send_document',
+        'pausa'        => 'wa_fl_pausa',
     ];
     return $padrao[$nome];
+}
+/* Pausa depois de um PDF (teste real de 25/11/2026): o documento demora mais a
+   chegar ao celular que um texto, e a pergunta seguinte chegava ANTES do
+   roteiro. O webhook ja respondeu 200 a Meta (fastcgi_finish_request no
+   whatsapp.php), entao esperar aqui nao atrasa a resposta para a Meta. Na
+   linha de comando (testes, scripts) nao espera. */
+const WA_FLUXO_PAUSA_DOC = 5;
+function wa_fl_pausa($segundos) {
+    if (PHP_SAPI === 'cli') return;
+    sleep((int) $segundos);
 }
 function wa_fl_call($nome, ...$args) { return call_user_func_array(wa_fl_dep($nome), $args); }
 
@@ -1473,7 +1484,9 @@ function wa_fluxo_executa($grafo, $card_id, $wa_id, $ctx, $nome) {
             $texto = trim($corpo . "\n\n" . WA_SITE . '/roteiros/' . $slug);
             return $saiu(wa_fl_call('send_text', $wa_id, $texto), 'text', $texto, false);
         }
-        return $saiu(wa_fl_call('send_doc', $wa_id, $roteiro['pdf_url'], $slug . '.pdf', $corpo), 'document', $corpo, false);
+        $envio = wa_fl_call('send_doc', $wa_id, $roteiro['pdf_url'], $slug . '.pdf', $corpo);
+        if (!empty($envio['ok'])) wa_fl_call('pausa', WA_FLUXO_PAUSA_DOC);
+        return $saiu($envio, 'document', $corpo, false);
 
     case 'marca':
         /* O contexto inteiro, nao so o roteiro: `+destino` le `destino_nome`,

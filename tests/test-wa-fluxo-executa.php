@@ -71,6 +71,23 @@ ok($ENVIADAS[0][0] === 'doc' && $ENVIADAS[0][1] === 'https://exemplo/t.pdf', 'ma
 ok($ENVIADAS[0][2] === 'Segue o Turquia com Antalia' && $ENVIADAS[0][3] === 'turquia.pdf', 'legenda com a variavel e arquivo pelo slug');
 ok($r['ok'] === true && $r['espera'] === false, 'card pdf nao espera');
 
+/* 3b. Pausa depois do PDF (teste real de 25/11/2026). O documento demora mais
+   a chegar que um texto, entao a pergunta da data chegava ANTES do roteiro no
+   celular do cliente, mesmo saindo depois. O robo espera WA_FLUXO_PAUSA_DOC
+   segundos depois de um PDF que saiu; nao espera se o envio falhou. */
+$PAUSAS = [];
+wa_fluxo_set_deps(['pausa' => function ($s) use (&$PAUSAS) { $PAUSAS[] = $s; }]);
+zera();
+wa_fluxo_executa($g, 'pdf', $fone, $ct, 'Marta');
+ok($PAUSAS === [WA_FLUXO_PAUSA_DOC] && WA_FLUXO_PAUSA_DOC >= 3, 'depois do PDF o robo espera antes da proxima mensagem');
+$PAUSAS = []; $OK = false; zera();
+wa_fluxo_executa($g, 'pdf', $fone, $ct, 'Marta');
+ok($PAUSAS === [], 'PDF que falhou nao gera espera');
+$OK = true; $PAUSAS = []; zera();
+wa_fluxo_executa($g, 'txt', $fone, $c0, 'Marta');
+ok($PAUSAS === [], 'texto nao gera espera')
+;
+
 /* 4. pdf sem roteiro: o catalogo VAZIO e o catalogo CHEIO sem o slug sao coisas
    diferentes, e o card tem que separa-las. po_fetch_roteiros devolve [] em erro,
    entao "vazio" tambem e o Supabase fora do ar ou o cache frio: tratar isso como
