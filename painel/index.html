@@ -171,6 +171,9 @@
           <option value="PO">Só os marcados com PO</option>
           <option value="CIASC">Só os do CIASC</option>
         </select>
+        <label class="imp-ct-forcar" style="margin-top:0"><input type="checkbox" id="cli-soemail"> Só quem tem e-mail</label>
+        <button class="btn btn-ghost" id="cli-csv" type="button">Exportar CSV</button>
+        <button class="btn btn-ghost" id="cli-xlsx" type="button">Exportar Excel</button>
         <button class="btn btn-danger" id="cli-excluir" type="button" disabled>Excluir selecionados</button>
       </div>
       <div class="table-wrap">
@@ -179,7 +182,7 @@
             <thead>
               <tr>
                 <th class="cli-ck"><input type="checkbox" id="cli-todos" aria-label="Selecionar todos da lista"></th>
-                <th>Nome</th><th>Telefone</th><th>Situação</th>
+                <th>Nome</th><th>Telefone</th><th>E-mail</th><th>Situação</th>
                 <th>Interesses</th><th>Viagens</th><th>Faturado</th><th>Último contato</th>
               </tr>
             </thead>
@@ -789,7 +792,7 @@
 <script src="fone.js?v=2"></script>
 <script src="datas.js?v=4"></script>
 <script src="app.js?v=29"></script>
-<script src="clientes.js?v=5"></script>
+<script src="clientes.js?v=6"></script>
 <script src="funil.js?v=3"></script>
 <script src="conversa.js?v=1"></script>
 <script src="importar-contatos.js?v=6"></script>

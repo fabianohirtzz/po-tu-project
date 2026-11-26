@@ -134,7 +134,7 @@ assert.equal(semTelSemId.length, 2, 'dois leads sem telefone e sem id viram duas
 // script dentro do painel da cliente.
 const ctxUi = new Function(
   poE164Src + pega('poDigitos') + pega('poChavePessoa') + pega('poMarcadorDoLead') + pega('poAgrupaPessoas') +
-  pega('poEtiquetaMarcador') + pega('poLinhaPessoa') +
+  pega('poEtiquetaMarcador') + pega('poTemEmail') + pega('poLinhaPessoa') +
   'function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c]));}' +
   'function brl(n){return n>0?("R$ "+n):"—";}' +
   'function fmtData(d){return d?"01 set":"—";}' +
@@ -196,7 +196,7 @@ assert.ok(html.includes('data-chave="5548996048882"'), 'a linha carrega a chave 
    duplicados; aprovar na Revisao nao mudava a contagem, porque eles ja estavam
    la. Pendente fica so na Revisao; "nao e cliente" sai das duas listas. */
 {
-  const cF = new Function(pega('poEntraEmClientes') + pega('poEtiquetaMarcador') + pega('poLinhaPessoa') +
+  const cF = new Function(pega('poEntraEmClientes') + pega('poEtiquetaMarcador') + pega('poTemEmail') + pega('poLinhaPessoa') +
     'function esc(s){return String(s==null?"":s)}function brl(n){return "R$ "+n}function brl2(n){return "R$ "+n}function fmtData(){return ""}' +
     '; return {poEntraEmClientes, poLinhaPessoa};')();
   assert.equal(cF.poEntraEmClientes({ origemImport: 'agenda-esposa', revisado: false }), false, 'pendente fica so na Revisao');
@@ -224,7 +224,7 @@ assert.ok(html.includes('data-chave="5548996048882"'), 'a linha carrega a chave 
   const pegaRev = n => { const m = rev.match(new RegExp('function ' + n + '\\([\\s\\S]*?\\n\\}')); assert.ok(m, n); return m[0]; };
   const cM = new Function(poE164Src + pegaRev('poRevNomeAgenda') + pegaRev('poRevMarcador') +
     pega('poDigitos') + pega('poChavePessoa') + pega('poMarcadorDoLead') + pega('poAgrupaPessoas') +
-    pega('poFiltraMarcador') + pega('poEtiquetaMarcador') + pega('poLinhaPessoa') +
+    pega('poFiltraMarcador') + pega('poEtiquetaMarcador') + pega('poTemEmail') + pega('poLinhaPessoa') +
     'function esc(s){return String(s==null?"":s).replace(/</g,"&lt;")}function brl(n){return "R$ "+n}function fmtData(){return ""}' +
     '; return {poAgrupaPessoas, poFiltraMarcador, poLinhaPessoa, poMarcadorDoLead};')();
 
@@ -260,6 +260,57 @@ assert.ok(html.includes('data-chave="5548996048882"'), 'a linha carrega a chave 
   assert.ok(/#fi-nome'\)\.innerHTML = esc\(p\.nome\) \+ poEtiquetaMarcador\(p\.marcador\)/.test(fonte), 'a ficha mostra a etiqueta');
   const html = readFileSync(new URL('../painel/index.html', import.meta.url), 'utf8');
   assert.ok(html.includes('id="cli-marcador"'), 'a tela tem o filtro #cli-marcador');
+}
+
+/* ---------- exportar clientes e coluna de e-mail (26/11/2026) ----------
+   A Lais exporta a lista que esta na tela (busca + etiqueta) em CSV ou Excel,
+   com a opcao "so quem tem e-mail" para campanha de e-mail. */
+{
+  const cE = new Function(pega('poTemEmail') + pega('poFiltraEmail') + pega('poExportLinhas') + pega('poCsvCelula') +
+    pega('poCsv') + pega('poXlsxCelula') + pega('poXlsxPlanilha') + pega('poDataBR') +
+    '; return {poTemEmail, poFiltraEmail, poExportLinhas, poCsv, poXlsxPlanilha};')();
+
+  const ps = [
+    { nome: 'Ana Souza', tel: '+5548999990001', email: 'ana@x.com', cidade: 'Florianópolis', marcador: 'PO', temVenda: true,
+      ehCliente: true, total: 2, vendas: 1, valorVendido: 22900.5, ultimaData: '2026-03-10T12:00:00Z' },
+    { nome: 'Bia; "Bi"', tel: '+5548999990002', email: '', cidade: '', marcador: '', temVenda: false, ehCliente: false,
+      total: 1, vendas: 0, valorVendido: 0, ultimaData: null },
+    { nome: '=HYPERLINK("x")', tel: '—', email: 'sem-arroba', cidade: '—', marcador: 'CIASC', temVenda: false, ehCliente: true,
+      total: 1, vendas: 0, valorVendido: 0, ultimaData: null },
+  ];
+  assert.equal(cE.poTemEmail('ana@x.com'), true);
+  assert.equal(cE.poTemEmail('sem-arroba'), false, 'texto sem @ nao conta como e-mail');
+  assert.equal(cE.poTemEmail('—'), false);
+  assert.deepEqual(cE.poFiltraEmail(ps, true).map(p => p.nome), ['Ana Souza'], 'so quem tem e-mail');
+  assert.equal(cE.poFiltraEmail(ps, false).length, 3, 'sem a opcao, todos');
+
+  const L = cE.poExportLinhas(ps);
+  assert.deepEqual(L[0], ['Nome', 'Telefone', 'E-mail', 'Cidade', 'Situação', 'Etiqueta', 'Interesses', 'Viagens', 'Faturado (R$)', 'Último contato']);
+  assert.deepEqual(L[1], ['Ana Souza', '+5548999990001', 'ana@x.com', 'Florianópolis', 'Já viajou', 'PO', 2, 1, 22900.5, '10/03/2026']);
+  assert.equal(L[2][4], 'Lead');
+  assert.equal(L[3][4], 'Cliente');
+  assert.equal(L[3][1], '', 'o travessao do painel ("—") sai vazio no arquivo');
+  assert.equal(L[3][2], '', 'e-mail invalido sai vazio');
+
+  const csv = cE.poCsv(L);
+  assert.ok(csv.startsWith('\uFEFF'), 'CSV com BOM, para o Excel ler os acentos');
+  assert.ok(csv.includes('Ana Souza;+5548999990001;ana@x.com;Florianópolis;Já viajou;PO;2;1;22900,50;10/03/2026'), 'separador ; e decimal com virgula');
+  assert.ok(csv.includes('"Bia; ""Bi"""'), 'campo com ; e aspas sai entre aspas');
+  assert.ok(csv.includes("'=HYPERLINK"), 'formula no nome e neutralizada (injecao de CSV)');
+  assert.ok(csv.split('\r\n').length === 5, 'uma linha por pessoa + cabecalho, CRLF');
+
+  const x = cE.poXlsxPlanilha(L);
+  assert.ok(x.includes('<c r="A1" t="inlineStr"><is><t>Nome</t></is></c>'), 'celula de texto');
+  assert.ok(x.includes('<c r="I2"><v>22900.5</v></c>'), 'faturado como numero');
+  assert.ok(x.includes('Bia; &quot;Bi&quot;') && !x.includes('Bia; "Bi"'), 'texto escapado no XML');
+  assert.ok(x.includes('<c r="B2" t="inlineStr"><is><t>+5548999990001</t></is></c>'), 'telefone como texto (o Excel nao o vira numero)');
+
+  const fonte = readFileSync(new URL('../painel/clientes.js', import.meta.url), 'utf8');
+  assert.ok(/poFiltraEmail\(poFiltraMarcador\(poFiltraPessoas\(/.test(fonte), 'a tela e a exportacao passam pelo filtro de e-mail');
+  assert.ok(/'<td>' \+ esc\(p\.email/.test(fonte) || /esc\(poTemEmail\(p\.email\)/.test(fonte), 'a tabela tem a coluna de e-mail, escapada');
+  const html = readFileSync(new URL('../painel/index.html', import.meta.url), 'utf8');
+  for (const id of ['cli-soemail', 'cli-csv', 'cli-xlsx']) assert.ok(html.includes('id="' + id + '"'), 'a tela tem #' + id);
+  assert.ok(/<th>Telefone<\/th><th>E-mail<\/th>/.test(html), 'cabecalho com a coluna E-mail');
 }
 
 console.log('test-clientes OK');

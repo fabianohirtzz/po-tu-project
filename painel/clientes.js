@@ -197,6 +197,7 @@ function poLinhaPessoa(p) {
     '<td><div class="c-name">' + esc(p.nome) + poEtiquetaMarcador(p.marcador) + '</div>' +
          '<div class="c-sub">' + esc(p.cidade || '—') + '</div></td>' +
     '<td class="mono">' + esc(p.tel) + '</td>' +
+    '<td>' + esc(poTemEmail(p.email) ? p.email : '—') + '</td>' +
     '<td>' + etiqueta + '</td>' +
     '<td class="mono">' + p.total + '</td>' +
     '<td class="mono">' + (p.vendas ? viagens : '—') + '</td>' +
@@ -224,15 +225,22 @@ function poPessoas() {
   return poAgrupaPessoas((typeof filtradasPessoas === 'function' ? filtradasPessoas() : LEADS).filter(poEntraEmClientes));
 }
 
-function poRenderClientes() {
+/* A lista que esta NA TELA: e ela que a tabela mostra e que a exportacao leva. */
+function poClientesNaTela() {
   const qEl = document.querySelector('#cli-q');
   const mkEl = document.querySelector('#cli-marcador');
-  const pessoas = poFiltraMarcador(poFiltraPessoas(poPessoas(), qEl ? qEl.value : ''), mkEl ? mkEl.value : '');
+  const emEl = document.querySelector('#cli-soemail');
+  return poFiltraEmail(poFiltraMarcador(poFiltraPessoas(poPessoas(), qEl ? qEl.value : ''), mkEl ? mkEl.value : ''),
+    !!(emEl && emEl.checked));
+}
+
+function poRenderClientes() {
+  const pessoas = poClientesNaTela();
   const tb = document.querySelector('#cli-rows');
   if (!tb) return;
   tb.innerHTML = pessoas.length
     ? pessoas.map(poLinhaPessoa).join('')
-    : '<tr><td colspan="8"><div class="empty">Nenhum cliente com esses filtros.</div></td></tr>';
+    : '<tr><td colspan="9"><div class="empty">Nenhum cliente com esses filtros.</div></td></tr>';
   tb.querySelectorAll('tr[data-chave]').forEach(tr => {
     tr.onclick = () => poAbreFicha(tr.dataset.chave);
   });
@@ -291,6 +299,132 @@ function poCliLigaBarra() {
   if (mk && !mk.dataset.ligado) {
     mk.dataset.ligado = '1';
     mk.onchange = () => poRenderClientes();
+  }
+  const em = document.querySelector('#cli-soemail');
+  if (em && !em.dataset.ligado) {
+    em.dataset.ligado = '1';
+    em.onchange = () => poRenderClientes();
+  }
+  const csv = document.querySelector('#cli-csv');
+  if (csv && !csv.dataset.ligado) { csv.dataset.ligado = '1'; csv.onclick = () => poExportaClientes('csv'); }
+  const xl = document.querySelector('#cli-xlsx');
+  if (xl && !xl.dataset.ligado) { xl.dataset.ligado = '1'; xl.onclick = () => poExportaClientes('xlsx'); }
+}
+
+/* ---------- exportar clientes (26/11/2026) ----------
+   Exporta a lista que esta NA TELA (busca, etiqueta e "so quem tem e-mail"),
+   em CSV ou Excel. O Excel e montado com o JSZip que o painel ja carrega para
+   o importador: nenhuma biblioteca nova. */
+function poTemEmail(e) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e == null ? '' : e).trim());
+}
+
+function poFiltraEmail(pessoas, soEmail) {
+  if (!soEmail) return pessoas || [];
+  return (pessoas || []).filter(p => p && poTemEmail(p.email));
+}
+
+function poDataBR(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const dd = String(d.getDate()).padStart(2, '0'), mm = String(d.getMonth() + 1).padStart(2, '0');
+  return dd + '/' + mm + '/' + d.getFullYear();
+}
+
+function poExportLinhas(pessoas) {
+  // o painel escreve "—" onde nao ha valor; no arquivo isso vira celula vazia
+  const v = s => { const t = String(s == null ? '' : s).trim(); return t === '—' ? '' : t; };
+  const linhas = [['Nome', 'Telefone', 'E-mail', 'Cidade', 'Situação', 'Etiqueta', 'Interesses', 'Viagens', 'Faturado (R$)', 'Último contato']];
+  (pessoas || []).forEach(p => {
+    linhas.push([
+      v(p.nome), v(p.tel), poTemEmail(p.email) ? String(p.email).trim() : '', v(p.cidade),
+      p.temVenda ? 'Já viajou' : (p.ehCliente ? 'Cliente' : 'Lead'),
+      p.marcador || '', Number(p.total) || 0, Number(p.vendas) || 0, Number(p.valorVendido) || 0,
+      poDataBR(p.ultimaData),
+    ]);
+  });
+  return linhas;
+}
+
+/* CSV no formato que o Excel brasileiro abre direto: ponto e virgula, decimal
+   com virgula, BOM para os acentos e CRLF. Celula que comeca com = @ ou com
+   + / - seguido de algo que nao e numero vira texto com apostrofo (injecao de
+   formula: o nome vem do perfil do WhatsApp, que e dado de terceiro). */
+function poCsvCelula(c) {
+  if (typeof c === 'number') return String(Number.isInteger(c) ? c : c.toFixed(2)).replace('.', ',');
+  let t = String(c == null ? '' : c);
+  if (/^[=@]/.test(t) || /^[+-](?![\d\s(])/.test(t)) t = "'" + t;
+  return /[;"\r\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+}
+
+function poCsv(linhas) {
+  return '﻿' + linhas.map(l => l.map(poCsvCelula).join(';')).join('\r\n') + '\r\n';
+}
+
+/* Excel: texto como inlineStr (o telefone fica texto, senao o Excel o vira
+   5,5E+12) e numero como numero. */
+function poXlsxCelula(ref, c) {
+  if (typeof c === 'number') return '<c r="' + ref + '"><v>' + c + '</v></c>';
+  const t = String(c == null ? '' : c).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  return '<c r="' + ref + '" t="inlineStr"><is><t>' + t + '</t></is></c>';
+}
+
+function poXlsxPlanilha(linhas) {
+  const col = i => String.fromCharCode(65 + i);
+  const rows = linhas.map((l, r) => '<row r="' + (r + 1) + '">' + l.map((c, i) => poXlsxCelula(col(i) + (r + 1), c)).join('') + '</row>').join('');
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<cols><col min="1" max="1" width="32" customWidth="1"/><col min="2" max="2" width="18" customWidth="1"/>' +
+    '<col min="3" max="3" width="32" customWidth="1"/><col min="4" max="10" width="16" customWidth="1"/></cols>' +
+    '<sheetData>' + rows + '</sheetData></worksheet>';
+}
+
+async function poXlsxBlob(linhas) {
+  const z = new JSZip();
+  z.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+    '<Default Extension="xml" ContentType="application/xml"/>' +
+    '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+    '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+    '</Types>');
+  z.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+    '</Relationships>');
+  z.file('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+    '<sheets><sheet name="Clientes" sheetId="1" r:id="rId1"/></sheets></workbook>');
+  z.file('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
+    '</Relationships>');
+  z.file('xl/worksheets/sheet1.xml', poXlsxPlanilha(linhas));
+  return z.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
+function poBaixa(blob, nome) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nome;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+async function poExportaClientes(formato) {
+  const pessoas = poClientesNaTela();
+  if (!pessoas.length) { alert('Nenhum contato na lista para exportar.'); return; }
+  const linhas = poExportLinhas(pessoas);
+  const soEmail = !!(document.querySelector('#cli-soemail') || {}).checked;
+  const nome = 'clientes' + (soEmail ? '-com-email' : '') + '-' + new Date().toISOString().slice(0, 10);
+  if (formato === 'csv') {
+    poBaixa(new Blob([poCsv(linhas)], { type: 'text/csv;charset=utf-8' }), nome + '.csv');
+  } else {
+    if (typeof JSZip === 'undefined') { alert('Não consegui gerar o Excel agora. Recarregue a página e tente de novo, ou exporte em CSV.'); return; }
+    poBaixa(await poXlsxBlob(linhas), nome + '.xlsx');
   }
 }
 
