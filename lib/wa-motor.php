@@ -419,6 +419,11 @@ function wa_processar($ev) {
     }
 }
 
+/* "Lais", "Laís", "Laiiiss", "LAIS" como palavra inteira ("Laisa" nao conta). */
+function wa_chamou_lais($texto) {
+    return (bool) preg_match('/(?<![\p{L}\p{N}])la+[iíì]+s+(?![\p{L}\p{N}])/iu', (string) $texto);
+}
+
 function wa_processar_evento($ev) {
     $wa_id = $ev['wa_id'];
     $texto = (string) ($ev['texto'] ?? '');
@@ -572,6 +577,17 @@ function wa_processar_evento($ev) {
         wa_conversa_set($wa_id, ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
         wa_nota_lead($wa_id, 'Contato da base escreveu no WhatsApp. O robô só atende número novo: a conversa fica com a equipe.');
         return 'cliente_base';
+    }
+
+    /* CHAMOU A LAIS PELO NOME (26/11/2026). Conhecido que nao esta salvo no
+       celular dela nem na base ("Oi Lais, bom dia", "Falaaa Laiiiss") recebia
+       as boas-vindas do robo. Lead de anuncio e do site nao escreve o nome
+       dela. Vale em qualquer mensagem enquanto o robo conduz, nao so na
+       primeira. Sem ficha, nao vira lead no funil (igual a agenda). */
+    if (!$teste && wa_chamou_lais($texto)) {
+        wa_conversa_set($wa_id, ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
+        if (wa_lead($wa_id)) wa_nota_lead($wa_id, 'A pessoa chamou a Laís pelo nome no WhatsApp: o robô saiu e a conversa fica com a equipe.');
+        return 'chamou_lais';
     }
     if (!$conv && ($ja = wa_lead($wa_id))) {
         /* A pessoa ja tem ficha (CRM, agenda, site) e escreve pela primeira

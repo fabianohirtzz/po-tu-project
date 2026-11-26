@@ -216,7 +216,11 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
 >   agenda da Laís (tabela `po_wa_agenda`, `acao = nao_atender`, 2.257 números do .vcf; os
 >   números NÃO vão para o Git), ficha importada (`origem_import` preenchido: agendas e CRM,
 >   revisada ou não) e cliente aprovado. Qualquer fala da Laís pelo celular cala o robô
->   naquele contato para sempre.
+>   naquele contato para sempre. **Quem escreve o nome dela** ("Lais", "Laís", "Laiiiss",
+>   em qualquer mensagem enquanto o robô conduz) também vai para a equipe
+>   (`wa_chamou_lais`, 26/11): conhecido fora da agenda e da base recebia boas-vindas.
+>   A agenda foi atualizada com o .vcf de 26/11 (2.778 contatos; leitor precisa de
+>   `pcre.backtrack_limit` alto por causa das fotos embutidas).
 > - **Números de teste** (`po_wa_agenda.acao = teste`): Fabiano e os dois do Carlos. O robô
 >   sempre os atende. Para testar de novo do zero, apagar a conversa, as mensagens e a ficha
 >   deles (backup em `~/.claude/projects/<projeto>/backups/`).

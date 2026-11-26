@@ -250,6 +250,38 @@ ok(!$ENVIADAS && !$DB['po_wa_conversas'] && !$DB['po_leads'], 'nada sai e nada f
 fx_instala();
 ok(wa_processar(ev('mensagem', 'oi')) === 'fluxo', 'com o banco de volta, o numero novo e atendido');
 
+// --- 10f. CHAMOU A LAIS PELO NOME (26/11/2026). Conhecidos fora da agenda e da
+// base ("Oi Lais, bom dia", "Falaaa Laiiiss") recebiam as boas-vindas.
+ok(wa_chamou_lais('Oi Lais, bom dia, como vai?'), 'Lais');
+ok(wa_chamou_lais('Bom dia Laís, tudo bem contigo?'), 'Laís com acento');
+ok(wa_chamou_lais('Falaaa Laiiiss, como você está??'), 'Laiiiss');
+ok(wa_chamou_lais('LAIS!'), 'maiusculas');
+ok(!wa_chamou_lais('Olá! Posso ter mais informações sobre isso?'), 'mensagem padrao do anuncio nao conta');
+ok(!wa_chamou_lais('Falei com a Laisa ontem'), 'outro nome que comeca igual nao conta');
+ok(!wa_chamou_lais('Olá! Vim pelo site e quero mais informações. (ref S-QGGGC)'), 'mensagem do site nao conta');
+
+zera();
+$ENVIADAS = [];
+$acao = wa_processar(ev('mensagem', 'Oi Lais, bom dia, como vai?'));
+ok($acao === 'chamou_lais', "numero novo que chama a Lais pelo nome nao entra no fluxo (deu: $acao)");
+ok(!$ENVIADAS, 'o robo nao manda nada');
+ok($DB['po_wa_conversas'][0]['estado'] === 'humano', 'a conversa nasce com a equipe');
+ok(!$DB['po_leads'], 'e nao vira lead no funil');
+ok(wa_processar(ev('mensagem', 'conhecer as viagens')) === 'silenciado' && !$ENVIADAS, 'e segue calado');
+
+// no meio do fluxo: o robo sai e a ficha explica por que
+zera();
+ok(wa_processar(ev('mensagem', 'oi')) === 'fluxo', 'numero novo entra no fluxo');
+$ENVIADAS = [];
+ok(wa_processar(ev('mensagem', 'na verdade queria falar com a Laís')) === 'chamou_lais' && !$ENVIADAS, 'chamou a Lais no meio do fluxo: o robo sai');
+ok($DB['po_wa_conversas'][0]['estado'] === 'humano', 'a conversa passa para a equipe');
+ok(!$DB['po_leads'] || !empty($DB['po_leads'][0]['notas']), 'a ficha, se existir, explica por que');
+
+// numero de teste segue atendido mesmo chamando a Lais
+zera();
+$DB['po_wa_agenda'][] = ['wa_id' => $WA, 'acao' => 'teste', 'origem' => 'equipe'];
+ok(wa_processar(ev('mensagem', 'Laís, a principio o robo ta tudo bem')) === 'fluxo', 'numero de teste ignora a regra do nome');
+
 // --- 10e. MENSAGENS FORA DE ORDEM (segundo teste real, 25/11/2026). O Carlos
 // mandou 3 mensagens em 6 segundos e tocou no mesmo botao de duas boas-vindas.
 // (1) clique num botao de mensagem ANTERIOR e ignorado em silencio, em vez de
