@@ -390,7 +390,36 @@ function wa_atalho($wa_id, $texto) {
 }
 
 /* ---------- ponto de entrada ---------- */
+/* TRAVA POR CONTATO (segundo teste real, 25/11/2026). A Meta entrega cada
+   mensagem numa requisicao propria, e tres mensagens seguidas da mesma pessoa
+   rodavam AO MESMO TEMPO: duas viram "conversa nova" e as boas-vindas sairam
+   duas vezes no mesmo segundo. Com a trava, a segunda espera a primeira
+   terminar (inclusive a pausa do PDF) e le o estado que ela deixou. Pessoas
+   diferentes nao se esperam. Se o arquivo da trava nao abrir, segue sem trava:
+   melhor o risco de duplicar que o robo mudo. */
+function wa_trava($wa_id, $espera = true) {
+    $arq = rtrim(sys_get_temp_dir(), '/' . chr(92)) . DIRECTORY_SEPARATOR . 'po-wa-trava-' . md5((string) $wa_id) . '.lock';
+    $h = @fopen($arq, 'c');
+    if (!$h) return null;
+    if (!flock($h, $espera ? LOCK_EX : (LOCK_EX | LOCK_NB))) { fclose($h); return null; }
+    return $h;
+}
+function wa_destrava($h) {
+    if (!$h) return;
+    flock($h, LOCK_UN);
+    fclose($h);
+}
+
 function wa_processar($ev) {
+    $trava = wa_trava($ev['wa_id'] ?? '');
+    try {
+        return wa_processar_evento($ev);
+    } finally {
+        wa_destrava($trava);
+    }
+}
+
+function wa_processar_evento($ev) {
     $wa_id = $ev['wa_id'];
     $texto = (string) ($ev['texto'] ?? '');
     $nome  = $ev['nome'] ?? '';
@@ -482,6 +511,17 @@ function wa_processar($ev) {
 
     // Conversa entregue a humana nunca volta para o robo.
     if (($conv['estado'] ?? '') === 'humano') return 'silenciado';
+
+    /* Mensagem enviada ANTES de a pergunta atual sair (rajada: "Ola", "Teste",
+       "07" em seis segundos). Ela nao responde a pergunta, que a pessoa nem
+       tinha visto; responder cada uma empilha "nao entendi" na tela. A hora e
+       a do WhatsApp (quando a pessoa enviou), e aguardando_desde e gravado
+       logo depois de a pergunta sair. Vem antes do reinicio do lembrete, que
+       reescreve aguardando_desde. */
+    if (($conv['estado'] ?? '') === 'aguardando' && !empty($conv['aguardando_desde']) && !empty($ev['ts'])) {
+        $desde = strtotime((string) $conv['aguardando_desde']);
+        if ($desde !== false && (int) $ev['ts'] < $desde) return 'antes_da_pergunta';
+    }
 
     // O cliente voltou a falar: o relogio do timeout recomeca do zero. E o
     // significado real de "ele respondeu", e vale para qualquer mensagem,
@@ -620,6 +660,24 @@ function wa_processar($ev) {
         $clique   = in_array($ev['tipo_msg'] ?? '', ['list_reply', 'button_reply', 'button'], true);
         $resposta = ($clique || $digita) ? $texto : '';
         $p = wa_fluxo_proximo($grafo, $atual, $resposta, $ctx, $texto);
+        /* Clique num botao de mensagem ANTERIOR (segundo teste real, 25/11/2026):
+           com duas boas-vindas na tela, o segundo toque em "Conhecer as
+           viagens" chegava com a conversa ja na lista e caia no "nao
+           entendi", fora de ordem. Clique que o card atual NAO reconhece como
+           escolha (opcao dele, ou roteiro do card de roteiros) e ignorado em
+           silencio: o que vale e a pergunta atual. Texto digitado segue o
+           caminho de sempre. `button` (resposta rapida de modelo) nao e de card. */
+        if ($clique && ($ev['tipo_msg'] ?? '') !== 'button'
+            && !in_array($p['motivo'] ?? '', ['opcao', 'escolheu'], true)) {
+            return 'clique_antigo';
+        }
+        // A lista dinamica aceita qualquer id como slug, mas lista so devolve
+        // list_reply: um toque de BOTAO ali e sempre de mensagem anterior.
+        $c_at = $grafo['cards'][$atual];
+        if (($ev['tipo_msg'] ?? '') === 'button_reply' && ($c_at['tipo'] ?? '') === 'lista'
+            && (($c_at['config']['fonte'] ?? '') === 'roteiros')) {
+            return 'clique_antigo';
+        }
         if ($p['card'] === null) {
             error_log('wa_processar: card ' . $atual . ' sem saida (' . $p['motivo'] . ') | ' . $wa_id);
             wa_entrega_humana($wa_id, 'O card em que a conversa estava não tem saída para essa resposta. Entregue para atendimento humano.');

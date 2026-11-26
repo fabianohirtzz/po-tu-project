@@ -250,6 +250,44 @@ ok(!$ENVIADAS && !$DB['po_wa_conversas'] && !$DB['po_leads'], 'nada sai e nada f
 fx_instala();
 ok(wa_processar(ev('mensagem', 'oi')) === 'fluxo', 'com o banco de volta, o numero novo e atendido');
 
+// --- 10e. MENSAGENS FORA DE ORDEM (segundo teste real, 25/11/2026). O Carlos
+// mandou 3 mensagens em 6 segundos e tocou no mesmo botao de duas boas-vindas.
+// (1) clique num botao de mensagem ANTERIOR e ignorado em silencio, em vez de
+// cair no "nao entendi"; (2) mensagem enviada ANTES de a pergunta atual sair
+// nao gera resposta; (3) a mesma pessoa nunca e processada em paralelo.
+zera();
+wa_processar(ev('mensagem', 'oi'));
+wa_processar(clica('rot'));                       // boas -> lista de roteiros
+ok($DB['po_wa_conversas'][0]['card_atual'] === 'lista', 'o primeiro toque leva a lista');
+$ENVIADAS = [];
+ok(wa_processar(clica('rot')) === 'clique_antigo', 'segundo toque no mesmo botao antigo e ignorado');
+ok(!$ENVIADAS, 'nada sai: nem "nao entendi", nem a lista de novo');
+ok($DB['po_wa_conversas'][0]['card_atual'] === 'lista', 'e a conversa continua onde estava');
+ok(wa_processar(clica('turquia', 'list_reply')) === 'fluxo' && $ENVIADAS, 'a escolha da lista atual segue valendo');
+$ENVIADAS = [];
+ok(wa_processar(clica('rot')) === 'clique_antigo' && !$ENVIADAS, 'botao das boas-vindas no card da data tambem e ignorado');
+ok(wa_processar(clica('sim')) === 'fluxo', 'o botao da pergunta atual funciona');
+
+// (2) rajada: mensagem com hora ANTERIOR a entrega da pergunta atual
+zera();
+wa_processar(ev('mensagem', 'Olá! Vim pelo site e quero mais informações.'));
+$DB['po_wa_conversas'][0]['aguardando_desde'] = gmdate('c', time() + 5);   // a pergunta saiu depois
+$ENVIADAS = [];
+ok(wa_processar(ev('mensagem', 'Teste', ['ts' => time()])) === 'antes_da_pergunta', 'mensagem escrita antes da pergunta nao e respondida');
+ok(!$ENVIADAS && $DB['po_wa_conversas'][0]['card_atual'] === 'boas', 'nada sai e nada muda');
+ok(wa_processar(ev('mensagem', 'Teste', ['ts' => time() + 10])) === 'fluxo', 'depois da pergunta, a resposta e lida');
+
+// (3) trava por contato: enquanto um processo segura, outro nao entra
+$t1 = wa_trava('+5548900000077', false);
+ok($t1 !== null, 'a trava e obtida');
+ok(wa_trava('+5548900000077', false) === null, 'a mesma pessoa nao e processada duas vezes ao mesmo tempo');
+ok(wa_trava('+5548900000078', false) !== null, 'outra pessoa nao espera');
+wa_destrava($t1);
+ok(($t2 = wa_trava('+5548900000077', false)) !== null, 'solta, a proxima entra');
+wa_destrava($t2);
+$fonte = str_replace(chr(13), '', file_get_contents(__DIR__ . '/../lib/wa-motor.php'));
+ok(preg_match('/function wa_processar\(\$ev\) \{\s*\$trava = wa_trava\(/', $fonte) === 1, 'wa_processar entra pela trava');
+
 // --- 11. roteiro sem PDF nao pode travar: manda o link da pagina
 zera();
 wa_processar(ev('mensagem', 'oi'));
