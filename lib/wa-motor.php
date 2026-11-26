@@ -502,13 +502,35 @@ function wa_processar($ev) {
         $conv['aguardando_desde'] = $agora;
     }
 
-    // Primeiro contato: cria lead e contato.
-    if (!$conv && ($ja = wa_lead($wa_id)) && !empty($ja['cliente'])) {
-        /* Cliente da base (aprovado na Revisao): o robo nao atende. Decisao de
-           25/11/2026: robo so para numero novo. Cliente antigo recebendo menu
-           de robo soa frio, e quem esta em viagem escreve para a equipe. */
+    /* SO NUMERO NOVO (25/11/2026). No primeiro teste real o robo entrou na
+       conversa de uma cliente que falava com a Lais e nao estava na base. A
+       API nao mostra a agenda nem o historico do celular dela, entao a agenda
+       exportada (.vcf) foi carregada em po_wa_agenda. Numero 'teste' (equipe)
+       passa por cima de tudo. Erro de leitura NAO atende e NAO grava nada: nem
+       arrisca o robo num conhecido, nem prende um lead novo com a equipe para
+       sempre por causa de uma queda de banco. */
+    $agenda = '';
+    if (!$conv) {
+        $linhas = wa_call('select_estrito', 'po_wa_agenda', 'wa_id=eq.' . rawurlencode($wa_id) . '&select=acao&limit=1');
+        if ($linhas === null) return 'agenda_indisponivel';
+        $agenda = (string) ($linhas[0]['acao'] ?? '');
+    }
+    $teste = $agenda === 'teste';
+
+    if (!$conv && !$teste && $agenda === 'nao_atender' && !wa_lead($wa_id)) {
+        // conhecido da agenda, sem ficha: fica com a equipe e nao vira lead no funil
         wa_conversa_set($wa_id, ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
-        wa_nota_lead($wa_id, 'Cliente da base escreveu no WhatsApp. O robô não atende clientes: a conversa fica com a equipe.');
+        return 'agenda';
+    }
+
+    // Primeiro contato: cria lead e contato.
+    if (!$conv && !$teste && ($ja = wa_lead($wa_id))
+        && (!empty($ja['cliente']) || $agenda === 'nao_atender' || trim((string) ($ja['origem_import'] ?? '')) !== '')) {
+        /* Cliente da base (aprovado na Revisao), contato importado (agenda ou
+           CRM, revisado ou nao) ou da agenda do celular: o robo nao atende.
+           Decisao de 25/11/2026: robo so para numero novo. */
+        wa_conversa_set($wa_id, ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
+        wa_nota_lead($wa_id, 'Contato da base escreveu no WhatsApp. O robô só atende número novo: a conversa fica com a equipe.');
         return 'cliente_base';
     }
     if (!$conv && ($ja = wa_lead($wa_id))) {

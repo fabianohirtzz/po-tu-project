@@ -50,7 +50,7 @@ function fx_roteiros() {
 function fx_banco_inicial() {
     $GLOBALS['ESPERAS'] = [];
     return [
-        'po_wa_conversas' => [], 'po_wa_contatos' => [], 'po_leads' => [], 'po_wa_mensagens' => [],
+        'po_wa_conversas' => [], 'po_wa_contatos' => [], 'po_leads' => [], 'po_wa_mensagens' => [], 'po_wa_agenda' => [],
         'po_wa_textos' => [],
         'po_wa_fluxos' => [
             ['id' => 'f-triagem', 'nome' => 'Triagem', 'gatilho' => 'mensagem_nova', 'gatilho_valor' => null,

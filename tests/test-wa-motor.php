@@ -213,6 +213,43 @@ zera();
 $DB['po_leads'][] = ['id' => 'L4', 'wa_id' => $WA, 'telefone' => $WA, 'nome' => 'Lead', 'status' => 'semresposta', 'cliente' => false];
 ok(wa_processar(ev('mensagem', 'oi')) === 'fluxo', 'ficha que nao e cliente segue no fluxo');
 
+// --- 10d. SO NUMERO NOVO (25/11/2026, depois do primeiro teste real). O robo
+// entrou na conversa de uma cliente que falava com a Lais e nao estava na base.
+// Fica com a equipe: quem esta na agenda do celular dela (po_wa_agenda, carregada
+// do .vcf) e quem entrou por importacao (origem_import), aprovado ou nao.
+zera();
+$DB['po_wa_agenda'][] = ['wa_id' => $WA, 'acao' => 'nao_atender', 'origem' => 'agenda-esposa'];
+$ENVIADAS = [];
+$acao = wa_processar(ev('mensagem', 'Ok, agradeço.'));
+ok($acao === 'agenda', "contato da agenda dela nao entra no fluxo (deu: $acao)");
+ok(!$ENVIADAS, 'o robo nao manda nada para contato da agenda');
+ok($DB['po_wa_conversas'][0]['estado'] === 'humano', 'a conversa nasce com a equipe');
+ok(!$DB['po_leads'], 'contato da agenda nao vira lead no funil');
+ok(wa_processar(ev('mensagem', 'conhecer as viagens')) === 'silenciado' && !$ENVIADAS, 'e segue calado');
+
+zera();
+$DB['po_leads'][] = ['id' => 'L5', 'wa_id' => $WA, 'telefone' => $WA, 'nome' => 'Do Toninho', 'status' => 'semresposta',
+    'origem_import' => 'agenda-marido', 'revisado' => false, 'cliente' => false];
+$ENVIADAS = [];
+ok(wa_processar(ev('mensagem', 'oi')) === 'cliente_base' && !$ENVIADAS, 'contato importado, mesmo pendente na Revisao, fica com a equipe');
+
+// numero de TESTE: atendido sempre, mesmo estando na agenda e na base
+zera();
+$DB['po_wa_agenda'][] = ['wa_id' => $WA, 'acao' => 'teste', 'origem' => 'equipe'];
+$DB['po_leads'][] = ['id' => 'L6', 'wa_id' => $WA, 'telefone' => $WA, 'nome' => 'Testador', 'status' => 'semresposta',
+    'origem_import' => 'agenda-esposa', 'cliente' => true];
+ok(wa_processar(ev('mensagem', 'oi')) === 'fluxo', 'numero de teste passa por cima da agenda e da base');
+
+// banco fora do ar na consulta da agenda: nao arrisca o robo num conhecido, e
+// nao prende o numero com a equipe para sempre (a proxima mensagem tenta de novo)
+zera();
+wa_motor_set_deps(['select_estrito' => function ($t, $q) { return $t === 'po_wa_agenda' ? null : fx_consulta($t, $q); }]);
+$ENVIADAS = [];
+ok(wa_processar(ev('mensagem', 'oi')) === 'agenda_indisponivel', 'erro de leitura da agenda nao atende');
+ok(!$ENVIADAS && !$DB['po_wa_conversas'] && !$DB['po_leads'], 'nada sai e nada fica gravado');
+fx_instala();
+ok(wa_processar(ev('mensagem', 'oi')) === 'fluxo', 'com o banco de volta, o numero novo e atendido');
+
 // --- 11. roteiro sem PDF nao pode travar: manda o link da pagina
 zera();
 wa_processar(ev('mensagem', 'oi'));

@@ -373,7 +373,8 @@ ok(wa_processar(ev('mensagem', 'oi de novo')) === 'grafo_indisponivel', 'banco f
 ok($ENVIADAS === [], 'banco fora nao reenvia boas-vindas a quem esta no meio da conversa');
 // lista de fluxos indisponivel (banco fora) tambem nao e "nenhum fluxo"
 zera();
-wa_motor_set_deps(['select_estrito' => function () { return null; }]);
+// a agenda responde (senao a mensagem para nela, antes da lista de fluxos)
+wa_motor_set_deps(['select_estrito' => function ($t) { return $t === 'po_wa_agenda' ? [] : null; }]);
 ok(wa_processar(ev('mensagem', 'oi')) === 'grafo_indisponivel' && $ENVIADAS === [], 'lista de fluxos fora do ar: nada feito');
 
 // SEM fluxo_versao_id: e o caminho legitimo "sem fluxo".
