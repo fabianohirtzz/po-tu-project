@@ -199,6 +199,41 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
 
 ## Estado atual
 
+> ### ⚠ ROBÔ DO WHATSAPP ATIVO EM PRODUÇÃO (desde 25/11/2026, ~22h)
+>
+> **O webhook está LIGADO.** O app `4057725214358864` está inscrito na WABA real
+> `374665579072339` (número +55 48 9604-8882, `phone_id 444498328748420`) e os dois fluxos
+> estão `ativo = true` na versão 4: "Lista de espera" e "Boas-vindas e triagem". Toda
+> mensagem que chega no WhatsApp da Laís passa pelo `whatsapp.php` e o robô RESPONDE
+> número novo. **Qualquer deploy em `whatsapp.php`, `lib/wa-*.php` ou `po_wa_*` afeta
+> cliente real na hora.**
+>
+> - **Desligar (freio):** `DELETE /v26.0/374665579072339/subscribed_apps` com o `WA_TOKEN`
+>   do `config.local.php` do servidor. Sem 2FA, sem a Laís. As mensagens seguem chegando no
+>   celular dela; só o robô para. Religar = `POST` no mesmo endereço. Conferir com `GET`
+>   (`data: []` = desligado). O "Desligar fluxo" do painel só barra conversa NOVA.
+> - **Quem o robô NÃO atende** (conversa nasce com a equipe, `estado = humano`): número da
+>   agenda da Laís (tabela `po_wa_agenda`, `acao = nao_atender`, 2.257 números do .vcf; os
+>   números NÃO vão para o Git), ficha importada (`origem_import` preenchido: agendas e CRM,
+>   revisada ou não) e cliente aprovado. Qualquer fala da Laís pelo celular cala o robô
+>   naquele contato para sempre.
+> - **Números de teste** (`po_wa_agenda.acao = teste`): Fabiano e os dois do Carlos. O robô
+>   sempre os atende. Para testar de novo do zero, apagar a conversa, as mensagens e a ficha
+>   deles (backup em `~/.claude/projects/<projeto>/backups/`).
+> - **Correções do teste real de 25/11** (`lib/wa-motor.php`, `lib/wa-fluxo.php`): trava por
+>   contato (`wa_trava`, uma mensagem por vez por pessoa), mensagem enviada antes da pergunta
+>   atual não é respondida (`antes_da_pergunta`), clique em botão de mensagem antiga é
+>   ignorado (`clique_antigo`), pausa de 5 s depois do PDF (`WA_FLUXO_PAUSA_DOC`).
+> - **Ainda não feito:** cron do `wa-cron.php` no cPanel (lembrete de 20h e despedida de
+>   ~23h não saem sem ele) e forma de pagamento na conta da Meta (erro 141006: bloqueia só
+>   mensagem iniciada pela empresa, ou seja, a transmissão; as respostas do robô saem).
+> - **Para quem mexe no rastreio (Carlos):** lead do robô nasce em `po_leads` com
+>   `origem = 'whatsapp'` (ou `'pago'` quando vem `ad_id` de anúncio Click-to-WhatsApp, com
+>   `ctwa_clid`). Mensagem do site chega com `(ref X-XXXXX)` no texto. O `painel/index.html`
+>   do SERVIDOR tem as mudanças do Carlos e foi patchado lá (etiqueta PO, exportação); nunca
+>   subir o do repo por cima.
+
+
 - **Fase:** Build em andamento, página a página.
 - **Arquitetura de páginas:** o site é **multi-página**. `index.html` (home) é uma
   **tela cheia travada** (`position:fixed`, sem rolagem, vídeo + focus-rail) e **deve
