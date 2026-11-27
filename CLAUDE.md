@@ -251,7 +251,10 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
 >   atual não é respondida (`antes_da_pergunta`), clique em botão de mensagem antiga é
 >   ignorado (`clique_antigo`), pausa de 5 s depois do PDF (`WA_FLUXO_PAUSA_DOC`).
 > - **Ainda não feito:** cron do `wa-cron.php` no cPanel (lembrete de 20h e despedida de
->   ~23h não saem sem ele) e forma de pagamento na conta da Meta (erro 141006: bloqueia só
+>   ~23h não saem sem ele). Comando, de hora em hora (`0 * * * *`):
+>   `/usr/local/bin/php /home/pereirao/public_html/wa-cron.php >/dev/null 2>&1` (docroot medido
+>   em 27/11; PHP 8.5). Pela linha de comando o cron não exige a `WA_CRON_KEY`. Só o dono tem
+>   login do cPanel e forma de pagamento na conta da Meta (erro 141006: bloqueia só
 >   mensagem iniciada pela empresa, ou seja, a transmissão; as respostas do robô saem).
 > - **Para quem mexe no rastreio (Carlos):** lead do robô nasce em `po_leads` com
 >   `origem = 'whatsapp'` (ou `'pago'` quando vem `ad_id` de anúncio Click-to-WhatsApp, com
