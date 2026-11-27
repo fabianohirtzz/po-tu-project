@@ -371,8 +371,11 @@ tbody tr:last-child td{border-bottom:none}
    inteiro passava a andar de lado no celular, levando o cabecalho fixo
    junto. E o mesmo par de .table-wrap + .tscroll usado nas tabelas. */
 .fn-scroll{overflow-x:auto;padding-bottom:8px}
-.fn-board{display:grid;grid-template-columns:repeat(5,minmax(190px,1fr));gap:12px}
-@media(max-width:1100px){.fn-board{grid-template-columns:repeat(5,minmax(180px,1fr));width:max-content;min-width:100%}}
+/* Uma coluna por status, quantas houver: com repeat(5) fixo a sexta (Perdido,
+   quando a Lista de espera entrou) descia para outra linha, embaixo dos 800
+   cards do Contato feito, e sumia da tela (26/11/2026). */
+.fn-board{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(170px,1fr);gap:12px}
+@media(max-width:1100px){.fn-board{grid-auto-columns:minmax(180px,1fr);width:max-content;min-width:100%}}
 .fn-col{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 10px;
   display:flex;flex-direction:column;gap:8px;min-height:180px}
 .fn-col.fn-col--alvo{border-color:var(--azul);background:rgba(31,168,221,.06)}
