@@ -111,6 +111,9 @@ function fx_instala() {
            "tem cara de lead" (26/11) e exercitada a parte, em test-wa-motor 10h,
            que tira este duble. */
         'parece_lead'    => function () { return true; },
+        // A IA do primeiro contato nunca toca a rede no teste: sem veredito
+        // (null), o motor segue a regra de palavras. 10i troca este duble.
+        'ia_lead'        => function () { return null; },
         'destinos'       => function () { return []; },
         'roteiros'       => 'fx_roteiros',
         /* A lista de espera por destino mora em tabela propria (po_wa_espera) e

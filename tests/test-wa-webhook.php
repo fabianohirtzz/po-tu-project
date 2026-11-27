@@ -96,6 +96,15 @@ $ev = wa_parse_evento($st);
 ok($ev[0]['tipo'] === 'status' && $ev[0]['texto'] === 'delivered', 'status de entrega');
 
 // --- payload que nao interessa nao pode explodir
+// audio e imagem trazem o id da midia (e a legenda) para a IA do primeiro contato
+$ev = wa_parse_evento(['entry' => [['changes' => [['value' => ['messages' => [
+    ['from' => '5548999990000', 'id' => 'wA', 'timestamp' => '1', 'type' => 'audio', 'audio' => ['id' => 'MID-A', 'mime_type' => 'audio/ogg; codecs=opus']],
+    ['from' => '5548999990000', 'id' => 'wI', 'timestamp' => '1', 'type' => 'image', 'image' => ['id' => 'MID-I', 'caption' => 'quero esse']],
+    ['from' => '5548999990000', 'id' => 'wT', 'timestamp' => '1', 'type' => 'text', 'text' => ['body' => 'oi']],
+]]]]]]]);
+ok($ev[0]['media_id'] === 'MID-A' && $ev[0]['legenda'] === null, 'audio traz o id da midia');
+ok($ev[1]['media_id'] === 'MID-I' && $ev[1]['legenda'] === 'quero esse', 'imagem traz id e legenda');
+ok($ev[2]['media_id'] === null, 'texto nao tem midia');
 ok(wa_parse_evento([]) === [], 'json vazio devolve []');
 ok(wa_parse_evento(['entry' => [['changes' => [['value' => []]]]]]) === [], 'change sem mensagem devolve []');
 

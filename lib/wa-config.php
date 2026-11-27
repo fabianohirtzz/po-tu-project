@@ -32,6 +32,9 @@ function wa_config() {
            campanha.php inerte, e preenche-la com o numero de teste faria uma
            campanha falhar para a base inteira de uma vez, em definitivo. */
         'WA_TEST_PHONE_ID'     => '',
+        // Gemini: a IA que classifica o primeiro contato (lib/wa-ia.php). Vazia,
+        // a IA nao e chamada e o robo segue so a regra de palavras.
+        'GEMINI_API_KEY'       => '',
     ];
     $out = po_config();
     foreach ($defaults as $k => $v) {

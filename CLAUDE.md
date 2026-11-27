@@ -228,6 +228,15 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
 >   ou reação também. O erro aceito: lead que escreve só "oi" cai com a Laís.
 >   A agenda foi atualizada com o .vcf de 26/11 (2.778 contatos; leitor precisa de
 >   `pcre.backtrack_limit` alto por causa das fotos embutidas).
+> - **IA como segunda opinião no primeiro contato (27/11, `lib/wa-ia.php`).** O Gemini
+>   (`gemini-flash-lite-latest`, chave `GEMINI_API_KEY` do projeto pago) só CLASSIFICA, nunca
+>   responde. É chamado só em número desconhecido sem ficha, em dois casos: **mídia** (áudio,
+>   vídeo, imagem, baixada da Graph com o `WA_TOKEN`, até 8 MB), onde pode deixar entrar; e
+>   **texto com sinal fraco** (palavra de viagem, destino, roteiro), onde pode VETAR. Sinal
+>   forte (anúncio, site, botão) e texto sem sinal não gastam chamada. Aceita lead só com
+>   `confianca >= 0.8`. IA fora ou sem chave = regra de antes (`wa_ia_aceita` devolve null).
+>   Medido: ~1 s texto, ~2 s áudio, ~400 tokens. Veredito vai para o `error_log` do servidor
+>   (sem o conteúdo da mensagem). A política de privacidade ainda não cita o Google como operador.
 > - **Números de teste** (`po_wa_agenda.acao = teste`): Fabiano e os dois do Carlos. Desde
 >   27/11 eles passam por cima só de QUEM a pessoa é (agenda, base), nunca do que a mensagem
 >   diz: áudio solto, "oi" ou o nome da Laís ficam com ela (o Fabiano mandou áudio para a

@@ -26,6 +26,7 @@ require_once __DIR__ . '/wa-send.php';
 require_once __DIR__ . '/wa-roteiro.php';
 require_once __DIR__ . '/wa-fone.php';
 require_once __DIR__ . '/wa-camp-recibo.php';
+require_once __DIR__ . '/wa-ia.php';
 
 // WA_SITE mora em wa-fluxo.php (o motor ja o requer): um dono so para o dominio.
 
@@ -434,21 +435,42 @@ function wa_chamou_lais($texto) {
    como era antes do robo. Funcao PURA: destinos e roteiros chegam prontos, e
    so sao consultados se os sinais baratos nao bastarem (callables). */
 const WA_LEAD_PALAVRAS = ['viag', 'viaj', 'roteir', 'excurs', 'pacote', 'cruzeir', 'turismo', 'passeio', 'destino', 'passagen'];
-function wa_parece_lead($ev, $destinos, $roteiros) {
+/* A IA COMO SEGUNDA OPINIAO (27/11/2026, lib/wa-ia.php). Sinal FORTE (anuncio,
+   site, botao, mensagem padrao do anuncio) entra direto, sem chamada. Texto sem
+   sinal nenhum ("oi", vidraceiro) fica com a Lais, sem chamada. A IA so e
+   consultada em dois casos: MIDIA (audio, video, imagem: a regra nao le), onde
+   ela pode deixar entrar; e texto com sinal FRACO (palavra de viagem, destino,
+   roteiro), onde ela pode VETAR ("Lais, e aquela viagem do meu pai?"). Sem
+   veredito (IA fora, sem chave), vale exatamente a regra de antes. */
+function wa_parece_lead($ev, $destinos, $roteiros, $ia = null) {
     if (!empty($ev['ad_id']) || !empty($ev['ctwa_clid'])) return true;                       // anuncio
     if (in_array($ev['tipo_msg'] ?? '', ['button', 'button_reply', 'list_reply'], true)) return true; // resposta a modelo/botao
     $cru = (string) ($ev['texto'] ?? '');
     if (preg_match('/\(ref\s*[a-z]-/i', $cru)) return true;                                   // botao do site
     $t = ' ' . trim(wa_normaliza($cru)) . ' ';
-    if (trim($t) === '') return false;
     if (strpos($t, ' vim pelo site ') !== false || strpos($t, ' posso ter mais informac') !== false) return true;
-    foreach (explode(' ', trim($t)) as $tok) {
-        foreach (WA_LEAD_PALAVRAS as $p) if (strpos($tok, $p) === 0) return true;
+
+    $midia = in_array($ev['tipo_msg'] ?? '', WA_IA_MIDIAS, true);
+    $fraco = false;
+    $alvo = trim($cru . ' ' . (string) ($ev['legenda'] ?? ''));
+    if ($alvo !== '') {
+        foreach (explode(' ', trim(wa_normaliza($alvo))) as $tok) {
+            foreach (WA_LEAD_PALAVRAS as $p) if ($tok !== '' && strpos($tok, $p) === 0) { $fraco = true; break 2; }
+        }
+        if (!$fraco) {
+            $d = is_callable($destinos) ? $destinos() : $destinos;
+            $fraco = (bool) wa_match_destinos($alvo, (array) $d);
+        }
+        if (!$fraco) {
+            $r = is_callable($roteiros) ? $roteiros() : $roteiros;
+            $fraco = (bool) wa_match_roteiros($alvo, (array) $r);
+        }
     }
-    $d = is_callable($destinos) ? $destinos() : $destinos;
-    if (wa_match_destinos($cru, (array) $d)) return true;
-    $r = is_callable($roteiros) ? $roteiros() : $roteiros;
-    return (bool) wa_match_roteiros($cru, (array) $r);
+    if (!$fraco && !$midia) return false;
+
+    $ia = $ia ?? ($GLOBALS['WA_DEPS']['ia_lead'] ?? 'wa_ia_lead');
+    $aceita = wa_ia_aceita($ia($ev));
+    return $aceita === null ? $fraco : $aceita;
 }
 
 function wa_processar_evento($ev) {

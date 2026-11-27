@@ -118,6 +118,9 @@ function wa_parse_evento($json) {
                     'ad_id'     => $m['referral']['source_id'] ?? null,
                     'ctwa_clid' => $m['referral']['ctwa_clid'] ?? null,
                     'ts'        => (int) ($m['timestamp'] ?? time()),
+                    // Para a IA ouvir/ver o primeiro contato (lib/wa-ia.php).
+                    'media_id'  => wa_media_msg($m)['id'],
+                    'legenda'   => wa_media_msg($m)['legenda'],
                 ];
             }
 
@@ -181,4 +184,13 @@ function wa_texto_msg($m) {
     }
     if ($t === 'document') return $m['document']['filename'] ?? '';
     return '';
+}
+
+/* Id e legenda da midia (audio, video, imagem, documento, figurinha). O
+   conteudo nao vem no webhook: so o id, que a Graph troca pelos bytes. */
+function wa_media_msg($m) {
+    $t = $m['type'] ?? '';
+    $x = in_array($t, ['audio', 'video', 'image', 'document', 'sticker'], true) ? ($m[$t] ?? []) : [];
+    return ['id' => isset($x['id']) ? (string) $x['id'] : null,
+            'legenda' => isset($x['caption']) ? (string) $x['caption'] : null];
 }

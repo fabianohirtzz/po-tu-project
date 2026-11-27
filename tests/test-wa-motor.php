@@ -361,6 +361,47 @@ $fontes = '';
 foreach (glob(__DIR__ . '/../{lib/*.php,*.php}', GLOB_BRACE) as $f) $fontes .= file_get_contents($f);
 ok(strpos($fontes, "'parece_lead' =>") === false, 'nenhum codigo de producao injeta a regra');
 
+// --- 10i. A IA COMO SEGUNDA OPINIAO (27/11/2026). So e consultada onde a regra
+// de palavras nao basta: midia (audio/video/imagem) e texto com sinal FRACO
+// (palavra de viagem, destino, roteiro). Sinal forte (anuncio, site, botao) e
+// texto sem sinal nenhum nao gastam chamada. Sem veredito, vale a regra de antes.
+$IA_N = 0;
+$ia = function ($veredito) use (&$IA_N) { return function () use ($veredito, &$IA_N) { $IA_N++; return $veredito; }; };
+$sim = ['lead' => true, 'confianca' => 0.95, 'motivo' => ''];
+$duv = ['lead' => true, 'confianca' => 0.5, 'motivo' => ''];
+$nao = ['lead' => false, 'confianca' => 0.9, 'motivo' => ''];
+$pl = function ($texto, $extra, $iaf) use ($DEST, $ROT) { return wa_parece_lead(ev('mensagem', $texto, $extra), $DEST, $ROT, $iaf); };
+// midia
+ok($pl('', ['tipo_msg' => 'audio'], $ia($sim)) === true, 'audio que a IA ouviu como lead entra');
+ok($pl('', ['tipo_msg' => 'audio'], $ia($nao)) === false, 'audio pessoal fica com a Lais');
+ok($pl('', ['tipo_msg' => 'audio'], $ia($duv)) === false, 'audio em duvida fica com a Lais');
+ok($pl('', ['tipo_msg' => 'audio'], $ia(null)) === false, 'IA fora: audio fica com a Lais (como antes)');
+ok($pl('', ['tipo_msg' => 'image'], $ia($sim)) === true, 'imagem tambem passa pela IA');
+ok($pl('', ['tipo_msg' => 'video'], $ia($sim)) === true, 'video tambem passa pela IA');
+// texto com sinal fraco: a IA pode vetar
+ok($pl('Laís, e aquela viagem do meu pai?', [], $ia($nao)) === false, 'conhecido falando de viagem: a IA veta');
+ok($pl('Quero saber da excursão para o Peru', [], $ia($sim)) === true, 'lead de verdade segue entrando');
+ok($pl('Quero saber da excursão para o Peru', [], $ia(null)) === true, 'IA fora: palavra de viagem entra (como antes)');
+ok($pl('tenho interesse na Toscana', [], $ia($duv)) === false, 'destino com IA em duvida fica com a Lais');
+// sem chamada: sinal forte e texto sem sinal
+$IA_N = 0;
+ok($pl('Olá! Posso ter mais informações sobre isso?', [], $ia($nao)) === true, 'mensagem do anuncio entra sem perguntar a IA');
+ok($pl('oi', ['ad_id' => '1'], $ia($nao)) === true, 'anuncio entra sem perguntar a IA');
+ok($pl('Olá! Vim pelo site e quero mais informações. (ref S-QGGGC)', [], $ia($nao)) === true, 'site entra sem perguntar a IA');
+ok($pl('oi', [], $ia($sim)) === false, '"oi" nao pergunta a IA e fica com a Lais');
+ok($pl('Ok, agradeço.', [], $ia($sim)) === false, 'texto sem sinal nao pergunta a IA');
+ok($pl('', ['tipo_msg' => 'document'], $ia($sim)) === false, 'documento nao pergunta a IA');
+ok($IA_N === 0, "nenhum desses gastou chamada (gastou $IA_N)");
+// no motor: o duble de producao e o wa_ia_lead, e o teste injeta pelo deps
+zera();
+wa_motor_set_deps(['parece_lead' => 'wa_parece_lead', 'destinos' => function () { return []; }, 'ia_lead' => $ia($sim)]);
+ok(wa_processar(ev('mensagem', '', ['tipo_msg' => 'audio'])) === 'fluxo', 'motor: audio de lead entra no fluxo');
+zera();
+wa_motor_set_deps(['parece_lead' => 'wa_parece_lead', 'destinos' => function () { return []; }, 'ia_lead' => $ia($nao)]);
+ok(wa_processar(ev('mensagem', '', ['tipo_msg' => 'audio'])) === 'nao_lead', 'motor: audio pessoal fica com a Lais');
+fx_instala();
+ok(strpos($fontes, "'ia_lead' =>") === false, 'nenhum codigo de producao injeta a IA');
+
 // numero de teste que chama a Lais pelo nome tambem sai do robo (27/11/2026):
 // a equipe conversa com ela por esses numeros.
 zera();
