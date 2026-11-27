@@ -241,6 +241,19 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
 >   inicial (`wa_ia_transcricao`, mesmo `wamid`), então áudio pedindo "roteiro da Grécia" pula
 >   para a Grécia em vez do menu. Só a primeira mensagem decide: depois que a conversa vai para
 >   a Laís, o robô não volta nela.
+> - **Lead de anúncio recebe o roteiro do anúncio (27/11, `689f33b`).** Dez leads do anúncio do
+>   Vietnã (`ad_id 52508154975981`) mandaram a mensagem padrão ("Posso ter mais informações sobre
+>   isso?") e receberam o menu. Agora, no primeiro contato, o roteiro do anúncio vem de
+>   `po_wa_anuncios` (ad_id → slug) ou do **título/texto do anúncio** que a Meta manda no
+>   `referral` (`headline`/`body`, casado contra os roteiros do site, um só); nesse caso o mapa
+>   **aprende sozinho**. Aí a conversa entra pela porta do atalho de roteiro do card inicial
+>   (saudação, PDF, pergunta), ou pelo `encerrado` se o roteiro saiu da venda. A frase da pessoa
+>   vem antes ("quero falar com alguém" vence o anúncio). Mensagem `unsupported` vinda de
+>   anúncio agora entra no fluxo (o Sândro ficou sem resposta). O `referral` fica gravado em
+>   `po_wa_mensagens.payload.anuncio`. A Graph NÃO lê o anúncio pelo id (sem `ads_read`).
+>   Junto: a **lista casa frase inteira** ("Roteiro com valores para o Vietna" caía no "sem data
+>   para Vietnã" com o Vietnã em 1º na lista) e o **atalho de destino não dispara** quando a
+>   frase nomeia roteiro à venda.
 > - **Números de teste** (`po_wa_agenda.acao = teste`): Fabiano e os dois do Carlos. Desde
 >   27/11 eles passam por cima só de QUEM a pessoa é (agenda, base), nunca do que a mensagem
 >   diz: áudio solto, "oi" ou o nome da Laís ficam com ela (o Fabiano mandou áudio para a
@@ -1988,6 +2001,15 @@ Spec: `docs/superpowers/specs/2026-09-11-automacao-whatsapp-crm-design.md`.
 - **COLUNA PERDIDO SUMIDA DO FUNIL (26/11/2026): CORRIGIDO E NO AR.** O `.fn-board` tinha `repeat(5,...)` fixo; com a Lista de espera (11/11) virou 6 colunas e o Perdido descia para uma segunda linha, embaixo dos ~840 cards do Contato feito. Agora `grid-auto-flow:column` (uma coluna por status, quantas houver). Servidor patchado na copia de la (`painel.css?v=27`, tem mudancas do Carlos); repo em `v=22`.
 - **CONTATO FEITO SO COM QUEM ESCREVEU (26/11/2026): NO AR** (`funil.js?v=5` no servidor, `v=4` no repo). Ficha importada (`origemImport`: agendas, CRM) parada na etapa inicial (`novo`/`semresposta`) NAO entra no quadro do funil: ela nasce com o mesmo DEFAULT do formulario do site e enchia o Contato feito com ~820 fichas. Saindo da etapa inicial (espera, #proposta, venda, perdido) aparece. Regra em `poAgrupaFunil`, `test-funil.mjs`. Fichas de teste do Fabiano e do Carlos apagadas (backup em `backups/`).
 - **ETIQUETA PO/CIASC NA ABA CLIENTES (25/11/2026): NO AR** (`clientes.js?v=5`). A pessoa leva a etiqueta se qualquer ficha dela veio marcada da agenda; a regra e a MESMA da Revisao (`poRevMarcador` sobre o nome original em `payload_import.raw`), sem coluna nova. Filtro `#cli-marcador` (Todos / So PO / So CIASC) e etiqueta tambem na ficha. O `index.html` do servidor foi PATCHADO na copia de la (tem mudancas do Carlos).
+- **ASSINATURA ANIMADA DA FREELA NO RODAPÉ (27/11/2026): NO AR.** Mesmo padrão da Barra Boat:
+  pílula com um avião parado no início de uma rota tracejada; no hover ele decola por
+  `offset-path`, deixa o rastro azul→verde da marca e pousa no pin. "Sites prontos para decolar,
+  desenvolvido pela Freela In Home" (o emoji ✈️ saiu: regra de copy). CSS único
+  `assets/css/assinatura.css` (`?v=1`) carregado pelas 6 páginas com rodapé; a curva existe em
+  3 lugares (2 `<path>` + `offset-path`) e o `test-assinatura.php` exige que sejam iguais.
+  **contato/nossa-historia/politica e faq/roteiro/roteiros.php do servidor têm as tags de
+  rastreio do Carlos (`origem.js`, `rastreio.js`) que não estão no repo**: a assinatura foi
+  aplicada sobre as cópias de lá. Nunca subir esses arquivos do repo por cima.
 - **A confirmar com a cliente:** identidade nas fotos do arquivo (legendei por local/era,
   ex. "Cuba · arquivo Ilhatur"; se o homem jovem for o próprio fundador, dá para virar um
   "então & agora") · destino dos botões "Ver roteiro" (hoje `#`; criar páginas de roteiro

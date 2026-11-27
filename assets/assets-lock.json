@@ -59,5 +59,9 @@
   "roteiros-shared.js": {
     "v": 10,
     "sha": "b33c970f3f9a4f0f"
+  },
+  "assinatura.css": {
+    "v": 1,
+    "sha": "2eaf5b50c5638070"
   }
 }
