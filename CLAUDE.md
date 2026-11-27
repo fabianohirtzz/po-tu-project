@@ -228,8 +228,10 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
 >   ou reação também. O erro aceito: lead que escreve só "oi" cai com a Laís.
 >   A agenda foi atualizada com o .vcf de 26/11 (2.778 contatos; leitor precisa de
 >   `pcre.backtrack_limit` alto por causa das fotos embutidas).
-> - **Números de teste** (`po_wa_agenda.acao = teste`): Fabiano e os dois do Carlos. O robô
->   sempre os atende. Para testar de novo do zero, apagar a conversa, as mensagens e a ficha
+> - **Números de teste** (`po_wa_agenda.acao = teste`): Fabiano e os dois do Carlos. Desde
+>   27/11 eles passam por cima só de QUEM a pessoa é (agenda, base), nunca do que a mensagem
+>   diz: áudio solto, "oi" ou o nome da Laís ficam com ela (o Fabiano mandou áudio para a
+>   Laís e o robô entrou). Para testar o robô, escrever como lead ("quero saber da viagem"). Para testar de novo do zero, apagar a conversa, as mensagens e a ficha
 >   deles (backup em `~/.claude/projects/<projeto>/backups/`).
 > - **Correções do teste real de 25/11** (`lib/wa-motor.php`, `lib/wa-fluxo.php`): trava por
 >   contato (`wa_trava`, uma mensagem por vez por pessoa), mensagem enviada antes da pergunta

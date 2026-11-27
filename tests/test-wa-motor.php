@@ -336,20 +336,36 @@ zera();
 wa_motor_set_deps(['parece_lead' => 'wa_parece_lead', 'destinos' => function () { return []; }]);
 $DB['po_leads'][] = ['id' => 'L9', 'wa_id' => $WA, 'telefone' => $WA, 'nome' => 'Do site', 'status' => 'semresposta', 'cliente' => false];
 ok(wa_processar(ev('mensagem', 'oi')) === 'fluxo', 'ficha do site segue com o robo');
-// numero de teste passa por cima da regra
+// numero de teste OBEDECE a regra (27/11/2026): o Fabiano mandou um audio para a
+// Lais pelo numero de teste e ganhou as boas-vindas. O teste vale como um
+// desconhecido: passa por cima de QUEM a pessoa e (agenda, base), nunca do que a
+// mensagem DIZ. Para testar o robo, escreve como lead ("quero saber da viagem").
 zera();
 wa_motor_set_deps(['parece_lead' => 'wa_parece_lead', 'destinos' => function () { return []; }]);
 $DB['po_wa_agenda'][] = ['wa_id' => $WA, 'acao' => 'teste', 'origem' => 'equipe'];
-ok(wa_processar(ev('mensagem', 'oi')) === 'fluxo', 'numero de teste ignora a regra');
+$ENVIADAS = [];
+ok(wa_processar(ev('mensagem', '', ['tipo_msg' => 'audio'])) === 'nao_lead' && !$ENVIADAS, 'audio do numero de teste fica com a Lais');
+zera();
+wa_motor_set_deps(['parece_lead' => 'wa_parece_lead', 'destinos' => function () { return []; }]);
+$DB['po_wa_agenda'][] = ['wa_id' => $WA, 'acao' => 'teste', 'origem' => 'equipe'];
+ok(wa_processar(ev('mensagem', 'oi')) === 'nao_lead', '"oi" do numero de teste fica com a Lais');
+zera();
+wa_motor_set_deps(['parece_lead' => 'wa_parece_lead', 'destinos' => function () { return []; }]);
+$DB['po_wa_agenda'][] = ['wa_id' => $WA, 'acao' => 'teste', 'origem' => 'equipe'];
+ok(wa_processar(ev('mensagem', 'quero saber da viagem')) === 'fluxo', 'numero de teste escrevendo como lead entra no fluxo');
+zera();
+$DB['po_wa_agenda'][] = ['wa_id' => $WA, 'acao' => 'teste', 'origem' => 'equipe'];
+ok(wa_processar(ev('mensagem', '', ['tipo_msg' => 'reaction'])) === 'nao_lido', 'reacao do numero de teste fica com a Lais');
 // em producao ninguem define o duble: so os testes
 $fontes = '';
 foreach (glob(__DIR__ . '/../{lib/*.php,*.php}', GLOB_BRACE) as $f) $fontes .= file_get_contents($f);
 ok(strpos($fontes, "'parece_lead' =>") === false, 'nenhum codigo de producao injeta a regra');
 
-// numero de teste segue atendido mesmo chamando a Lais
+// numero de teste que chama a Lais pelo nome tambem sai do robo (27/11/2026):
+// a equipe conversa com ela por esses numeros.
 zera();
 $DB['po_wa_agenda'][] = ['wa_id' => $WA, 'acao' => 'teste', 'origem' => 'equipe'];
-ok(wa_processar(ev('mensagem', 'Laís, a principio o robo ta tudo bem')) === 'fluxo', 'numero de teste ignora a regra do nome');
+ok(wa_processar(ev('mensagem', 'Laís, a principio o robo ta tudo bem')) === 'chamou_lais', 'numero de teste obedece a regra do nome');
 
 // --- 10e. MENSAGENS FORA DE ORDEM (segundo teste real, 25/11/2026). O Carlos
 // mandou 3 mensagens em 6 segundos e tocou no mesmo botao de duas boas-vindas.

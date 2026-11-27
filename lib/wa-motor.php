@@ -587,6 +587,11 @@ function wa_processar_evento($ev) {
         if ($linhas === null) return 'agenda_indisponivel';
         $agenda = (string) ($linhas[0]['acao'] ?? '');
     }
+    /* O numero de TESTE passa por cima de QUEM a pessoa e (agenda, base), nunca
+       do que a mensagem DIZ (nome da Lais, mensagem ilegivel, cara de lead).
+       Em 27/11/2026 o Fabiano mandou um audio para a Lais pelo numero de teste
+       e o robo entrou: a equipe tambem conversa com ela por esses numeros. Para
+       testar o robo, escreve-se como lead ("quero saber da viagem"). */
     $teste = $agenda === 'teste';
 
     if (!$conv && !$teste && $agenda === 'nao_atender' && !wa_lead($wa_id)) {
@@ -611,7 +616,7 @@ function wa_processar_evento($ev) {
        as boas-vindas do robo. Lead de anuncio e do site nao escreve o nome
        dela. Vale em qualquer mensagem enquanto o robo conduz, nao so na
        primeira. Sem ficha, nao vira lead no funil (igual a agenda). */
-    if (!$teste && wa_chamou_lais($texto)) {
+    if (wa_chamou_lais($texto)) {
         wa_conversa_set($wa_id, ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
         if (wa_lead($wa_id)) wa_nota_lead($wa_id, 'A pessoa chamou a Laís pelo nome no WhatsApp: o robô saiu e a conversa fica com a equipe.');
         return 'chamou_lais';
@@ -621,7 +626,7 @@ function wa_processar_evento($ev) {
        outro sistema) e reacao (so existe sobre mensagem que ja estava na
        conversa) nao sao lead chegando: o robo dava boas-vindas a algo que nem
        leu, e a ficha virava lead falso no funil. Fica com a equipe. */
-    if (!$conv && !$teste && in_array($ev['tipo_msg'] ?? '', ['unsupported', 'reaction'], true)) {
+    if (!$conv && in_array($ev['tipo_msg'] ?? '', ['unsupported', 'reaction'], true)) {
         wa_conversa_set($wa_id, ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
         return 'nao_lido';
     }
@@ -630,7 +635,7 @@ function wa_processar_evento($ev) {
     // A regra e injetavel so para os testes antigos, que usam "oi" como primeira
     // mensagem generica; em producao nada a define e vale wa_parece_lead.
     $parece_lead = $GLOBALS['WA_DEPS']['parece_lead'] ?? 'wa_parece_lead';
-    if (!$conv && !$teste && !wa_lead($wa_id)
+    if (!$conv && !wa_lead($wa_id)
         && !$parece_lead($ev, function () { return wa_call('destinos'); }, function () { return wa_call('roteiros'); })) {
         wa_conversa_set($wa_id, ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
         return 'nao_lead';
