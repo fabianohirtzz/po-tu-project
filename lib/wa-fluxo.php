@@ -324,6 +324,11 @@ function wa_fluxo_atalho($grafo, $card, $texto_cru, $ctx) {
             return $achou;
         }
         if ($a['tipo'] === 'destino') {
+            /* O card do destino diz "ainda nao temos data aberta para X".
+               Se a frase nomeia um roteiro A VENDA, isso e mentira (27/11/2026:
+               "Vietna" na lista caiu aqui com o Vietna em primeiro na lista).
+               Vale mesmo com DOIS roteiros na frase: ambiguo nao e "sem data". */
+            if (wa_match_roteiros($texto_cru, wa_fluxo_roteiros_venda(wa_fl_call('roteiros')))) continue;
             $nome = wa_destino_unico($texto_cru, (array) wa_fl_call('destinos'));
             if ($nome === null) continue;
             $achou['destino_nome'] = $nome;
@@ -345,6 +350,33 @@ function wa_fluxo_atalho($grafo, $card, $texto_cru, $ctx) {
             $dests = (array) wa_fl_call('destinos');
             $achou['destino_nome'] = wa_destino_unico($texto_cru, $dests) ?? wa_destino_unico($titulo, $dests) ?? $titulo;
             return $achou;
+        }
+    }
+    return null;
+}
+
+/* O atalho do card para um roteiro JA CONHECIDO (o do anuncio), sem frase.
+   Mesma porta e mesma ordem de wa_fluxo_atalho: `roteiro` se ele esta a venda,
+   `encerrado` se esta no site mas fora da venda. `palavras` e `destino` sao de
+   frase e nao se aplicam. null se o card nao tem a porta ou o roteiro nao esta
+   no site. (27/11/2026: lead do anuncio do Vietna recebia o menu.) */
+function wa_fluxo_atalho_slug($grafo, $card, $slug) {
+    $slug = (string) $slug;
+    if ($slug === '') return null;
+    foreach (wa_atalhos_do_card($card) as $a) {
+        $d = $a['destino'];
+        if (!is_string($d) || $d === '' || !isset($grafo['cards'][$d])) continue;
+        $achou = ['card' => $d, 'tipo' => $a['tipo'], 'saudacao' => $a['saudacao'],
+                  'roteiro_slug' => $slug, 'destino_nome' => null];
+        if ($a['tipo'] === 'roteiro') {
+            if (in_array($slug, array_column(wa_fluxo_roteiros_venda(wa_fl_call('roteiros')), 'slug'), true)) return $achou;
+        } elseif ($a['tipo'] === 'encerrado') {
+            foreach (wa_fluxo_roteiros_encerrados(wa_fl_call('roteiros')) as $r) {
+                if ((string) $r['slug'] !== $slug) continue;
+                $titulo = trim((string) $r['titulo']);
+                $achou['destino_nome'] = wa_destino_unico($titulo, (array) wa_fl_call('destinos')) ?? $titulo;
+                return $achou;
+            }
         }
     }
     return null;
@@ -501,6 +533,17 @@ function wa_fluxo_casa_roteiro($resposta, $slugs_enviados, $venda) {
     }
     if (count($iguais) === 1) return (string) array_key_first($iguais);
     if (!$iguais && count($contem) === 1) return (string) array_key_first($contem);
+    /* Frase inteira ("Roteiro com valores para o Vietna", 27/11/2026): nao e
+       pedaco do titulo, mas nomeia um roteiro da lista. Casa palavra a palavra,
+       o mesmo casamento do atalho de roteiro, e so com UM roteiro na frase. Com
+       dois ou mais pedacos de titulo ja ambiguos, nao tenta: a ambiguidade e
+       real e quem resolve e a pessoa. */
+    if (!$iguais && !$contem) {
+        $na_lista = array_values(array_filter((array) $venda, function ($r) use ($slugs_enviados) {
+            return in_array((string) ($r['slug'] ?? ''), $slugs_enviados, true);
+        }));
+        return wa_roteiro_unico($resposta, $na_lista);
+    }
     return null;
 }
 

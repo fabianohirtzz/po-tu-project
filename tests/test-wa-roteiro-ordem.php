@@ -172,7 +172,9 @@ $n_env  = preg_match_all('/wa_fluxo_roteiros_venda\(wa_fl_call\(\x27roteiros\x27
    numerada para o cliente, entao nao e uma terceira ordem possivel. */
 $n_enc  = preg_match_all('/wa_fluxo_roteiros_encerrados\(wa_fl_call\(\x27roteiros\x27\)\)/', $src, $m4);
 ok($n_call >= 2, 'ha ao menos as duas leituras conhecidas do catalogo, achei ' . $n_call);
-ok($n_enc === 1, 'o atalho encerrado le o catalogo uma vez, envolvido');
+/* Duas desde 27/11/2026: o atalho encerrado por FRASE e o por ROTEIRO JA
+   CONHECIDO (o do anuncio, wa_fluxo_atalho_slug). Nenhuma das duas monta lista. */
+ok($n_enc === 2, 'os atalhos encerrado leem o catalogo envolvidos, achei ' . $n_enc);
 ok($n_call === $n_env + $n_enc + 1,
    'toda leitura do catalogo em wa-fluxo.php passa por wa_fluxo_roteiros_venda, fora a da closure: leituras=' . $n_call . ' envolvidas=' . $n_env);
 ok(preg_match('/wa_fluxo_roteiros_venda\(wa_fl_call\(\x27roteiros\x27\)\)/', $src) === 1,

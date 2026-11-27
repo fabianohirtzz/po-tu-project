@@ -230,4 +230,66 @@ wa_processar(ev('mensagem', 'bom dia', ['ad_id' => 'ad-1']));
 ok(($DB['po_wa_conversas'][0]['roteiro_slug'] ?? null) === 'chile-e-deserto-do-atacama',
     'frase que nao casa atalho nao apaga o roteiro semeado pelo anuncio');
 
+/* ---------- LEAD DE ANUNCIO DE UM ROTEIRO (27/11/2026) ----------
+   Dez leads vieram do anuncio do Vietna escrevendo a mensagem padrao do
+   anuncio ("Posso ter mais informacoes sobre isso?") e receberam o menu. O
+   anuncio JA diz qual e a viagem: o robo manda o roteiro direto, pela mesma
+   porta do atalho de roteiro (saudacao antes, PDF, pergunta seguinte). */
+function ti_grafo_enc() {
+    $g = ti_grafo();
+    $g['cards']['boas']['config']['atalhos'][] = ['tipo' => 'encerrado', 'palavras' => [], 'destino' => 'hum', 'saudacao' => ''];
+    return $g;
+}
+$PADRAO = 'Olá! Posso ter mais informações sobre isso?';
+
+ti_prep(ti_grafo());
+wa_motor_set_anuncios(['ad-1' => 'chile-e-deserto-do-atacama']);
+wa_processar(ev('mensagem', $PADRAO, ['ad_id' => 'ad-1']));
+ok(($DB['po_wa_conversas'][0]['card_atual'] ?? null) === 'data', 'anuncio mapeado: o lead vai direto ao roteiro (parou em: ' . (string) ($DB['po_wa_conversas'][0]['card_atual'] ?? 'null') . ')');
+ok(($ENVIADAS[0][0] ?? '') === 'text' && $ENVIADAS[0][2] === TI_SAUD, 'com a saudacao do atalho de roteiro antes');
+ok(($ENVIADAS[1][0] ?? '') === 'doc' && strpos($ENVIADAS[1][2], 'c.pdf') !== false, 'e o PDF do roteiro do anuncio');
+
+// a pessoa pedindo atendente vence o anuncio
+ti_prep(ti_grafo());
+wa_motor_set_anuncios(['ad-1' => 'chile-e-deserto-do-atacama']);
+wa_processar(ev('mensagem', 'quero falar com uma pessoa', ['ad_id' => 'ad-1']));
+ok(($DB['po_wa_conversas'][0]['card_atual'] ?? null) === 'hum', 'pedido de atendente vence o roteiro do anuncio');
+
+// anuncio NAO mapeado: o titulo/texto do anuncio decide, e o mapa aprende
+ti_prep(ti_grafo());
+wa_processar(ev('mensagem', $PADRAO, ['ad_id' => 'ad-9', 'anuncio_texto' => 'Turquia com Antália Saídas em maio']));
+ok(($DB['po_wa_conversas'][0]['card_atual'] ?? null) === 'data', 'anuncio sem mapa: o texto do anuncio leva ao roteiro');
+ok(strpos((string) ($ENVIADAS[1][2] ?? ''), 't.pdf') !== false, 'o PDF e o do roteiro que o anuncio nomeia');
+ok(($DB['po_wa_anuncios'][0]['ad_id'] ?? '') === 'ad-9' && ($DB['po_wa_anuncios'][0]['roteiro_slug'] ?? '') === 'turquia',
+    'e o mapa anuncio -> roteiro aprende, para os proximos leads do mesmo anuncio');
+
+// texto do anuncio que nomeia DOIS roteiros nao escolhe nem aprende
+ti_prep(ti_grafo());
+wa_processar(ev('mensagem', $PADRAO, ['ad_id' => 'ad-8', 'anuncio_texto' => 'Turquia e Chile em 2027']));
+ok(($DB['po_wa_conversas'][0]['card_atual'] ?? null) === 'boas', 'anuncio de dois roteiros: boas-vindas');
+ok(empty($DB['po_wa_anuncios']), 'e nada e aprendido');
+
+// roteiro do anuncio fora da venda: o atalho `encerrado` (lista de espera)
+ti_prep(ti_grafo_enc());
+wa_motor_set_deps(['roteiros' => function () { $r = ti_roteiros(); $r[0]['status_viagem'] = 'esgotado'; return $r; }]);
+wa_motor_set_anuncios(['ad-1' => 'chile-e-deserto-do-atacama']);
+wa_processar(ev('mensagem', $PADRAO, ['ad_id' => 'ad-1']));
+ok(($DB['po_wa_conversas'][0]['card_atual'] ?? null) === 'hum' && ($DB['po_wa_conversas'][0]['roteiro_slug'] ?? '') === 'chile-e-deserto-do-atacama',
+    'roteiro do anuncio encerrado segue o atalho encerrado do card');
+ok(($DB['po_wa_conversas'][0]['destino_nome'] ?? '') !== '', 'com o destino gravado para a lista de espera');
+
+/* PRIMEIRA MENSAGEM QUE A API NAO LE, MAS VEIO DE ANUNCIO. O Sandro clicou no
+   anuncio do Vietna e a mensagem chegou como `unsupported`: ficou com a Lais e
+   ninguem respondeu. Vindo de anuncio, e lead: entra no fluxo. */
+ti_prep(ti_grafo());
+wa_motor_set_deps(['parece_lead' => 'wa_parece_lead']);
+wa_motor_set_anuncios(['ad-1' => 'chile-e-deserto-do-atacama']);
+$acao = wa_processar(ev('mensagem', '', ['tipo_msg' => 'unsupported', 'ad_id' => 'ad-1']));
+ok($acao !== 'nao_lido', 'unsupported de anuncio nao fica parado (deu: ' . $acao . ')');
+ok(($DB['po_wa_conversas'][0]['card_atual'] ?? null) === 'data', 'e recebe o roteiro do anuncio');
+// sem anuncio, segue com a equipe
+ti_prep(ti_grafo());
+wa_motor_set_deps(['parece_lead' => 'wa_parece_lead']);
+ok(wa_processar(ev('mensagem', '', ['tipo_msg' => 'unsupported'])) === 'nao_lido', 'unsupported sem anuncio segue com a equipe');
+
 echo "OK test-wa-atalho-inicial\n";

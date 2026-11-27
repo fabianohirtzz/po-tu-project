@@ -23,6 +23,7 @@ $ROTEIROS = [
 $DESTINOS = [
     ['nome' => 'Itália', 'palavras' => 'italia, roma'],
     ['nome' => 'Egito',  'palavras' => 'egito, cairo'],
+    ['nome' => 'Turquia', 'palavras' => 'turquia, istambul'],
 ];
 wa_fluxo_set_deps([
     'roteiros' => function () use ($ROTEIROS) { return $ROTEIROS; },
@@ -62,6 +63,10 @@ $cards = [
         'fallback' => 'hum', 'lembrete_ativo' => true, 'lembrete_texto' => 'Oi?']),
     card('hum', 'humano'),
     card('fim', 'fim'),
+    card('sodest', 'botoes', [
+        'opcoes'  => [['id' => 'b1', 'rotulo' => 'Ver roteiros', 'destino' => 'lst']],
+        'config'  => ['atalhos' => [['tipo' => 'destino', 'destino' => 'semdata']]],
+        'fallback' => 'ops', 'lembrete_ativo' => true, 'lembrete_texto' => 'Oi?']),
 ];
 $g = wa_fluxo_grafo_de($fx, $cards);
 $ctx0 = ['roteiro_slug' => null, 'tentativas' => 0];
@@ -237,5 +242,13 @@ foreach (['wa-motor.php', 'wa-sim.php'] as $arq) {
 $motor = str_replace("\r\n", "\n", file_get_contents(__DIR__ . '/../lib/wa-motor.php'));
 ok(preg_match('/wa_fluxo_proximo\(\$grafo, \$atual, \$resposta, \$ctx, \$texto\)/', $motor) === 1,
    'no ponto 2 o motor passa $texto (a frase do cliente), nao vazio');
+
+/* ---------- destino com roteiro A VENDA nao e "sem data" (27/11/2026) ----------
+   O card `semdata` diz "ainda nao temos data aberta para X". Se ha roteiro a
+   venda que a frase nomeia, isso e mentira: o atalho de destino nao dispara. */
+$r = rota($g, 'sodest', '', $ctx0, 'quero a turquia');
+ok($r['card'] !== 'semdata', 'destino que tem roteiro a venda nao vai para o sem data (foi: ' . $r['card'] . ')');
+$r = rota($g, 'sodest', '', $ctx0, 'queria saber do egito');
+ok($r['card'] === 'semdata', 'destino sem roteiro a venda segue indo para o sem data');
 
 echo "OK test-wa-atalho-rota\n";

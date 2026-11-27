@@ -55,6 +55,24 @@ $ad = json_decode('{
 $ev = wa_parse_evento($ad);
 ok($ev[0]['ad_id'] === '120210000', 'ad_id do referral');
 ok($ev[0]['ctwa_clid'] === 'ARxyz', 'ctwa_clid do referral');
+ok($ev[0]['anuncio_texto'] === '', 'referral sem titulo nem texto: anuncio_texto vazio');
+
+/* O TEXTO do anuncio (27/11/2026). A Meta manda o titulo (headline) e o texto
+   (body) do anuncio no referral. E o que diz de QUAL viagem o lead quer saber:
+   a mensagem dele e a padrao do anuncio ("Posso ter mais informacoes sobre
+   isso?"), que nao nomeia nada. */
+$ad2 = json_decode('{
+ "entry":[{"changes":[{"value":{
+   "messages":[{"from":"5548996048882","id":"wamid.BBC","timestamp":"1757548800",
+     "type":"text","text":{"body":"Olá! Posso ter mais informações sobre isso?"},
+     "referral":{"source_id":"999","source_type":"ad","source_url":"https://www.instagram.com/p/x",
+       "headline":"Vietnã completo","body":"Saída em fevereiro de 2027","ctwa_clid":"ARq"}}]
+ }}]}]}', true);
+$ev = wa_parse_evento($ad2);
+ok($ev[0]['anuncio_texto'] === 'Vietnã completo Saída em fevereiro de 2027', 'titulo e texto do anuncio: ' . $ev[0]['anuncio_texto']);
+ok(($ev[0]['anuncio']['headline'] ?? '') === 'Vietnã completo' && ($ev[0]['anuncio']['source_url'] ?? '') === 'https://www.instagram.com/p/x',
+    'o referral inteiro (sem o ctwa_clid) segue no evento, para ficar registrado');
+
 
 // --- resposta do menu de lista vira o slug escolhido
 $lista = json_decode('{

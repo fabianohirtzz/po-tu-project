@@ -651,7 +651,11 @@ function wa_processar_evento($ev) {
        outro sistema) e reacao (so existe sobre mensagem que ja estava na
        conversa) nao sao lead chegando: o robo dava boas-vindas a algo que nem
        leu, e a ficha virava lead falso no funil. Fica com a equipe. */
-    if (!$conv && in_array($ev['tipo_msg'] ?? '', ['unsupported', 'reaction'], true)) {
+    /* Excecao (27/11/2026): veio de ANUNCIO. A mensagem do anuncio do Vietna
+       chegou como `unsupported` e o lead ficou sem resposta nenhuma. Quem clica
+       no anuncio quer saber da viagem, leia o robo a mensagem ou nao. */
+    $de_anuncio = !empty($ev['ad_id']) || !empty($ev['ctwa_clid']);
+    if (!$conv && !$de_anuncio && in_array($ev['tipo_msg'] ?? '', ['unsupported', 'reaction'], true)) {
         wa_conversa_set($wa_id, ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
         return 'nao_lido';
     }
@@ -817,6 +821,19 @@ function wa_processar_evento($ev) {
             $slug = $mapa[$ev['ad_id']] ?? null;
         }
     }
+    /* Anuncio que o mapa nao conhece: o TITULO e o TEXTO do anuncio (vem no
+       referral) dizem a viagem. Um roteiro so, entre os que estao no site; e o
+       mapa aprende, para os proximos leads do mesmo anuncio (inclusive os que
+       chegam sem texto, como `unsupported`). Dois roteiros no texto: nada. */
+    if ($slug === null && !empty($ev['ad_id']) && trim((string) ($ev['anuncio_texto'] ?? '')) !== '') {
+        $no_site = array_values(array_filter((array) wa_call('roteiros'), 'wa_fluxo_roteiro_no_site'));
+        $slug = wa_roteiro_unico((string) $ev['anuncio_texto'], $no_site);
+        if ($slug !== null) {
+            wa_call('insert', 'po_wa_anuncios', ['ad_id' => (string) $ev['ad_id'], 'roteiro_slug' => $slug,
+                'rotulo' => mb_substr((string) $ev['anuncio_texto'], 0, 120)]);
+            if (isset($GLOBALS['WA_ANUNCIOS']) && is_array($GLOBALS['WA_ANUNCIOS'])) $GLOBALS['WA_ANUNCIOS'][(string) $ev['ad_id']] = $slug;
+        }
+    }
     $ctx_novo = ['roteiro_slug' => $slug, 'tentativas' => 0];
 
     /* PONTO 1: a PRIMEIRA frase da conversa passa pelos atalhos do card
@@ -844,6 +861,12 @@ function wa_processar_evento($ev) {
        falado pula para a Grecia em vez de receber o menu. */
     $texto_atalho = trim($texto) !== '' ? $texto : wa_ia_transcricao($ev);
     $at = wa_fluxo_atalho($grafo, $grafo['cards'][$inicial], $texto_atalho, $ctx_novo);
+    /* A frase nao nomeou nada, mas o ANUNCIO nomeou: o lead vai direto ao
+       roteiro, pela mesma porta do atalho de roteiro (saudacao, PDF, pergunta).
+       A frase vem antes porque e a pessoa falando ("quero falar com alguem"). */
+    if ($at === null && $slug !== null) {
+        $at = wa_fluxo_atalho_slug($grafo, $grafo['cards'][$inicial], $slug);
+    }
     if ($at !== null) {
         $saud = trim((string) $at['saudacao']);
         if ($saud !== '') {

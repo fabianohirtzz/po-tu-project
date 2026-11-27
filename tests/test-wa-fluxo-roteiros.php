@@ -78,6 +78,14 @@ ok(wa_fluxo_casa_roteiro('0', $slugs, $v) === null, 'zero nao escolhe');
 ok(wa_fluxo_casa_roteiro('', $slugs, $v) === null, 'resposta vazia nao escolhe');
 ok(wa_fluxo_casa_roteiro('bom dia', $slugs, $v) === null, 'frase qualquer nao escolhe');
 ok(wa_fluxo_casa_roteiro('a', $slugs, $v) === null, 'uma letra que casa tudo nao escolhe');
+/* FRASE INTEIRA que nomeia o roteiro (27/11/2026). A Arnalda respondeu a lista
+   com "Roteiro com valores para o Vietna" e o robo nao casou: o nome so valia
+   como PEDACO do titulo. A frase caiu no atalho de destino e ela ouviu que nao
+   havia data para o Vietna, com o Vietna em primeiro na lista que ela leu. */
+ok(wa_fluxo_casa_roteiro('Roteiro com valores para o Vietna', $slugs, $v) === 'vietna', 'frase inteira que nomeia o roteiro escolhe');
+ok(wa_fluxo_casa_roteiro('quero saber do chile', $slugs, $v) === 'chile', 'outra frase, outro roteiro');
+ok(wa_fluxo_casa_roteiro('quero o chile e o vietna', $slugs, $v) === null, 'frase com dois roteiros nao escolhe');
+ok(wa_fluxo_casa_roteiro('qual o valor da viagem', $slugs, $v) === null, 'frase sem roteiro nao escolhe');
 // ambiguidade: duas viagens com "tesouros" no nome
 $amb = [['slug'=>'t1','titulo'=>'Tesouros do Oriente','periodo'=>'','ativo'=>true,'status_viagem'=>null],
         ['slug'=>'t2','titulo'=>'Tesouros Asiáticos','periodo'=>'','ativo'=>true,'status_viagem'=>null]];

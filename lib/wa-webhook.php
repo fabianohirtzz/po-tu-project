@@ -78,6 +78,9 @@ function wa_registra_evento($ev) {
         'texto'   => $ev['texto'],
         'ts'      => gmdate('c', $ev['ts']),
     ];
+    // O anuncio fica registrado na mensagem: sem isto nao ha como saber, depois,
+    // o que o anuncio dizia quando o robo errou o roteiro.
+    if (!empty($ev['anuncio'])) $linha['payload'] = ['anuncio' => $ev['anuncio']];
     $r = wa_db_http('POST', wa_db_url('po_wa_mensagens'), json_encode($linha), wa_db_headers());
 
     if (!$r) {
@@ -121,6 +124,9 @@ function wa_parse_evento($json) {
                     // Para a IA ouvir/ver o primeiro contato (lib/wa-ia.php).
                     'media_id'  => wa_media_msg($m)['id'],
                     'legenda'   => wa_media_msg($m)['legenda'],
+                    // De qual viagem o anuncio fala (lib/wa-motor.php, ponto 1).
+                    'anuncio'       => wa_anuncio_msg($m),
+                    'anuncio_texto' => wa_anuncio_texto(wa_anuncio_msg($m)),
                 ];
             }
 
@@ -184,6 +190,24 @@ function wa_texto_msg($m) {
     }
     if ($t === 'document') return $m['document']['filename'] ?? '';
     return '';
+}
+
+/* O anuncio de onde a mensagem veio (Click-to-WhatsApp): titulo, texto,
+   endereco e tipo, como a Meta manda no `referral`. Sem o ctwa_clid, que ja
+   tem coluna propria e e identificador de clique, nao conteudo. [] sem anuncio. */
+function wa_anuncio_msg($m) {
+    $r = $m['referral'] ?? null;
+    if (!is_array($r)) return [];
+    $out = [];
+    foreach (['source_id', 'source_type', 'source_url', 'headline', 'body', 'media_type'] as $k) {
+        if (isset($r[$k]) && is_scalar($r[$k]) && trim((string) $r[$k]) !== '') $out[$k] = trim((string) $r[$k]);
+    }
+    return $out;
+}
+
+/* Titulo + texto do anuncio numa frase so, para casar com o catalogo. */
+function wa_anuncio_texto($anuncio) {
+    return trim(($anuncio['headline'] ?? '') . ' ' . ($anuncio['body'] ?? ''));
 }
 
 /* Id e legenda da midia (audio, video, imagem, documento, figurinha). O
