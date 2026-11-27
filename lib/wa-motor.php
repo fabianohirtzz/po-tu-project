@@ -589,6 +589,15 @@ function wa_processar_evento($ev) {
         if (wa_lead($wa_id)) wa_nota_lead($wa_id, 'A pessoa chamou a Laís pelo nome no WhatsApp: o robô saiu e a conversa fica com a equipe.');
         return 'chamou_lais';
     }
+    /* PRIMEIRA MENSAGEM QUE O ROBO NAO LE (26/11/2026). Tipo "unsupported" (a
+       API nao entrega o conteudo: enquete, visualizacao unica, mensagem de
+       outro sistema) e reacao (so existe sobre mensagem que ja estava na
+       conversa) nao sao lead chegando: o robo dava boas-vindas a algo que nem
+       leu, e a ficha virava lead falso no funil. Fica com a equipe. */
+    if (!$conv && !$teste && in_array($ev['tipo_msg'] ?? '', ['unsupported', 'reaction'], true)) {
+        wa_conversa_set($wa_id, ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
+        return 'nao_lido';
+    }
     if (!$conv && ($ja = wa_lead($wa_id))) {
         /* A pessoa ja tem ficha (CRM, agenda, site) e escreve pela primeira
            vez. A ficha e a dona (regra 1 do Armando): so preenche o que esta

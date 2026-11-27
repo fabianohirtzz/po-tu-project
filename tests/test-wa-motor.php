@@ -277,6 +277,24 @@ ok(wa_processar(ev('mensagem', 'na verdade queria falar com a Laís')) === 'cham
 ok($DB['po_wa_conversas'][0]['estado'] === 'humano', 'a conversa passa para a equipe');
 ok(!$DB['po_leads'] || !empty($DB['po_leads'][0]['notas']), 'a ficha, se existir, explica por que');
 
+// --- 10g. PRIMEIRA MENSAGEM QUE O ROBO NAO LE (26/11/2026): "unsupported" e
+// reacao nao sao lead chegando. Fica com a equipe e nao nasce ficha.
+foreach (['unsupported', 'reaction'] as $tp) {
+    zera();
+    $ENVIADAS = [];
+    $acao = wa_processar(ev('mensagem', '', ['tipo_msg' => $tp]));
+    ok($acao === 'nao_lido', "primeira mensagem $tp nao entra no fluxo (deu: $acao)");
+    ok(!$ENVIADAS && !$DB['po_leads'], "$tp: nada sai e nao vira lead");
+    ok($DB['po_wa_conversas'][0]['estado'] === 'humano', "$tp: a conversa nasce com a equipe");
+}
+// audio e imagem de numero novo seguem com o robo (lead pode mandar audio)
+zera();
+ok(wa_processar(ev('mensagem', '', ['tipo_msg' => 'audio'])) === 'fluxo', 'audio de numero novo segue no fluxo');
+// no meio do fluxo a regra nao vale (so a primeira mensagem decide)
+zera();
+wa_processar(ev('mensagem', 'oi'));
+ok(wa_processar(ev('mensagem', '', ['tipo_msg' => 'reaction'])) !== 'nao_lido', 'reacao no meio do fluxo nao tira o robo');
+
 // numero de teste segue atendido mesmo chamando a Lais
 zera();
 $DB['po_wa_agenda'][] = ['wa_id' => $WA, 'acao' => 'teste', 'origem' => 'equipe'];
