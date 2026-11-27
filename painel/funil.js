@@ -29,6 +29,11 @@ function poAgrupaFunil(leads) {
   const cols = {};
   PO_COLUNAS.forEach(c => { cols[c.status] = []; });
   (leads || []).forEach(l => {
+    // Base importada (agenda, CRM) parada na etapa inicial nao e contato
+    // feito: ninguem escreveu. Ela nasce com o mesmo DEFAULT do formulario do
+    // site e enchia a coluna com ~820 fichas (26/11/2026). Saindo da etapa
+    // inicial (espera, #proposta, venda) ela entra no quadro normalmente.
+    if (l.origemImport && !(l.status in cols && l.status !== 'novo')) return;
     const alvo = cols[l.status] ? l.status : 'novo';
     cols[alvo].push(l);
   });

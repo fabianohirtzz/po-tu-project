@@ -61,6 +61,24 @@ const soSite = poAgrupaFunil([{id:9, status:'semresposta', nome:'Do site', rotei
 assert.equal(soSite.novo.length, 1, 'lead do formulario do site aparece em contato feito');
 assert.equal(soSite.perdido.length, 0, 'e nao em perdido');
 
+// --- base importada (agendas, CRM) NAO e contato feito (26/11/2026). Ela nasce
+// com o mesmo status DEFAULT do formulario do site, e as ~820 fichas da agenda
+// enchiam a coluna como se todo mundo tivesse escrito. Contato feito e quem
+// veio perguntar. A ficha importada so entra no quadro quando sai da etapa
+// inicial (espera pelo marcador, #proposta da Lais, venda).
+{
+  const c = poAgrupaFunil([
+    {id:20, status:'semresposta', origemImport:'agenda-esposa'},
+    {id:21, status:'novo',        origemImport:'crm-toninho'},
+    {id:22, status:'espera',      origemImport:'agenda-esposa'},
+    {id:23, status:'negociacao',  origemImport:'agenda-marido'},
+    {id:24, status:'semresposta', origemImport:''},
+  ]);
+  assert.deepEqual(c.novo.map(l => l.id), [24], 'importado parado na etapa inicial fica fora do contato feito');
+  assert.equal(c.espera.length, 1, 'importado na lista de espera aparece');
+  assert.equal(c.negociacao.length, 1, 'importado com proposta aparece');
+}
+
 // --- o card escapa dado de terceiro. O nome vem do perfil do WhatsApp.
 const ctxCard = new Function(
   pega('poCardFunil') +
