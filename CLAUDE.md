@@ -256,7 +256,7 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
 >   (`shell_exec('crontab ...')`, a hospedagem não bloqueia), apagado em seguida. Aparece na tela
 >   Trabalhos Cron do cPanel. Para mexer de novo, o mesmo caminho: ler `crontab -l`, acrescentar,
 >   nunca sobrescrever. Pela linha de comando o cron não exige a `WA_CRON_KEY`.
-> - **Ainda não feito:** e forma de pagamento na conta da Meta (erro 141006: bloqueia só
+> - **Ainda não feito:** forma de pagamento na conta da Meta (erro 141006: bloqueia só
 >   mensagem iniciada pela empresa, ou seja, a transmissão; as respostas do robô saem).
 > - **Para quem mexe no rastreio (Carlos):** lead do robô nasce em `po_leads` com
 >   `origem = 'whatsapp'` (ou `'pago'` quando vem `ad_id` de anúncio Click-to-WhatsApp, com
