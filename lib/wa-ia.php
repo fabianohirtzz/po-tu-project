@@ -38,7 +38,9 @@ Responda lead=true SOMENTE se a pessoa está pedindo informação sobre viagens,
 
 Responda lead=false se for: conversa pessoal ou familiar com a dona (Laís), amigo ou conhecido, relato de viagem que já aconteceu, fornecedor, prestador de serviço, vendedor oferecendo algo, cobrança, assunto de trabalho interno, saudação solta sem pedido ("oi", "bom dia"), ou qualquer coisa que você não consiga entender.
 
-Na dúvida, lead=false. confianca vai de 0 a 1. motivo em até 10 palavras, em português.';
+Na dúvida, lead=false. confianca vai de 0 a 1. motivo em até 10 palavras, em português.
+
+transcricao: o que a pessoa disse ou escreveu, em português, fiel e em até 300 caracteres. Em imagem, o texto visível nela. Sem conteúdo, vazio.';
 
 function wa_ia_set_transport($f) { $GLOBALS['WA_IA_TRANSPORT'] = $f; }
 
@@ -106,8 +108,9 @@ function wa_ia_lead($ev, $cfg = null) {
             'temperature'      => 0,
             'responseSchema'   => [
                 'type'       => 'OBJECT',
-                'properties' => ['lead' => ['type' => 'BOOLEAN'], 'confianca' => ['type' => 'NUMBER'], 'motivo' => ['type' => 'STRING']],
-                'required'   => ['lead', 'confianca', 'motivo'],
+                'properties' => ['lead' => ['type' => 'BOOLEAN'], 'confianca' => ['type' => 'NUMBER'], 'motivo' => ['type' => 'STRING'],
+                                 'transcricao' => ['type' => 'STRING']],
+                'required'   => ['lead', 'confianca', 'motivo', 'transcricao'],
             ],
         ],
     ];
@@ -122,7 +125,8 @@ function wa_ia_lead($ev, $cfg = null) {
     $j = json_decode($r['body'], true);
     $v = json_decode((string) ($j['candidates'][0]['content']['parts'][0]['text'] ?? ''), true);
     if (!is_array($v) || !is_bool($v['lead'] ?? null) || !is_numeric($v['confianca'] ?? null)) return null;
-    $out = ['lead' => $v['lead'], 'confianca' => (float) $v['confianca'], 'motivo' => (string) ($v['motivo'] ?? '')];
+    $out = ['lead' => $v['lead'], 'confianca' => (float) $v['confianca'], 'motivo' => (string) ($v['motivo'] ?? ''),
+            'transcricao' => mb_substr(trim((string) ($v['transcricao'] ?? '')), 0, 300)];
     // Sem o conteudo da mensagem no log: so o veredito, para auditar a regua.
     error_log('wa_ia_lead: ' . $tipo . ' lead=' . ($out['lead'] ? 'sim' : 'nao') . ' conf=' . $out['confianca'] . ' | ' . $out['motivo']);
     return $out;
@@ -132,4 +136,17 @@ function wa_ia_lead($ev, $cfg = null) {
 function wa_ia_aceita($v) {
     if (!is_array($v)) return null;
     return $v['lead'] === true && $v['confianca'] >= WA_IA_CONFIANCA;
+}
+
+/* A transcricao da midia que a IA acabou de ouvir, para os atalhos do card
+   inicial ("quero o roteiro da Grecia" falado pula para a Grecia, como se
+   tivesse sido escrito). Vale so para a MESMA mensagem (wamid), so para midia
+   e so quando a IA aceitou como lead. Quem grava o veredito e wa_parece_lead. */
+function wa_ia_transcricao($ev) {
+    $x = $GLOBALS['WA_IA_VEREDITO'] ?? null;
+    $wamid = (string) ($ev['wamid'] ?? '');
+    if (!is_array($x) || $wamid === '' || ($x['wamid'] ?? '') !== $wamid) return '';
+    if (!in_array($ev['tipo_msg'] ?? '', WA_IA_MIDIAS, true)) return '';
+    if (wa_ia_aceita($x['v'] ?? null) !== true) return '';
+    return trim((string) ($x['v']['transcricao'] ?? ''));
 }

@@ -31,13 +31,13 @@ ok(!$CHAMADAS, 'sem chave nao toca a rede');
 zera();
 $RESPOSTAS[] = gemini(['lead' => true, 'confianca' => 0.97, 'motivo' => 'pede valores']);
 $r = wa_ia_lead(ev('text', 'Quanto custa a Turquia?'), $CFG);
-ok($r === ['lead' => true, 'confianca' => 0.97, 'motivo' => 'pede valores'], 'le o veredito');
+ok($r === ['lead' => true, 'confianca' => 0.97, 'motivo' => 'pede valores', 'transcricao' => ''], 'le o veredito (sem transcricao vem vazia)');
 ok(count($CHAMADAS) === 1 && strpos($CHAMADAS[0]['url'], 'generativelanguage.googleapis.com') !== false, 'uma chamada ao Gemini');
 ok(strpos($CHAMADAS[0]['url'], WA_IA_MODELO) !== false, 'no modelo fixado');
 $corpo = json_decode($CHAMADAS[0]['corpo'], true);
 ok(strpos(json_encode($corpo, JSON_UNESCAPED_UNICODE), 'Quanto custa a Turquia?') !== false, 'o texto vai no pedido');
 ok(!empty($corpo['systemInstruction']['parts'][0]['text']), 'com a instrucao');
-ok(($corpo['generationConfig']['responseSchema']['required'] ?? []) === ['lead', 'confianca', 'motivo'], 'com o formato de resposta');
+ok(($corpo['generationConfig']['responseSchema']['required'] ?? []) === ['lead', 'confianca', 'motivo', 'transcricao'], 'com o formato de resposta');
 // a chave vai no cabecalho, nunca na URL (URL cai em log)
 ok(strpos($CHAMADAS[0]['url'], 'chave-de-teste') === false, 'a chave nao vai na URL');
 ok(in_array('x-goog-api-key: chave-de-teste-1234567890', $CHAMADAS[0]['headers'], true), 'a chave vai no cabecalho');
@@ -46,9 +46,9 @@ ok(in_array('x-goog-api-key: chave-de-teste-1234567890', $CHAMADAS[0]['headers']
 zera();
 $RESPOSTAS[] = ['status' => 200, 'body' => json_encode(['url' => 'https://lookaside.fbsbx.com/x', 'mime_type' => 'audio/ogg; codecs=opus', 'file_size' => 5000])];
 $RESPOSTAS[] = ['status' => 200, 'body' => 'BYTESDOAUDIO'];
-$RESPOSTAS[] = gemini(['lead' => false, 'confianca' => 0.9, 'motivo' => 'conversa pessoal']);
+$RESPOSTAS[] = gemini(['lead' => false, 'confianca' => 0.9, 'motivo' => 'conversa pessoal', 'transcricao' => 'oi tudo bem']);
 $r = wa_ia_lead(ev('audio', '', ['media_id' => 'MID1']), $CFG);
-ok($r['lead'] === false, 'audio classificado');
+ok($r['lead'] === false && $r['transcricao'] === 'oi tudo bem', 'audio classificado e transcrito');
 ok(count($CHAMADAS) === 3, 'meta (metadado), meta (bytes), gemini');
 ok($CHAMADAS[0]['url'] === WA_GRAPH . 'MID1', 'metadado pelo id da midia');
 ok(in_array('Authorization: Bearer token-wa-teste', $CHAMADAS[0]['headers'], true), 'metadado com o token');

@@ -126,6 +126,32 @@ ok(primeira('bom dia')['enviadas'][0][0] === 'buttons',
    ha frase a interpretar, e o certo e o menu. */
 ok(primeira('')['card'] === 'boas', 'mensagem sem texto comeca no inicial');
 
+/* AUDIO QUE NOMEIA O ROTEIRO (27/11/2026). O Fabiano pediu o roteiro da Grecia
+   por audio e recebeu o menu: audio nao tem texto. A IA do primeiro contato
+   (lib/wa-ia.php) ja ouve o audio para decidir se e lead, e devolve tambem a
+   transcricao; ela entra no lugar do texto SO para os atalhos do card inicial. */
+function ti_audio($veredito, $extra = []) {
+    ti_prep(ti_grafo());
+    wa_motor_set_deps(['parece_lead' => 'wa_parece_lead', 'destinos' => function () { return []; },
+        'ia_lead' => function () use ($veredito) { return $veredito; }]);
+    $acao = wa_processar(ev('mensagem', '', array_merge(['tipo_msg' => 'audio', 'media_id' => 'M1'], $extra)));
+    $c = $GLOBALS['DB']['po_wa_conversas'][0] ?? null;
+    return ['acao' => $acao, 'card' => $c['card_atual'] ?? null, 'enviadas' => $GLOBALS['ENVIADAS']];
+}
+$au = ti_audio(['lead' => true, 'confianca' => 0.95, 'motivo' => '', 'transcricao' => 'Oi, queria informações do roteiro do Chile']);
+ok($au['card'] === 'data', 'audio que nomeia o roteiro pula para ele (parou em: ' . (string) $au['card'] . ')');
+ok(($au['enviadas'][1][0] ?? '') === 'doc' && strpos($au['enviadas'][1][2], 'c.pdf') !== false, 'e manda o PDF do roteiro falado');
+$au = ti_audio(['lead' => true, 'confianca' => 0.95, 'motivo' => '', 'transcricao' => 'Oi, queria saber das viagens de vocês']);
+ok($au['card'] === 'boas', 'audio de lead sem roteiro nomeado recebe as boas-vindas');
+$au = ti_audio(['lead' => true, 'confianca' => 0.95, 'motivo' => '']);
+ok($au['card'] === 'boas', 'veredito sem transcricao: boas-vindas, como antes');
+// a transcricao so vale para a MESMA mensagem que a IA ouviu
+ti_prep(ti_grafo());
+$GLOBALS['WA_IA_VEREDITO'] = ['wamid' => 'outra', 'v' => ['lead' => true, 'confianca' => 1, 'motivo' => '', 'transcricao' => 'quero o chile']];
+wa_processar(ev('mensagem', '', ['tipo_msg' => 'audio']));
+ok(($DB['po_wa_conversas'][0]['card_atual'] ?? null) === 'boas', 'veredito de outra mensagem nao vira texto');
+unset($GLOBALS['WA_IA_VEREDITO']);
+
 /* Frase que casa DOIS roteiros nao escolhe (wa_roteiro_unico devolve null):
    mandar o PDF errado e pior que perguntar. */
 ok(primeira('quero o chile e a turquia')['card'] === 'boas',

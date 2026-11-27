@@ -469,7 +469,10 @@ function wa_parece_lead($ev, $destinos, $roteiros, $ia = null) {
     if (!$fraco && !$midia) return false;
 
     $ia = $ia ?? ($GLOBALS['WA_DEPS']['ia_lead'] ?? 'wa_ia_lead');
-    $aceita = wa_ia_aceita($ia($ev));
+    $v = $ia($ev);
+    // Guardado para wa_ia_transcricao: o audio que nomeia o roteiro pula para ele.
+    $GLOBALS['WA_IA_VEREDITO'] = ['wamid' => (string) ($ev['wamid'] ?? ''), 'v' => $v];
+    $aceita = wa_ia_aceita($v);
     return $aceita === null ? $fraco : $aceita;
 }
 
@@ -836,7 +839,11 @@ function wa_processar_evento($ev) {
 
        Mensagem sem texto (audio, foto) nao dispara nada: wa_fluxo_atalho
        devolve null para texto vazio, e o certo e o menu. */
-    $at = wa_fluxo_atalho($grafo, $grafo['cards'][$inicial], $texto, $ctx_novo);
+    /* Audio/video/imagem que a IA ouviu como lead: a transcricao entra no lugar
+       do texto SO aqui, nos atalhos (27/11/2026). "Quero o roteiro da Grecia"
+       falado pula para a Grecia em vez de receber o menu. */
+    $texto_atalho = trim($texto) !== '' ? $texto : wa_ia_transcricao($ev);
+    $at = wa_fluxo_atalho($grafo, $grafo['cards'][$inicial], $texto_atalho, $ctx_novo);
     if ($at !== null) {
         $saud = trim((string) $at['saudacao']);
         if ($saud !== '') {
