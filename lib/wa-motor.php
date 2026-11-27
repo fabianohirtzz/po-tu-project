@@ -424,6 +424,33 @@ function wa_chamou_lais($texto) {
     return (bool) preg_match('/(?<![\p{L}\p{N}])la+[iíì]+s+(?![\p{L}\p{N}])/iu', (string) $texto);
 }
 
+/* TEM CARA DE LEAD? (26/11/2026, decisao do Fabiano). O robo so puxa conversa
+   com numero desconhecido quando a primeira mensagem parece de quem quer
+   viajar; o resto nasce com a Lais. Antes ele presumia que todo desconhecido
+   era lead, e entrava em conversa de conhecido fora da agenda (vidraceiro,
+   amigo que nao chamou pelo nome). Medido de 25 a 26/11: os 7 leads reais
+   passariam todos (6 de anuncio, 1 do site) e os 9 erros ficariam de fora.
+   O erro que sobra e um lead que escreve so "oi": ele cai com a Lais, que e
+   como era antes do robo. Funcao PURA: destinos e roteiros chegam prontos, e
+   so sao consultados se os sinais baratos nao bastarem (callables). */
+const WA_LEAD_PALAVRAS = ['viag', 'viaj', 'roteir', 'excurs', 'pacote', 'cruzeir', 'turismo', 'passeio', 'destino', 'passagen'];
+function wa_parece_lead($ev, $destinos, $roteiros) {
+    if (!empty($ev['ad_id']) || !empty($ev['ctwa_clid'])) return true;                       // anuncio
+    if (in_array($ev['tipo_msg'] ?? '', ['button', 'button_reply', 'list_reply'], true)) return true; // resposta a modelo/botao
+    $cru = (string) ($ev['texto'] ?? '');
+    if (preg_match('/\(ref\s*[a-z]-/i', $cru)) return true;                                   // botao do site
+    $t = ' ' . trim(wa_normaliza($cru)) . ' ';
+    if (trim($t) === '') return false;
+    if (strpos($t, ' vim pelo site ') !== false || strpos($t, ' posso ter mais informac') !== false) return true;
+    foreach (explode(' ', trim($t)) as $tok) {
+        foreach (WA_LEAD_PALAVRAS as $p) if (strpos($tok, $p) === 0) return true;
+    }
+    $d = is_callable($destinos) ? $destinos() : $destinos;
+    if (wa_match_destinos($cru, (array) $d)) return true;
+    $r = is_callable($roteiros) ? $roteiros() : $roteiros;
+    return (bool) wa_match_roteiros($cru, (array) $r);
+}
+
 function wa_processar_evento($ev) {
     $wa_id = $ev['wa_id'];
     $texto = (string) ($ev['texto'] ?? '');
@@ -597,6 +624,16 @@ function wa_processar_evento($ev) {
     if (!$conv && !$teste && in_array($ev['tipo_msg'] ?? '', ['unsupported', 'reaction'], true)) {
         wa_conversa_set($wa_id, ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
         return 'nao_lido';
+    }
+
+    // Numero sem ficha e sem cara de lead: fica com a Lais (wa_parece_lead).
+    // A regra e injetavel so para os testes antigos, que usam "oi" como primeira
+    // mensagem generica; em producao nada a define e vale wa_parece_lead.
+    $parece_lead = $GLOBALS['WA_DEPS']['parece_lead'] ?? 'wa_parece_lead';
+    if (!$conv && !$teste && !wa_lead($wa_id)
+        && !$parece_lead($ev, function () { return wa_call('destinos'); }, function () { return wa_call('roteiros'); })) {
+        wa_conversa_set($wa_id, ['estado' => 'humano', 'silenciado_at' => gmdate('c')]);
+        return 'nao_lead';
     }
     if (!$conv && ($ja = wa_lead($wa_id))) {
         /* A pessoa ja tem ficha (CRM, agenda, site) e escreve pela primeira

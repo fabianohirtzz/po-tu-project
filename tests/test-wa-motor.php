@@ -295,6 +295,57 @@ zera();
 wa_processar(ev('mensagem', 'oi'));
 ok(wa_processar(ev('mensagem', '', ['tipo_msg' => 'reaction'])) !== 'nao_lido', 'reacao no meio do fluxo nao tira o robo');
 
+// --- 10h. TEM CARA DE LEAD? (26/11/2026). Numero desconhecido so entra no
+// robo se a primeira mensagem parece de quem quer viajar. Frases reais de 25-26/11.
+$DEST = [['nome' => 'Itália', 'palavras' => 'italia, italiano, toscana']];
+$ROT  = [['slug' => 'turquia', 'titulo' => 'Turquia com Antália', 'palavras_chave' => '']];
+$lead = function ($texto, $extra = []) use ($DEST, $ROT) { return wa_parece_lead(ev('mensagem', $texto, $extra), $DEST, $ROT); };
+ok($lead('Olá! Posso ter mais informações sobre isso?'), 'mensagem padrao do anuncio');
+ok($lead('Olá! Vim pelo site e quero mais informações. (ref S-QGGGC)'), 'botao do site');
+ok($lead('oi', ['ad_id' => '120200']), 'qualquer texto vindo de anuncio');
+ok($lead('Quero saber da excursão para o Peru'), 'palavra de viagem (excursao)');
+ok($lead('Tem viagem em grupo em março?'), 'palavra de viagem (viagem)');
+ok($lead('quanto custa o pacote?'), 'palavra de viagem (pacote)');
+ok($lead('tenho interesse na Toscana'), 'destino da casa');
+ok($lead('e a turquia, ainda tem vaga?'), 'roteiro a venda');
+ok($lead('', ['tipo_msg' => 'button']), 'resposta a botao de modelo (transmissao)');
+ok(!$lead('Boa tarde  Consigo fazer a troca de vidro, na terça feira de manhã'), 'prestador de servico fica com a Lais');
+ok(!$lead('Faz tempo que não nos falamos 😅'), 'conhecido fica com a Lais');
+ok(!$lead('Ok, agradeço.'), 'resposta solta fica com a Lais');
+ok(!$lead('oi'), '"oi" sozinho fica com a Lais (o erro aceito)');
+ok(!$lead('', ['tipo_msg' => 'audio']), 'audio sem anuncio fica com a Lais');
+// destinos e roteiros so sao lidos quando os sinais baratos nao bastam
+$leu = 0;
+wa_parece_lead(ev('mensagem', 'Olá! Posso ter mais informações sobre isso?'), function () use (&$leu) { $leu++; return []; }, function () use (&$leu) { $leu++; return []; });
+ok($leu === 0, 'mensagem de anuncio nao consulta o banco');
+
+// no motor, com a regra REAL (sem o duble do fixture)
+zera();
+wa_motor_set_deps(['parece_lead' => 'wa_parece_lead', 'destinos' => function () use ($DEST) { return $DEST; }]);
+$ENVIADAS = [];
+$acao = wa_processar(ev('mensagem', 'Boa tarde, consigo trocar o vidro na terça?'));
+ok($acao === 'nao_lead', "desconhecido sem cara de lead nao entra no fluxo (deu: $acao)");
+ok(!$ENVIADAS && !$DB['po_leads'], 'nada sai e nao vira lead no funil');
+ok($DB['po_wa_conversas'][0]['estado'] === 'humano', 'a conversa nasce com a equipe');
+ok(wa_processar(ev('mensagem', 'quero saber da viagem')) === 'silenciado' && !$ENVIADAS, 'e segue com a equipe depois');
+zera();
+wa_motor_set_deps(['parece_lead' => 'wa_parece_lead', 'destinos' => function () use ($DEST) { return $DEST; }]);
+ok(wa_processar(ev('mensagem', 'Olá! Posso ter mais informações sobre isso?')) === 'fluxo', 'lead de anuncio entra no fluxo');
+// quem ja tem ficha (site, robo) e nao e importado segue com o robo mesmo com "oi"
+zera();
+wa_motor_set_deps(['parece_lead' => 'wa_parece_lead', 'destinos' => function () { return []; }]);
+$DB['po_leads'][] = ['id' => 'L9', 'wa_id' => $WA, 'telefone' => $WA, 'nome' => 'Do site', 'status' => 'semresposta', 'cliente' => false];
+ok(wa_processar(ev('mensagem', 'oi')) === 'fluxo', 'ficha do site segue com o robo');
+// numero de teste passa por cima da regra
+zera();
+wa_motor_set_deps(['parece_lead' => 'wa_parece_lead', 'destinos' => function () { return []; }]);
+$DB['po_wa_agenda'][] = ['wa_id' => $WA, 'acao' => 'teste', 'origem' => 'equipe'];
+ok(wa_processar(ev('mensagem', 'oi')) === 'fluxo', 'numero de teste ignora a regra');
+// em producao ninguem define o duble: so os testes
+$fontes = '';
+foreach (glob(__DIR__ . '/../{lib/*.php,*.php}', GLOB_BRACE) as $f) $fontes .= file_get_contents($f);
+ok(strpos($fontes, "'parece_lead' =>") === false, 'nenhum codigo de producao injeta a regra');
+
 // numero de teste segue atendido mesmo chamando a Lais
 zera();
 $DB['po_wa_agenda'][] = ['wa_id' => $WA, 'acao' => 'teste', 'origem' => 'equipe'];

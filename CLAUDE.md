@@ -219,6 +219,13 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
 >   naquele contato para sempre. **Quem escreve o nome dela** ("Lais", "Laís", "Laiiiss",
 >   em qualquer mensagem enquanto o robô conduz) também vai para a equipe
 >   (`wa_chamou_lais`, 26/11): conhecido fora da agenda e da base recebia boas-vindas.
+>   **E desde 26/11 a lógica é invertida: número desconhecido SEM ficha só entra no robô
+>   se a primeira mensagem tem cara de lead** (`wa_parece_lead`): veio de anúncio
+>   (`ad_id`/`ctwa_clid`), do site (`(ref X-...)`, "vim pelo site"), é a mensagem padrão do
+>   anúncio, cita palavra de viagem (viagem, roteiro, excursão, pacote...), destino de
+>   `po_destinos` ou roteiro à venda, ou é clique em botão de modelo. O resto ("oi",
+>   vidraceiro, conhecido) nasce com a equipe, sem ficha. Primeira mensagem `unsupported`
+>   ou reação também. O erro aceito: lead que escreve só "oi" cai com a Laís.
 >   A agenda foi atualizada com o .vcf de 26/11 (2.778 contatos; leitor precisa de
 >   `pcre.backtrack_limit` alto por causa das fotos embutidas).
 > - **Números de teste** (`po_wa_agenda.acao = teste`): Fabiano e os dois do Carlos. O robô

@@ -107,6 +107,11 @@ function fx_consulta($tabela, $query) {
 function fx_instala() {
     $consulta = function ($tabela, $query) { $GLOBALS['QUERIES'][] = [$tabela, $query]; return fx_consulta($tabela, $query); };
     wa_motor_set_deps([
+        /* Os testes antigos usam "oi" como primeira mensagem generica; a regra
+           "tem cara de lead" (26/11) e exercitada a parte, em test-wa-motor 10h,
+           que tira este duble. */
+        'parece_lead'    => function () { return true; },
+        'destinos'       => function () { return []; },
         'roteiros'       => 'fx_roteiros',
         /* A lista de espera por destino mora em tabela propria (po_wa_espera) e
            e escrita por lib/wa-espera.php, que fala com o wa-db direto. O duble
