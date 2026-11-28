@@ -199,6 +199,13 @@ Português. Sem travessões, sem emojis. Números concretos. Tom de confiança e
 
 ## Estado atual
 
+> ### ⏸ ROBÔ DESLIGADO EM 27/11/2026 (pedido do Fabiano; ajustar e religar na segunda, 30/11)
+>
+> `DELETE /subscribed_apps` feito, `GET` conferido: `data: []`. Fluxos seguem `ativo = true` e o
+> cron segue instalado; nada chega no `whatsapp.php`, então o robô não responde ninguém. Religar =
+> `POST` no mesmo endereço (`cfg/inscreve.php` no scratchpad faz GET/POST/DELETE sem imprimir o token).
+> O texto abaixo descreve o robô quando ligado.
+>
 > ### ⚠ ROBÔ DO WHATSAPP ATIVO EM PRODUÇÃO (desde 25/11/2026, ~22h)
 >
 > **O webhook está LIGADO.** O app `4057725214358864` está inscrito na WABA real
